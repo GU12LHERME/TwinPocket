@@ -84,11 +84,10 @@ jobs:
           set -euo pipefail
           binary="${GITHUB_WORKSPACE}/build-android-arm64-smoke/te_android_ndk_smoke"
           cache="${GITHUB_WORKSPACE}/build-android-arm64-smoke/CMakeCache.txt"
-          grep -q '^ANDROID_ABI:STRING=arm64-v8a$' "$cache"
-          grep -q '^ANDROID_PLATFORM:STRING=android-24$' "$cache"
-          grep -q '^TE_ANDROID_SMOKE_ONLY:BOOL=ON$' "$cache"
-          grep -E '^(ANDROID_ABI|ANDROID_PLATFORM|TE_ANDROID_SMOKE_ONLY):' "$cache" \
+          grep -E '^(ANDROID_ABI|ANDROID_PLATFORM|CMAKE_SYSTEM_VERSION|TE_ANDROID_SMOKE_ONLY):' "$cache" \
             | tee "$BUILD_LOG_DIR/android-cmake-cache.log"
+          grep -q '^ANDROID_ABI:STRING=arm64-v8a$' "$cache"
+          grep -q '^TE_ANDROID_SMOKE_ONLY:BOOL=ON$' "$cache"
           readelf -h "$binary" | tee "$BUILD_LOG_DIR/elf-header.log"
           grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/elf-header.log"
           grep -q 'Data:.*little endian' "$BUILD_LOG_DIR/elf-header.log"
@@ -96,7 +95,7 @@ jobs:
           grep -q 'Android smoke artifact verified: ELF64 little-endian, AArch64' \
             "$BUILD_LOG_DIR/build.log"
           cp "$binary" "$BUILD_LOG_DIR/te_android_ndk_smoke"
-          printf 'Android ARM64 ELF checks passed. Android target macros are enforced at compile time in tools/android_smoke/main.c.\n' \
+          printf 'Android ARM64 ELF checks passed. ABI and API 24 are enforced at compile time in tools/android_smoke/main.c.\n' \
             | tee "$BUILD_LOG_DIR/verification.log"
 
       - name: Upload binary and diagnostic logs

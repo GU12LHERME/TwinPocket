@@ -5,6 +5,10 @@
 #error "Android smoke target must compile for Android ARM64"
 #endif
 
+#if !defined(__ANDROID_API__) || __ANDROID_API__ != 24
+#error "Android smoke target must compile against Android API 24"
+#endif
+
 _Static_assert(sizeof(void*) == 8, "arm64-v8a requires 64-bit pointers");
 
 int main(void) {
