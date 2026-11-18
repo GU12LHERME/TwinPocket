@@ -1,5 +1,21 @@
 cmake_minimum_required(VERSION 3.21)
 project(TwinsanityEvolved LANGUAGES C CXX)
+
+# Isolated Android NDK toolchain smoke target. It deliberately returns before
+# configuring game assets, NativeEE, SDL2, FFmpeg, or any graphics backend.
+option(TE_ANDROID_SMOKE_ONLY "Configure only the Android NDK ARM64 toolchain smoke target" OFF)
+if(TE_ANDROID_SMOKE_ONLY)
+    if(NOT ANDROID OR NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "TE_ANDROID_SMOKE_ONLY requires the Android NDK toolchain and ANDROID_ABI=arm64-v8a")
+    endif()
+    add_executable(te_android_ndk_smoke tools/android_smoke/main.c)
+    add_custom_command(TARGET te_android_ndk_smoke POST_BUILD
+        COMMAND "${CMAKE_COMMAND}" -DTE_ANDROID_SMOKE_BINARY=$<TARGET_FILE:te_android_ndk_smoke>
+            -P "${CMAKE_SOURCE_DIR}/cmake/verify_android_elf.cmake"
+        VERBATIM)
+    return()
+endif()
+
 # The game fiber's switch is assembly on the POSIX arms (runner/te_fiber_switch.S: AAPCS64, SysV x86-64); the Windows x64
 # arm is inline asm inside a C file (runner/te_fiber_win64.c), so the Windows lane (clang-cl) enables no assembler.
 if(NOT WIN32)

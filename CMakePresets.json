@@ -64,6 +64,21 @@
       "inherits": "vita-base",
       "binaryDir": "${sourceDir}/build-vita-module",
       "cacheVariables": { "TE_VITA_NATIVE": "OFF" }
+    },
+    {
+      "name": "android-arm64-smoke",
+      "displayName": "Android NDK arm64-v8a toolchain smoke build",
+      "description": "Isolated NDK cross-compile check only. Requires ANDROID_NDK_HOME; does not configure SDL2, NativeEE, the game, or a renderer.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-android-arm64-smoke",
+      "toolchainFile": "${sourceDir}/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-24",
+        "ANDROID_STL": "c++_static",
+        "TE_ANDROID_SMOKE_ONLY": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -72,7 +87,8 @@
     { "name": "windows-clang-cl-release-lto", "configurePreset": "windows-clang-cl-release-lto", "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved", "twinsanityevolved-modtool", "te_tests", "te_fiber_test", "te_graphics_selftest", "te_pdesc"] }
 ,
     { "name": "vita-release",                "configurePreset": "vita-release",                "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved_vpk"] },
-    { "name": "vita-module-release",         "configurePreset": "vita-module-release",         "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved_vpk"] }
+    { "name": "vita-module-release",         "configurePreset": "vita-module-release",         "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved_vpk"] },
+    { "name": "android-arm64-smoke",         "configurePreset": "android-arm64-smoke",         "targets": ["te_android_ndk_smoke"] }
   ],
   "testPresets": [
     { "name": "windows-clang-cl-release",     "configurePreset": "windows-clang-cl-release",     "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "filter": { "include": { "label": "nativeee" } }, "output": { "outputOnFailure": true }, "execution": { "timeout": 300 } },
