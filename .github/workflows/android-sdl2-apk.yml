@@ -1,0 +1,111 @@
+name: Android ARM64 SDL2 APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-arm64-sdl2-smoke
+    paths:
+      - '.github/workflows/android-sdl2-apk.yml'
+      - 'android/sdl2-smoke/**'
+  pull_request:
+    paths:
+      - '.github/workflows/android-sdl2-apk.yml'
+      - 'android/sdl2-smoke/**'
+
+permissions:
+  contents: read
+
+jobs:
+  android-sdl2-apk:
+    name: Build SDL2 smoke APK (arm64-v8a)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ANDROID_NDK_VERSION: 30.0.16248370
+      SDL2_VERSION: release-2.30.9
+      BUILD_LOG_DIR: ${{ github.workspace }}/android-sdl2-logs
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK and pinned NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_LOG_DIR"
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.31.6" \
+            "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/build/cmake/android.toolchain.cmake"
+
+      - name: Check out pinned SDL2 source and Android Java glue
+        uses: actions/checkout@v7
+        with:
+          repository: libsdl-org/SDL
+          ref: release-2.30.9
+          path: .deps/SDL2
+
+      - name: Record build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee "$BUILD_LOG_DIR/tool-versions.log"
+          gradle --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version \
+            | head -n 1 | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+
+      - name: Build debug APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace \
+            -Psdl2SourceDir="${GITHUB_WORKSPACE}/.deps/SDL2" \
+            -p android/sdl2-smoke assembleDebug 2>&1 | tee "$BUILD_LOG_DIR/gradle-build.log"
+
+      - name: Verify APK package and native libraries
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/sdl2-smoke/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" \
+            | tee "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "package: name='com.twinsanityevolved.androidsmoke'" "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "sdkVersion:'24'" "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "native-code: 'arm64-v8a'" "$BUILD_LOG_DIR/apk-badging.log"
+          unzip -p "$apk" lib/arm64-v8a/libmain.so > "$BUILD_LOG_DIR/libmain.so"
+          unzip -p "$apk" lib/arm64-v8a/libSDL2.so > "$BUILD_LOG_DIR/libSDL2.so"
+          readelf -h "$BUILD_LOG_DIR/libmain.so" | tee "$BUILD_LOG_DIR/libmain-elf.log"
+          grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/libmain-elf.log"
+          grep -q 'Machine:.*AArch64' "$BUILD_LOG_DIR/libmain-elf.log"
+          sha256sum "$apk" | tee "$BUILD_LOG_DIR/apk-sha256.txt"
+
+      - name: Upload APK and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: twinsanity-sdl2-smoke-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            android/sdl2-smoke/app/build/outputs/apk/debug/app-debug.apk
+            android-sdl2-logs/
+          if-no-files-found: warn
+          retention-days: 14
