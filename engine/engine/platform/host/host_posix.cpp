@@ -43,7 +43,7 @@
 
 #if defined(__vita__)
 #include "engine/platform/vita/fiber_vita.h"
-#else
+#elif !defined(PS2R_ANDROID_BOOTSTRAP_NO_FIBERS)
 #include "engine/platform/posix/fiber_posix.h"
 #endif
 
@@ -59,6 +59,8 @@ void Mul64x64(uint64_t a, uint64_t b, uint64_t* hi, uint64_t* lo) {
     const unsigned __int128 p = static_cast<unsigned __int128>(a) * b;
     *lo = static_cast<uint64_t>(p);
     *hi = static_cast<uint64_t>(p >> 64);
+#elif defined(__ANDROID__)
+    (void)role;  // Android app threads remain at their OS-assigned priority in this bootstrap.
 #else
     // a 32-bit target (the Vita): four 32x32 partial products
     const uint64_t a_lo = static_cast<uint32_t>(a), a_hi = a >> 32;
@@ -362,6 +364,8 @@ void PinCurrentThreadInteractive(ThreadRole role) {
 #elif defined(__APPLE__)
     (void)role;   // every role is the interactive class
     pthread_set_qos_class_self_np(QOS_CLASS_USER_INTERACTIVE, 0);
+#elif defined(__ANDROID__)
+    (void)role;   // Android app threads keep their OS-assigned priority in this bootstrap.
 #else
     (void)role;   // the roles rank threads on Win32 and the Vita; here every role is the interactive class
     // Best effort: a lower nice value needs CAP_SYS_NICE; failure is not an error
@@ -476,6 +480,7 @@ std::string SymbolForAddress(const void* pc) {
 #endif
 }
 
+#if !defined(PS2R_ANDROID_BOOTSTRAP_NO_FIBERS)
 #if defined(__vita__)
 using HostFiber = platform::FiberVita;
 #else
@@ -489,7 +494,14 @@ bool CoroutineCreate(Coroutine* out, void (*fn)(void*), void* arg, size_t stack_
 Coroutine CoroutineCurrent() { return Coroutine{HostFiber::Current().handle}; }
 void CoroutineSwitch(Coroutine to) { HostFiber::Switch(platform::Fiber{to.handle}); }
 void CoroutineDestroy(Coroutine c) { HostFiber::Destroy(platform::Fiber{c.handle}); }
+#endif
 
-const char* HostArmName() { return "posix"; }
+const char* HostArmName() {
+#if defined(__ANDROID__)
+    return "android";
+#else
+    return "posix";
+#endif
+}
 
 }  // namespace ps2r::host

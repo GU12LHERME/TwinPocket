@@ -52,7 +52,13 @@
 
 // --- the GL header the render backend and the windowed tests include --------
 // `#include PS2R_GL_HEADER` is the one spelling; the macro resolves per OS here.
-#if defined(__APPLE__)
+#if defined(__ANDROID__)
+#define PS2R_GL_HEADER <GLES3/gl3.h>
+#define PS2R_HOST_ANDROID 1
+#define PS2R_HOST_MACOS 0
+#define PS2R_HOST_LINUX 0
+#define PS2R_HOST_VITA 0
+#elif defined(__APPLE__)
 #ifndef GL_SILENCE_DEPRECATION
 #define GL_SILENCE_DEPRECATION 1
 #endif

@@ -1,0 +1,107 @@
+name: Android ARM64 NativeEE bootstrap
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-nativeee-smoke
+    paths:
+      - '.github/workflows/android-nativeee-smoke.yml'
+      - 'engine/CMakeLists.txt'
+      - 'engine/engine/core/**'
+      - 'engine/engine/platform/android/**'
+      - 'engine/engine/platform/host/host_posix.cpp'
+      - 'engine/engine/platform/host/platform.h'
+      - 'engine/tests/android/**'
+  pull_request:
+    paths:
+      - '.github/workflows/android-nativeee-smoke.yml'
+      - 'engine/CMakeLists.txt'
+      - 'engine/engine/core/**'
+      - 'engine/engine/platform/android/**'
+      - 'engine/engine/platform/host/host_posix.cpp'
+      - 'engine/engine/platform/host/platform.h'
+      - 'engine/tests/android/**'
+
+permissions:
+  contents: read
+
+jobs:
+  android-nativeee-smoke:
+    name: NativeEE core tests and Android arm64-v8a cross-build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ANDROID_NDK_VERSION: 30.0.16248370
+      BUILD_LOG_DIR: ${{ github.workspace }}/android-nativeee-logs
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v7
+
+      - name: Set up Android SDK and pinned NDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install pinned Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_LOG_DIR"
+          sdkmanager --install "cmake;3.31.6" "ndk;${ANDROID_NDK_VERSION}"
+          echo "${ANDROID_SDK_ROOT}/cmake/3.31.6/bin" >> "$GITHUB_PATH"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/build/cmake/android.toolchain.cmake"
+          sudo apt-get update
+          sudo apt-get install --yes ninja-build
+
+      - name: Record toolchain versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version | tee "$BUILD_LOG_DIR/tool-versions.log"
+          ninja --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang++" --version \
+            | head -n 1 | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+
+      - name: Configure and run bootstrap tests on Ubuntu
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S engine -B build/android-nativeee-host -G Ninja \
+            -DPS2R_ANDROID_BOOTSTRAP_SMOKE=ON -DCMAKE_BUILD_TYPE=Debug \
+            2>&1 | tee "$BUILD_LOG_DIR/host-configure.log"
+          cmake --build build/android-nativeee-host --verbose \
+            2>&1 | tee "$BUILD_LOG_DIR/host-build.log"
+          ctest --test-dir build/android-nativeee-host --output-on-failure \
+            2>&1 | tee "$BUILD_LOG_DIR/host-ctest.log"
+
+      - name: Cross-compile NativeEE bootstrap for Android ARM64 API 24
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S engine -B build/android-nativeee-arm64 -G Ninja \
+            -DCMAKE_TOOLCHAIN_FILE="${ANDROID_NDK_HOME}/build/cmake/android.toolchain.cmake" \
+            -DANDROID_ABI=arm64-v8a -DANDROID_PLATFORM=android-24 \
+            -DPS2R_ANDROID_BOOTSTRAP_SMOKE=ON -DCMAKE_BUILD_TYPE=Debug \
+            2>&1 | tee "$BUILD_LOG_DIR/android-configure.log"
+          cmake --build build/android-nativeee-arm64 --verbose \
+            2>&1 | tee "$BUILD_LOG_DIR/android-build.log"
+          test -s build/android-nativeee-arm64/test_android_nativeee_bootstrap
+          readelf -h build/android-nativeee-arm64/test_android_nativeee_bootstrap \
+            | tee "$BUILD_LOG_DIR/android-elf.log"
+          grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/android-elf.log"
+          grep -q 'Data:.*little endian' "$BUILD_LOG_DIR/android-elf.log"
+          grep -q 'Machine:.*AArch64' "$BUILD_LOG_DIR/android-elf.log"
+          sha256sum build/android-nativeee-arm64/test_android_nativeee_bootstrap \
+            | tee "$BUILD_LOG_DIR/android-test-sha256.txt"
+
+      - name: Upload Android test binary and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nativeee-android-arm64-bootstrap-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build/android-nativeee-arm64/test_android_nativeee_bootstrap
+            android-nativeee-logs/
+          if-no-files-found: warn
+          retention-days: 14
