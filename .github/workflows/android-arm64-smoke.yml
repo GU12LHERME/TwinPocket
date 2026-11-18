@@ -1,0 +1,106 @@
+name: Android ARM64 smoke build
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/android-arm64-smoke.yml'
+      - 'CMakeLists.txt'
+      - 'CMakePresets.json'
+      - 'cmake/android.toolchain.cmake'
+      - 'cmake/verify_android_elf.cmake'
+      - 'cmake/test_android_elf_verifier.cmake'
+      - 'tools/android_smoke/**'
+
+permissions:
+  contents: read
+
+jobs:
+  android-arm64-smoke:
+    name: Android NDK arm64-v8a smoke
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      ANDROID_NDK_VERSION: 30.0.16248370
+      BUILD_LOG_DIR: ${{ github.workspace }}/android-smoke-logs
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+
+      - name: Install CMake and Ninja
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes cmake ninja-build binutils
+          mkdir -p "$BUILD_LOG_DIR"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Install pinned Android NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "ndk;${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}" >> "$GITHUB_ENV"
+          test -f "${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}/build/cmake/android.toolchain.cmake"
+
+      - name: Record tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --version | tee "$BUILD_LOG_DIR/tool-versions.log"
+          cmake_version="$(cmake --version | awk 'NR == 1 { print $3 }')"
+          minimum_version="$(printf '3.24.0\n%s\n' "$cmake_version" | sort -V | head -n 1)"
+          test "$minimum_version" = '3.24.0'
+          ninja --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          printf 'ANDROID_NDK_HOME=%s\n' "$ANDROID_NDK_HOME" | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          "${ANDROID_NDK_HOME}/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" --version \
+            | head -n 1 | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+
+      - name: Configure isolated Android preset
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset android-arm64-smoke 2>&1 | tee "$BUILD_LOG_DIR/configure.log"
+
+      - name: Test Android ELF verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -P cmake/test_android_elf_verifier.cmake 2>&1 \
+            | tee "$BUILD_LOG_DIR/elf-verifier-tests.log"
+
+      - name: Build Android ARM64 smoke target
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --build --preset android-arm64-smoke --verbose 2>&1 \
+            | tee "$BUILD_LOG_DIR/build.log"
+
+      - name: Confirm Android ARM64 ELF
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary="${GITHUB_WORKSPACE}/build-android-arm64-smoke/te_android_ndk_smoke"
+          grep -q -- '--target=aarch64-none-linux-android24' "$BUILD_LOG_DIR/build.log"
+          readelf -h "$binary" | tee "$BUILD_LOG_DIR/elf-header.log"
+          grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/elf-header.log"
+          grep -q 'Data:.*little endian' "$BUILD_LOG_DIR/elf-header.log"
+          grep -q 'Machine:.*AArch64' "$BUILD_LOG_DIR/elf-header.log"
+          grep -q 'Android smoke artifact verified: ELF64 little-endian, AArch64' \
+            "$BUILD_LOG_DIR/build.log"
+          cp "$binary" "$BUILD_LOG_DIR/te_android_ndk_smoke"
+          printf 'Android ARM64 ELF checks passed. ABI and API 24 are enforced at compile time in tools/android_smoke/main.c.\n' \
+            | tee "$BUILD_LOG_DIR/verification.log"
+
+      - name: Upload binary and diagnostic logs
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-arm64-smoke-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            build-android-arm64-smoke/te_android_ndk_smoke
+            android-smoke-logs/
+          if-no-files-found: warn
+          retention-days: 14
