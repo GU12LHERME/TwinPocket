@@ -1,0 +1,144 @@
+name: Android ARM64 NativeEE smoke APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-nativeee-apk
+    paths:
+      - '.github/workflows/android-nativeee-apk.yml'
+      - 'android/nativeee-smoke/**'
+      - 'engine/CMakeLists.txt'
+      - 'engine/engine/core/**'
+      - 'engine/engine/platform/android/**'
+      - 'engine/engine/platform/host/host_posix.cpp'
+      - 'engine/engine/platform/host/platform.h'
+      - 'engine/engine/platform/platform.h'
+      - 'engine/engine/platform/platform.cpp'
+      - 'engine/tests/android/**'
+  pull_request:
+    paths:
+      - '.github/workflows/android-nativeee-apk.yml'
+      - 'android/nativeee-smoke/**'
+      - 'engine/CMakeLists.txt'
+      - 'engine/engine/core/**'
+      - 'engine/engine/platform/android/**'
+      - 'engine/engine/platform/host/host_posix.cpp'
+      - 'engine/engine/platform/host/platform.h'
+      - 'engine/engine/platform/platform.h'
+      - 'engine/engine/platform/platform.cpp'
+      - 'engine/tests/android/**'
+
+permissions:
+  contents: read
+
+jobs:
+  nativeee-apk:
+    name: NativeEE core tests and Android ARM64 APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    env:
+      ANDROID_NDK_VERSION: 30.0.16248370
+      SDL2_VERSION: release-2.30.9
+      BUILD_LOG_DIR: ${{ github.workspace }}/android-nativeee-apk-logs
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v7
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK, CMake, and pinned NDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$BUILD_LOG_DIR"
+          sdkmanager --install \
+            "platforms;android-35" \
+            "build-tools;35.0.0" \
+            "cmake;3.31.6" \
+            "ndk;${ANDROID_NDK_VERSION}"
+          ndk_home="${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ndk_home}" >> "$GITHUB_ENV"
+          echo "${ANDROID_SDK_ROOT}/cmake/3.31.6/bin" >> "$GITHUB_PATH"
+          test -f "${ndk_home}/build/cmake/android.toolchain.cmake"
+
+      - name: Check out pinned SDL2 source and Android Java glue
+        uses: actions/checkout@v7
+        with:
+          repository: libsdl-org/SDL
+          ref: release-2.30.9
+          path: .deps/SDL2
+
+      - name: Record build tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          java -version 2>&1 | tee "$BUILD_LOG_DIR/tool-versions.log"
+          gradle --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          cmake --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+          ninja --version | tee -a "$BUILD_LOG_DIR/tool-versions.log"
+
+      - name: Run NativeEE bootstrap host tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -S engine -B build/nativeee-apk-host -G Ninja \
+            -DPS2R_ANDROID_BOOTSTRAP_SMOKE=ON -DCMAKE_BUILD_TYPE=Debug \
+            2>&1 | tee "$BUILD_LOG_DIR/host-configure.log"
+          cmake --build build/nativeee-apk-host --verbose \
+            2>&1 | tee "$BUILD_LOG_DIR/host-build.log"
+          ctest --test-dir build/nativeee-apk-host --output-on-failure \
+            2>&1 | tee "$BUILD_LOG_DIR/host-ctest.log"
+
+      - name: Build NativeEE Android ARM64 APK
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace \
+            -Psdl2SourceDir="${GITHUB_WORKSPACE}/.deps/SDL2" \
+            -p android/nativeee-smoke assembleDebug \
+            2>&1 | tee "$BUILD_LOG_DIR/gradle-build.log"
+
+      - name: Verify APK and linked NativeEE code
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/nativeee-smoke/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" \
+            | tee "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "package: name='com.twinsanityevolved.nativeeesmoke'" "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "sdkVersion:'24'" "$BUILD_LOG_DIR/apk-badging.log"
+          grep -q "native-code: 'arm64-v8a'" "$BUILD_LOG_DIR/apk-badging.log"
+          unzip -p "$apk" lib/arm64-v8a/libmain.so > "$BUILD_LOG_DIR/libmain.so"
+          unzip -p "$apk" lib/arm64-v8a/libSDL2.so > "$BUILD_LOG_DIR/libSDL2.so"
+          readelf -h "$BUILD_LOG_DIR/libmain.so" | tee "$BUILD_LOG_DIR/libmain-elf.log"
+          grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/libmain-elf.log"
+          grep -q 'Data:.*little endian' "$BUILD_LOG_DIR/libmain-elf.log"
+          grep -q 'Machine:.*AArch64' "$BUILD_LOG_DIR/libmain-elf.log"
+          strings "$BUILD_LOG_DIR/libmain.so" | grep -F 'NativeEE Android logger is running'
+          sha256sum "$apk" | tee "$BUILD_LOG_DIR/apk-sha256.txt"
+
+      - name: Upload APK and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: nativeee-android-arm64-apk-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            android/nativeee-smoke/app/build/outputs/apk/debug/app-debug.apk
+            android-nativeee-apk-logs/
+          if-no-files-found: warn
+          retention-days: 14
