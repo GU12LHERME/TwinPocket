@@ -9,6 +9,7 @@ on:
       - 'CMakePresets.json'
       - 'cmake/android.toolchain.cmake'
       - 'cmake/verify_android_elf.cmake'
+      - 'cmake/test_android_elf_verifier.cmake'
       - 'tools/android_smoke/**'
 
 permissions:
@@ -62,6 +63,13 @@ jobs:
         run: |
           set -euo pipefail
           cmake --preset android-arm64-smoke 2>&1 | tee "$BUILD_LOG_DIR/configure.log"
+
+      - name: Test Android ELF verifier
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake -P cmake/test_android_elf_verifier.cmake 2>&1 \
+            | tee "$BUILD_LOG_DIR/elf-verifier-tests.log"
 
       - name: Build Android ARM64 smoke target
         shell: bash
