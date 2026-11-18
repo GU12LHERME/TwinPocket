@@ -44,8 +44,8 @@ void ThreadEntry(void* opaque) {
     auto* start = static_cast<ThreadStart*>(opaque);
     ThreadStart value = std::move(*start);
     delete start;
-    if (!value.name.empty()) host::SetCurrentThreadName(value.name.c_str());
-    if (value.interactive) host::PinCurrentThreadInteractive();
+    if (!value.name.empty()) ps2r::host::SetCurrentThreadName(value.name.c_str());
+    if (value.interactive) ps2r::host::PinCurrentThreadInteractive();
     value.fn(value.arg);
 }
 
@@ -98,8 +98,8 @@ platform::File OpenPrivate(const char* relative, FileMode mode) {
 platform::Thread CreateThread(void (*fn)(void*), void* arg, const platform::ThreadDesc& desc) {
     if (!fn) return {};
     auto* start = new ThreadStart{fn, arg, desc.name ? desc.name : "", desc.interactive_qos};
-    host::NativeThread thread;
-    if (!host::ThreadCreate(&thread, ThreadEntry, start, desc.stack)) {
+    ps2r::host::NativeThread thread;
+    if (!ps2r::host::ThreadCreate(&thread, ThreadEntry, start, desc.stack)) {
         delete start;
         return {};
     }
@@ -107,7 +107,7 @@ platform::Thread CreateThread(void (*fn)(void*), void* arg, const platform::Thre
 }
 
 void JoinThread(platform::Thread thread) {
-    host::ThreadJoin(host::NativeThread{thread.handle});
+    ps2r::host::ThreadJoin(ps2r::host::NativeThread{thread.handle});
 }
 
 void CpuRelax() {
@@ -118,7 +118,7 @@ void CpuRelax() {
 #endif
 }
 
-uint64_t NowNs() { return host::MonotonicNowNs(); }
+uint64_t NowNs() { return ps2r::host::MonotonicNowNs(); }
 
 platform::Platform g_platform = [] {
     platform::Platform p;
