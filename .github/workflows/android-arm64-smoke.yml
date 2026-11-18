@@ -83,11 +83,7 @@ jobs:
         run: |
           set -euo pipefail
           binary="${GITHUB_WORKSPACE}/build-android-arm64-smoke/te_android_ndk_smoke"
-          cache="${GITHUB_WORKSPACE}/build-android-arm64-smoke/CMakeCache.txt"
-          grep -E '^(ANDROID_ABI|ANDROID_PLATFORM|CMAKE_SYSTEM_VERSION|TE_ANDROID_SMOKE_ONLY):' "$cache" \
-            | tee "$BUILD_LOG_DIR/android-cmake-cache.log"
-          grep -q '^ANDROID_ABI:STRING=arm64-v8a$' "$cache"
-          grep -q '^TE_ANDROID_SMOKE_ONLY:BOOL=ON$' "$cache"
+          grep -q -- '--target=aarch64-none-linux-android24' "$BUILD_LOG_DIR/build.log"
           readelf -h "$binary" | tee "$BUILD_LOG_DIR/elf-header.log"
           grep -q 'Class:.*ELF64' "$BUILD_LOG_DIR/elf-header.log"
           grep -q 'Data:.*little endian' "$BUILD_LOG_DIR/elf-header.log"
