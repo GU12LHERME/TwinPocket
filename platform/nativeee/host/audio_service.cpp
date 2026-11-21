@@ -253,6 +253,9 @@ AudioService::AudioService()
         }
     }
     // TE_AUDIO_LOG_EVERY=N: the producers' census every N boundaries (the device's pulled frames = the tap's position)
+#if defined(__ANDROID__)
+    producer_.log_every = 600;   // Android: the census every 10 s at 60 Hz by default (the diagnostic report reads it)
+#endif
     if (const char* every = std::getenv("TE_AUDIO_LOG_EVERY")) producer_.log_every = std::strtoull(every, nullptr, 10);
     // TE_AUDIO_MIX=legacy: the voices' frame loop of the earlier builds (an A/B arm: the same bits, the old cost)
     if (const char* mix = std::getenv("TE_AUDIO_MIX")) title::SampleVoice::SetLegacyMix(std::strcmp(mix, "legacy") == 0);
@@ -331,7 +334,15 @@ void AudioService::EnsureDevice() {
         const bool realtime = RealTimeWanted();
         if (realtime) device_tick_.reserve(static_cast<std::size_t>(kSampleRate / 50) * 2);   // the callback never allocates
         sink_->SetRefill(realtime ? &AudioService::RefillThunk : nullptr, this);
+        // the ring's lead and trim line for the device's pull (a 2048 / 4096-frame Android buffer is longer than the
+        // default 50 ms lead): set before the device thread starts
+        ring_->SetDeviceFrames(ps2r::platform::sdl::SdlAudioSink::RequestedBufferFrames());
         device_open_ = sink_->Open(spec, *ring_);
+        if (device_open_)
+            std::fprintf(stderr, "[twinsanityevolved] audio: ring lead %d frames, trim line %d, capacity %d (%.1f / %.1f / %.1f ms)\n",
+                         ring_->LeadFrames(), ring_->TrimFrames(), ps2r::platform::sdl::AudioPullRing::kCapacityFrames,
+                         1000.0 * ring_->LeadFrames() / kSampleRate, 1000.0 * ring_->TrimFrames() / kSampleRate,
+                         1000.0 * ps2r::platform::sdl::AudioPullRing::kCapacityFrames / kSampleRate);
         if (!device_open_) std::fprintf(stderr, "[twinsanityevolved] audio: no device -- the mix goes nowhere\n");
         {
             Lock lock(mutex_);
@@ -418,7 +429,6 @@ void AudioService::Refill(int frames) {
     // (the same 50 ms the boundary producer keeps: the same latency), never past the ring's trim line (a push there
     // would discard the oldest frames). A refill that finds the game thread inside a control call does not wait for it
     // while the ring already covers this pull: the next one (one device buffer later) tops up.
-    using Ring = ps2r::platform::sdl::AudioPullRing;
     static thread_local bool noted = false;   // TE_PROF's "audio" slot + the CPU census (the Vita): SDL's device thread
     if (!noted) {
         noted = true;
@@ -442,7 +452,7 @@ void AudioService::Refill(int frames) {
     const int tick = static_cast<int>(kSampleRate / hz_);
     // Below the trim line whatever the pull: a target past it would never be reached (each push past the line trims the
     // ring back to the lead) and the loop would spin holding mutex_; a pull larger than the line pads its remainder
-    const int target = std::min(frames + Ring::kLeadFrames, Ring::kTrimFrames - tick);
+    const int target = std::min(frames + ring_->LeadFrames(), ring_->TrimFrames() - tick);
     if (ring_->Available() >= target) return;
     while (ring_->Available() < target) {
         MixLocked(device_tick_, false);
@@ -493,6 +503,17 @@ void AudioService::LogProducers(uint64_t boundary) const {
                  (unsigned long long)p.boundary_ticks, (unsigned long long)p.refills, p.refill_mean_ms, p.refill_max_ms,
                  (unsigned long long)p.refills_over_4ms, (unsigned long long)p.refill_waits, (unsigned long long)p.refill_skips,
                  (unsigned long long)p.game_waits, p.game_wait_ms, p.game_wait_max_ms);
+    if (device_open_) {
+        // the device thread's side (sdl_audio_sink.cpp): a late callback is a gap the speakers heard; padded frames
+        // above are the ring's own underruns (it had less than a pull)
+        const auto st = sink_->Stats();
+        std::fprintf(stderr,
+                     "[twinsanityevolved] audio device: %d Hz, %d frames a callback (%.1f ms); callbacks %llu, late %llu, longest gap "
+                     "%.1f ms, longest callback %.2f ms\n",
+                     sink_->DeviceSampleRate(), sink_->DeviceBufferFrames(),
+                     sink_->DeviceSampleRate() ? 1000.0 * sink_->DeviceBufferFrames() / sink_->DeviceSampleRate() : 0.0,
+                     (unsigned long long)st.callbacks, (unsigned long long)st.late, st.max_gap_us / 1000.0, st.max_callback_us / 1000.0);
+    }
 }
 
 void AudioService::LogMixCensus(uint64_t boundary) {

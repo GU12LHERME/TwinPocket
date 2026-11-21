@@ -50,7 +50,16 @@ public final class MainActivity extends SDLActivity {
         // the disc image the launcher checked (runner/te_android.cpp: --te-iso, taken off before the runner's arguments)
         String iso = getIntent() != null ? getIntent().getStringExtra(EXTRA_ISO) : null;
         Diag.log(this, "game", "disc image for the game: " + (iso != null ? iso : "(none from the launcher: the native lookup decides)"));
-        return iso != null ? new String[] {"--te-iso", iso} : new String[0];
+        java.util.ArrayList<String> args = new java.util.ArrayList<>();
+        if (iso != null) { args.add("--te-iso"); args.add(iso); }
+        // the launcher's audio options (LauncherActivity "Áudio"), as the environment the engine and SDL read
+        android.content.SharedPreferences prefs = getSharedPreferences("twinsanity", MODE_PRIVATE);
+        int buffer = prefs.getInt("audio_buffer", 2048);
+        String driver = prefs.getString("audio_driver", "auto");
+        args.add("--te-env"); args.add("TE_AUDIO_BUFFER_FRAMES=" + buffer);
+        if (!"auto".equals(driver)) { args.add("--te-env"); args.add("SDL_AUDIODRIVER=" + driver); }
+        Diag.log(this, "game", "audio options: buffer " + buffer + " frames, driver " + driver);
+        return args.toArray(new String[0]);
     }
 
     @Override

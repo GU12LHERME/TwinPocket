@@ -64,8 +64,8 @@ void AudioPullRing::TrimToLead(uint64_t write_pos) {
     uint64_t r = read_.load(std::memory_order_acquire);
     for (;;) {
         const uint64_t content = write_pos - r;
-        if (content <= static_cast<uint64_t>(kTrimFrames)) return;
-        const uint64_t new_read = write_pos - static_cast<uint64_t>(kLeadFrames);
+        if (content <= static_cast<uint64_t>(TrimFrames())) return;
+        const uint64_t new_read = write_pos - static_cast<uint64_t>(LeadFrames());
         if (read_.compare_exchange_weak(r, new_read, std::memory_order_acq_rel, std::memory_order_acquire)) {
             trimmed_.fetch_add(new_read - r, std::memory_order_relaxed);
             return;

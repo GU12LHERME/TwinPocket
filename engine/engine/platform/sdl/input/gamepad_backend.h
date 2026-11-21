@@ -90,7 +90,15 @@ private:
         int   instance_id = -1;
         bool  generic_mapping = false;
         uint32_t pending_buttons = 0;
+        // the stick log (InputLog: Android by default, TE_INPUT_LOG=1 elsewhere): the raw left / right sticks as last
+        // logged, the window's range of the raw left stick and the time of the last line
+        int16_t  logged[4] = {0, 0, 0, 0};
+        int16_t  left_min[2] = {32767, 32767}, left_max[2] = {-32768, -32768};
+        uint64_t window_start_ns = 0, last_line_ns = 0;
+        uint32_t lines_in_second = 0;
     };
+    void LogSticks(Pad& pad, const struct GamepadRaw& raw, float lx, float ly, float rx, float ry);
+    bool log_sticks_ = false;
 
     void TryOpenDeviceIndex(int device_index);
     void CloseInstance(int instance_id);

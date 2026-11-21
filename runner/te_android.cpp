@@ -20,6 +20,7 @@
 #include <alloca.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#include <sys/resource.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -153,6 +154,9 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     te_android_thread_altstack();
     te_android_redirect_stdio();
     TE_ANDROID_STAGE("SDL_main entered (SDL thread)");
+    // the accelerometer is not a pad: SDL would list it as a joystick ("Android Accelerometer") whose tilt the engine's
+    // generic pad mapping read as the left stick (engine/platform/sdl/input/gamepad_backend.cpp IsSensor)
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
     for (int i = 0; i < argc; ++i) te_android_log("argv[%d] = %s", i, argv[i] ? argv[i] : "(null)");
 
     bool sdl_test = false;
@@ -198,6 +202,15 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
         if (argv[i] && std::strcmp(argv[i], "--te-iso") == 0 && i + 1 < argc) {
             iso = argv[++i];
             how = "given by the launcher (--te-iso)";
+        } else if (argv[i] && std::strcmp(argv[i], "--te-env") == 0 && i + 1 < argc) {
+            // a setting from the launcher (its audio options: TE_AUDIO_BUFFER_FRAMES, SDL_AUDIODRIVER), as the environment
+            // the engine and SDL read; taken off before the runner's arguments
+            const std::string kv = argv[++i];
+            const size_t eq = kv.find('=');
+            if (eq != std::string::npos && eq > 0) {
+                ::setenv(kv.substr(0, eq).c_str(), kv.substr(eq + 1).c_str(), 1);
+                te_android_log("setting from the launcher: %s", kv.c_str());
+            }
         } else {
             runner_args.emplace_back(argv[i] ? argv[i] : "");
         }
@@ -245,6 +258,10 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     const int created = pthread_create(&game, &attr, [](void* opaque) -> void* {
         auto* st = static_cast<GameStart*>(opaque);
         pthread_setname_np(pthread_self(), "TEGame");
+        // the priority SDL gave its own thread (THREAD_PRIORITY_DISPLAY, nice -4), which the runner ran on before: below
+        // it the audio device thread's refill can wait on a game thread the scheduler keeps behind other work
+        const int prio = ::setpriority(PRIO_PROCESS, static_cast<id_t>(::gettid()), -4);
+        te_android_log("game thread: priority nice -4 %s", prio == 0 ? "set" : "refused (the default kept)");
         te_android_thread_altstack();
         // attach this thread to the JVM the way SDL does it (SDL's own key detaches it at the thread's end)
         JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());

@@ -3,7 +3,12 @@
 
 #include <SDL.h>
 
+#include <chrono>
+#include <cmath>
+#include <algorithm>
 #include <cstdio>
+#include <cstdlib>
+#include <cstring>
 
 #include "engine/platform/sdl/input/gamepad_convert.h"
 
@@ -18,6 +23,32 @@ std::string GuidOfJoystick(SDL_Joystick* js) {
 }
 
 // Larger magnitude wins; on a tie the current (earlier) value stays.
+uint64_t SteadyNs() {
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::nanoseconds>(
+        std::chrono::steady_clock::now().time_since_epoch()).count());
+}
+
+// What the pad wire carries for a normalised stick value (input_mapper.cpp StickToByte: -1 -> 0x00, 0 -> 0x80, +1 -> 0xFF)
+int WireByte(float v) {
+    long b = std::lround(v * 127.5f + 127.5f);
+    return b < 0 ? 0 : b > 255 ? 255 : static_cast<int>(b);
+}
+
+// A joystick that is not a game pad and must never be given the generic pad mapping below: SDL's own "Android
+// Accelerometer" (SDL_HINT_ACCELEROMETER_AS_JOYSTICK, on by default on Android) and other sensors. SDL itself refuses
+// them a controller mapping; mapped as a pad, the device's tilt is a stick held over (gravity on the accelerometer's Y
+// axis = the left stick pushed down).
+bool IsSensor(const char* name) {
+    if (!name) return false;
+    const size_t n = std::strlen(name);
+    static const char* const kTails[] = {"Accelerometer", "Gyroscope", "Gyro", "Sensor"};
+    for (const char* t : kTails) {
+        const size_t k = std::strlen(t);
+        if (n >= k && std::strcmp(name + n - k, t) == 0) return true;
+    }
+    return false;
+}
+
 float Pick(float cur, float cand) {
     const float ac = cur < 0 ? -cur : cur, aa = cand < 0 ? -cand : cand;
     return aa > ac ? cand : cur;
@@ -34,6 +65,12 @@ GamepadBackend::GamepadBackend(float deadzone, float sensitivity, bool enabled,
     // Keep pads usable while the window is unfocused; must precede the
     // joystick subsystem init.
     SDL_SetHint(SDL_HINT_JOYSTICK_ALLOW_BACKGROUND_EVENTS, "1");
+#if defined(__ANDROID__)
+    // the accelerometer is not a pad (see IsSensor); set before the joystick subsystem starts
+    SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
+    log_sticks_ = true;
+#endif
+    if (const char* v = std::getenv("TE_INPUT_LOG")) log_sticks_ = v[0] == '1';
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) {
         std::fprintf(stderr, "input: gamepad subsystem init failed: %s\n", SDL_GetError());
         return;
@@ -46,6 +83,7 @@ GamepadBackend::GamepadBackend(float deadzone, float sensitivity, bool enabled,
     }
 
     const int n = SDL_NumJoysticks();
+    std::fprintf(stderr, "input: %d joystick device(s) at start-up\n", n);
     for (int i = 0; i < n; i++) TryOpenDeviceIndex(i);
     PublishSnapshot();
     if (pads_.empty()) std::fprintf(stderr, "input: gamepad: none detected at startup (hotplug supported)\n");
@@ -104,6 +142,18 @@ void GamepadBackend::TryOpenDeviceIndex(int device_index) {
     for (const auto& p : pads_)
         if (p.instance_id == (int)iid) return;   // JOYDEVICEADDED for a pad opened at startup
 
+    {
+        char guid[64] = {0};
+        SDL_JoystickGetGUIDString(SDL_JoystickGetDeviceGUID(device_index), guid, sizeof(guid));
+        const char* jname = SDL_JoystickNameForIndex(device_index);
+        std::fprintf(stderr, "input: device %d: '%s' guid %s vendor %04x product %04x, game controller: %s\n", device_index,
+                     jname ? jname : "?", guid, SDL_JoystickGetDeviceVendor(device_index), SDL_JoystickGetDeviceProduct(device_index),
+                     SDL_IsGameController(device_index) ? "yes" : "no");
+        if (IsSensor(jname)) {
+            std::fprintf(stderr, "input: device %d ('%s') is a sensor, not a pad: ignored\n", device_index, jname);
+            return;
+        }
+    }
     bool generic = false;
     if (!SDL_IsGameController(device_index)) {
         char guid[64] = {0};
@@ -139,6 +189,13 @@ void GamepadBackend::TryOpenDeviceIndex(int device_index) {
     const char* name = SDL_GameControllerName(gc);
     std::fprintf(stderr, "input: gamepad connected: %s (instance %d)%s\n", name ? name : "?", pad.instance_id,
                  generic ? " [generic mapping]" : "");
+    if (js)
+        std::fprintf(stderr, "input:   %d axes, %d buttons, %d hats; deadzone %.2f (radial), sensitivity %.2f\n", SDL_JoystickNumAxes(js),
+                     SDL_JoystickNumButtons(js), SDL_JoystickNumHats(js), deadzone_, sensitivity_);
+    if (char* mapping = SDL_GameControllerMapping(gc)) {
+        std::fprintf(stderr, "input:   mapping: %s\n", mapping);
+        SDL_free(mapping);
+    }
 
     // Reconnect-by-GUID: a pad matching the persisted preference is selected
     // when the selection is Auto.
@@ -220,6 +277,7 @@ void GamepadBackend::Poll(NormalizedInput& out) {
 
         NormalizedInput one;
         GamepadConvert::Convert(raw, deadzone_, one, sensitivity_, map_);
+        if (log_sticks_) LogSticks(p, raw, one.lx, one.ly, one.rx, one.ry);
         one.buttons |= p.pending_buttons;
         p.pending_buttons = 0;
 
@@ -228,6 +286,41 @@ void GamepadBackend::Poll(NormalizedInput& out) {
         out.ly = Pick(out.ly, one.ly);
         out.rx = Pick(out.rx, one.rx);
         out.ry = Pick(out.ry, one.ry);
+    }
+}
+
+// The stick log: a line when a raw stick moved by more than ~3 % of its range since the last line (at most 8 lines a
+// second), and every 5 s the window's range of the raw left stick (the resting noise when the stick is untouched). Raw =
+// SDL_GameControllerGetAxis (-32768..32767, y down positive); norm = after the deadzone and the sensitivity; wire = the
+// DualShock 2 byte (0x00 left / up, 0x80 centre, 0xFF right / down).
+void GamepadBackend::LogSticks(Pad& pad, const GamepadRaw& raw, float lx, float ly, float rx, float ry) {
+    const uint64_t now = SteadyNs();
+    const int16_t lxr = raw.axis[SDL_CONTROLLER_AXIS_LEFTX], lyr = raw.axis[SDL_CONTROLLER_AXIS_LEFTY];
+    const int16_t rxr = raw.axis[SDL_CONTROLLER_AXIS_RIGHTX], ryr = raw.axis[SDL_CONTROLLER_AXIS_RIGHTY];
+    if (pad.window_start_ns == 0) pad.window_start_ns = now;
+    pad.left_min[0] = std::min(pad.left_min[0], lxr);
+    pad.left_max[0] = std::max(pad.left_max[0], lxr);
+    pad.left_min[1] = std::min(pad.left_min[1], lyr);
+    pad.left_max[1] = std::max(pad.left_max[1], lyr);
+    const int16_t cur[4] = {lxr, lyr, rxr, ryr};
+    bool moved = pad.last_line_ns == 0;
+    for (int i = 0; i < 4; ++i) moved = moved || std::abs(int(cur[i]) - int(pad.logged[i])) > 1000;
+    if (now - pad.last_line_ns >= 1000000000ull) pad.lines_in_second = 0;
+    if (moved && pad.lines_in_second < 8) {
+        std::fprintf(stderr, "input: sticks pad %d: LEFTX %6d LEFTY %6d  RIGHTX %6d RIGHTY %6d | norm L (%+.2f, %+.2f) R (%+.2f, %+.2f) | wire "
+                             "L (0x%02X, 0x%02X) R (0x%02X, 0x%02X) | LT %d RT %d\n",
+                     pad.instance_id, lxr, lyr, rxr, ryr, lx, ly, rx, ry, WireByte(lx), WireByte(ly), WireByte(rx), WireByte(ry),
+                     raw.axis[SDL_CONTROLLER_AXIS_TRIGGERLEFT], raw.axis[SDL_CONTROLLER_AXIS_TRIGGERRIGHT]);
+        for (int i = 0; i < 4; ++i) pad.logged[i] = cur[i];
+        if (pad.lines_in_second == 0) pad.last_line_ns = now;
+        ++pad.lines_in_second;
+    }
+    if (now - pad.window_start_ns >= 5000000000ull) {
+        std::fprintf(stderr, "input: left stick pad %d, 5 s range: LEFTX %d..%d LEFTY %d..%d (deadzone %.0f raw units)\n", pad.instance_id,
+                     pad.left_min[0], pad.left_max[0], pad.left_min[1], pad.left_max[1], deadzone_ * 32767.f);
+        pad.window_start_ns = now;
+        pad.left_min[0] = pad.left_min[1] = 32767;
+        pad.left_max[0] = pad.left_max[1] = -32768;
     }
 }
 

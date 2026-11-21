@@ -12,6 +12,8 @@
 // calls Open(), so the harness runs with no audio device, as OLD did.
 #pragma once
 
+#include <atomic>
+
 #include <cstdint>
 
 #include "engine/platform/platform.h"
@@ -62,6 +64,19 @@ public:
     int DeviceChannels() const;
     int DeviceBufferFrames() const;
 
+    // The device callback's timing (the device thread writes, any thread reads): callbacks, those that came later than
+    // 1.5 device buffers after the previous one (the device's queue ran dry in between: an audible gap), the longest gap
+    // between two callbacks and the longest callback (the owner's refill + the ring pull) in microseconds.
+    struct CallbackStats {
+        uint64_t callbacks = 0, late = 0;
+        uint32_t max_gap_us = 0, max_callback_us = 0;
+    };
+    CallbackStats Stats() const;
+    void ResetMaxima();
+    // The device buffer requested (frames a callback): TE_AUDIO_BUFFER_FRAMES (256..8192) or the platform default
+    // (512; 2048 on Android, where SDL's AAudio / OpenSL ES queues are short and the device thread also mixes).
+    static int RequestedBufferFrames();
+
 private:
     static void Callback(void* userdata, uint8_t* stream, int len);
 
@@ -76,6 +91,11 @@ private:
     int            got_freq_      = 0;
     int            got_channels_  = 0;
     int            got_samples_   = 0;
+    uint64_t       last_callback_ns_ = 0;       // the device thread's own
+    std::atomic<uint64_t> callbacks_{0};
+    std::atomic<uint64_t> late_{0};
+    std::atomic<uint32_t> max_gap_us_{0};
+    std::atomic<uint32_t> max_callback_us_{0};
 };
 
 }  // namespace ps2r::platform::sdl

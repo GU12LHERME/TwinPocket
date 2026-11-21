@@ -119,6 +119,14 @@ jobs:
             runner/te_fiber.c runner/te_fiber_switch.S -o "$RUNNER_TEMP/test_game_stack_bounds" -lpthread
           qemu-aarch64 "$RUNNER_TEMP/test_game_stack_bounds" 2>&1 | tee "$LOG_DIR/game-stack-bounds.log"
 
+      - name: Audio ring lead for the Android device buffers (1024 / 2048 / 4096 frames)
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -O1 -Wall -Wextra -Iengine tools/android/test_audio_ring_lead.cpp \
+            engine/engine/platform/sdl/audio_pull_ring.cpp -o "$RUNNER_TEMP/test_audio_ring_lead"
+          "$RUNNER_TEMP/test_audio_ring_lead" 2>&1 | tee "$LOG_DIR/audio-ring-lead.log"
+
       - name: The engine's shaders as GLSL ES 3.20 (gl_glsl_es.cpp) through glslangValidator
         shell: bash
         run: |
@@ -230,6 +238,10 @@ jobs:
           check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
           check "game stack inside the game thread (te_android_take_fiber_stack)" 1 'te_android_take_fiber_stack'
           check "crash backtrace unwinder callback (te_android_diag.cpp)"     1    'CollectCrashFrame'
+          check "input: sensors refused as pads (gamepad_backend.cpp IsSensor)" 1   'IsSensor'
+          check "input: stick log (GamepadBackend::LogSticks)"              1    'GamepadBackend::LogSticks'
+          check "audio: configurable device buffer (RequestedBufferFrames)" 1    'SdlAudioSink::RequestedBufferFrames'
+          check "audio: device callback timing (SdlAudioSink::Stats)"      1    'SdlAudioSink::Stats'
           echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
           "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"

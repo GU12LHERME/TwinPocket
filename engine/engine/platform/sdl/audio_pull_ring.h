@@ -67,6 +67,20 @@ public:
     static constexpr int kLeadQuanta = 3;                                  // the standing lead (50 ms)
     static constexpr int kLeadFrames = kQuantumFrames * kLeadQuanta;
     static constexpr int kTrimFrames = kLeadFrames + 2 * kQuantumFrames;   // trim a push that leaves more than this
+    // The standing lead and the trim line for the device's buffer: a device pulling more than kLeadFrames a callback
+    // (Android's 2048 / 4096-frame buffers) needs a lead of at least one pull, or every pull past the lead is padded.
+    // lead = max(kLeadFrames, the pull rounded up to whole quanta), trim = lead + 2 quanta, within the capacity.
+    // Set before the device starts (the producer and the consumer read them relaxed).
+    void SetDeviceFrames(int frames) {
+        int lead = kLeadFrames;
+        const int need = (frames + kQuantumFrames - 1) / kQuantumFrames * kQuantumFrames;
+        if (need > lead) lead = need;
+        if (lead + 2 * kQuantumFrames > kCapacityFrames) lead = kCapacityFrames - 2 * kQuantumFrames;
+        lead_frames_.store(lead, std::memory_order_relaxed);
+        trim_frames_.store(lead + 2 * kQuantumFrames, std::memory_order_relaxed);
+    }
+    int LeadFrames() const { return lead_frames_.load(std::memory_order_relaxed); }
+    int TrimFrames() const { return trim_frames_.load(std::memory_order_relaxed); }
     void SetPadWithTail(bool on) { pad_with_tail_.store(on, std::memory_order_release); }
     bool PadWithTail() const { return pad_with_tail_.load(std::memory_order_acquire); }
     // Producer side, once before the stream (and after a restore's discard):
@@ -99,6 +113,8 @@ private:
     void PushRaw(const float* interleaved, int frames);
     void TrimToLead(uint64_t write_pos);
 
+    std::atomic<int>      lead_frames_{kLeadFrames};
+    std::atomic<int>      trim_frames_{kTrimFrames};
     float                 samples_[kCapacityFrames * kChannels];
     std::atomic<uint64_t> read_{0};
     std::atomic<uint64_t> write_{0};

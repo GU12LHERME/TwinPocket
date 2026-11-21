@@ -66,6 +66,7 @@ public final class LauncherActivity extends Activity {
         addButton(row1, "Teste SDL (sem o jogo)", v -> startSdlTest());
         addButton(row2, "Compartilhar relatório", v -> buildReport(true));
         addButton(row2, "Copiar relatório", v -> buildReport(false));
+        addButton(row2, "Áudio…", v -> audioOptions());
         addButton(row2, "Atualizar", v -> refresh());
         root.addView(row1);
         root.addView(row2);
@@ -153,6 +154,8 @@ public final class LauncherActivity extends Activity {
                 b.append("  O arquivo existe, mas o Android não deixa o app lê-lo (EACCES). Use \"Selecionar ISO\": o app copia a\n")
                  .append("  imagem pelo seletor do Android para o seu armazenamento privado, sem pedir permissões de armazenamento.\n");
         }
+        b.append("\nÁUDIO: buffer ").append(prefs().getInt("audio_buffer", 2048)).append(" frames, driver ")
+         .append(prefs().getString("audio_driver", "auto")).append(" (botão \"Áudio…\")\n");
         b.append('\n').append("ÚLTIMAS EXECUÇÕES\n");
         b.append(describeStage("game", "  jogo / teste SDL"));
         b.append(describeStage("probe", "  diagnóstico"));
@@ -208,6 +211,30 @@ public final class LauncherActivity extends Activity {
         Intent i = new Intent(this, MainActivity.class);
         i.putExtra(MainActivity.EXTRA_SDL_TEST, true);
         startActivity(i);
+    }
+
+    // The audio options the game starts with (MainActivity.getArguments -> runner/te_android.cpp --te-env): the device
+    // buffer (frames a callback: 1024 / 2048 / 4096, TE_AUDIO_BUFFER_FRAMES) and SDL's Android audio driver (auto =
+    // SDL's order: AAudio, then OpenSL ES, then Java AudioTrack). The report's "audio device" lines say how each did.
+    private void audioOptions() {
+        final int[] buffers = {1024, 2048, 4096};
+        final String[] drivers = {"auto", "aaudio", "openslES", "android"};
+        final String[] labels = {
+            "Buffer 1024 frames (21 ms)", "Buffer 2048 frames (43 ms) — padrão", "Buffer 4096 frames (85 ms)",
+            "Driver: automático (AAudio)", "Driver: AAudio", "Driver: OpenSL ES", "Driver: Java AudioTrack"};
+        final int curBuffer = prefs().getInt("audio_buffer", 2048);
+        final String curDriver = prefs().getString("audio_driver", "auto");
+        new AlertDialog.Builder(this)
+            .setTitle("Áudio — atual: " + curBuffer + " frames, " + curDriver)
+            .setItems(labels, (d, which) -> {
+                if (which < 3) prefs().edit().putInt("audio_buffer", buffers[which]).apply();
+                else prefs().edit().putString("audio_driver", drivers[which - 3]).apply();
+                Diag.log(this, "main", "audio option: " + labels[which]);
+                Toast.makeText(this, labels[which], Toast.LENGTH_SHORT).show();
+                refresh();
+            })
+            .setNegativeButton("Fechar", null)
+            .show();
     }
 
     private SharedPreferences prefs() {
@@ -387,6 +414,16 @@ public final class LauncherActivity extends Activity {
                 String content = Diag.readFile(new File(dir, name), name.equals("logcat.txt") ? 300000 : 120000);
                 if (content == null) continue;
                 b.append("\n===== ").append(name).append(" =====\n").append(content).append('\n');
+            }
+            String game = Diag.readFile(new File(dir, "latest-game.log"), 0);
+            if (game != null) {
+                StringBuilder in = new StringBuilder(), au = new StringBuilder();
+                for (String line : game.split("\n")) {
+                    if (line.contains("input:") || line.contains("] input")) in.append(line).append('\n');
+                    if (line.contains("audio") || line.contains("AAudio")) au.append(line).append('\n');
+                }
+                b.append("\n===== CONTROLES (linhas de input do latest-game.log) =====\n").append(in.length() > 0 ? in : "(nenhuma)\n");
+                b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
             }
             String frames = Diag.symbolizeFrames(c, b.toString());
             if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);
