@@ -70,6 +70,36 @@ endif()
 if(TE_VITA_NATIVE)
     add_compile_definitions(TE_NATIVE=1)   # the runner and the host side (te_host.h's address model, runner/te_native.h)
 endif()
+# TE_ANDROID: the Android lane -- the NDK's CMake toolchain (cmake/android.toolchain.cmake; the android-arm64-game preset),
+# arm64-v8a, API 24+. The game is the wasm2c module as on the desktop (the generator runs on the build machine, the NDK
+# compiles its C); the engine is configured for Android (engine/platform: the Linux folder + the AArch64 fibers, OpenGL ES
+# 3.2); the runner is linked as libmain.so, the library SDL2's Android activity loads and enters through SDL_main
+# (runner/te_android.cpp). SDL2 (shared, libSDL2.so) and FFmpeg (static, tools/android/ffmpeg_android.sh) are built
+# beforehand for the same ABI and named by TE_ANDROID_SDL2_DIR (its lib/cmake/SDL2) and TE_ANDROID_FFMPEG_PREFIX. Every
+# Android difference in this file sits under if(TE_ANDROID); the other lanes are untouched by it.
+option(TE_ANDROID "The Android lane: libmain.so for arm64-v8a through the NDK toolchain (the android-arm64-game preset)" OFF)
+if(TE_ANDROID)
+    if(NOT ANDROID OR NOT ANDROID_ABI STREQUAL "arm64-v8a")
+        message(FATAL_ERROR "TwinsanityEvolved: TE_ANDROID=ON needs the Android NDK toolchain with ANDROID_ABI=arm64-v8a")
+    endif()
+    string(REGEX REPLACE "^android-" "" _te_android_api "${ANDROID_PLATFORM}")
+    if(NOT _te_android_api MATCHES "^[0-9]+$" OR _te_android_api LESS 24)
+        message(FATAL_ERROR "TwinsanityEvolved: TE_ANDROID=ON needs ANDROID_PLATFORM android-24 or newer (got ${ANDROID_PLATFORM})")
+    endif()
+    set(TE_ANDROID_SDL2_DIR "" CACHE PATH "the Android SDL2 build's CMake package directory (<prefix>/lib/cmake/SDL2)")
+    set(TE_ANDROID_FFMPEG_PREFIX "" CACHE PATH "the Android FFmpeg prefix (tools/android/ffmpeg_android.sh)")
+    if(NOT EXISTS "${TE_ANDROID_SDL2_DIR}/SDL2Config.cmake" AND NOT EXISTS "${TE_ANDROID_SDL2_DIR}/sdl2-config.cmake")
+        message(FATAL_ERROR "TwinsanityEvolved: TE_ANDROID_SDL2_DIR=${TE_ANDROID_SDL2_DIR} holds no SDL2 CMake package (build SDL2 for arm64-v8a first: tools/android/build_deps.sh)")
+    endif()
+    if(NOT EXISTS "${TE_ANDROID_FFMPEG_PREFIX}/lib/libavcodec.a")
+        message(FATAL_ERROR "TwinsanityEvolved: TE_ANDROID_FFMPEG_PREFIX=${TE_ANDROID_FFMPEG_PREFIX} holds no libavcodec.a (tools/android/ffmpeg_android.sh)")
+    endif()
+    set(SDL2_DIR "${TE_ANDROID_SDL2_DIR}" CACHE PATH "SDL2's package (the Android build)" FORCE)
+    set(FFMPEG_INCLUDE_DIR "${TE_ANDROID_FFMPEG_PREFIX}/include" CACHE PATH "FFmpeg headers (the Android build)" FORCE)
+    set(FFMPEG_AVCODEC_LIBRARY "${TE_ANDROID_FFMPEG_PREFIX}/lib/libavcodec.a" CACHE FILEPATH "libavcodec (the Android build)" FORCE)
+    set(FFMPEG_AVUTIL_LIBRARY "${TE_ANDROID_FFMPEG_PREFIX}/lib/libavutil.a" CACHE FILEPATH "libavutil (the Android build)" FORCE)
+    set(FFMPEG_SWSCALE_LIBRARY "${TE_ANDROID_FFMPEG_PREFIX}/lib/libswscale.a" CACHE FILEPATH "libswscale (the Android build)" FORCE)
+endif()
 find_package(Python3 3.8 COMPONENTS Interpreter REQUIRED)
 
 set(TE_GAME "${CMAKE_SOURCE_DIR}/game")
@@ -493,6 +523,14 @@ if(TE_VITA)
          "-DFFMPEG_AVUTIL_LIBRARY=${TE_VITA_FFMPEG}/lib/libavutil.a"
          "-DFFMPEG_SWSCALE_LIBRARY=${TE_VITA_FFMPEG}/lib/libswscale.a")
 endif()
+if(TE_ANDROID)
+    # The engine's own configure reads the same NDK toolchain file (forwarded above) and so needs the same ABI / API /
+    # C++ runtime, the same SDL2 package and the same FFmpeg archives as this project.
+    list(APPEND TE_ENGINE_FORWARDED_ARGS "-DANDROID_ABI=${ANDROID_ABI}" "-DANDROID_PLATFORM=${ANDROID_PLATFORM}"
+         "-DANDROID_STL=${ANDROID_STL}" "-DSDL2_DIR=${SDL2_DIR}"
+         "-DFFMPEG_INCLUDE_DIR=${FFMPEG_INCLUDE_DIR}" "-DFFMPEG_AVCODEC_LIBRARY=${FFMPEG_AVCODEC_LIBRARY}"
+         "-DFFMPEG_AVUTIL_LIBRARY=${FFMPEG_AVUTIL_LIBRARY}" "-DFFMPEG_SWSCALE_LIBRARY=${FFMPEG_SWSCALE_LIBRARY}")
+endif()
 if(TE_DIST)
     set(PS2R_FETCH_SDL2 ON CACHE BOOL "" FORCE)
     set(CMAKE_DISABLE_FIND_PACKAGE_SDL2 ON)
@@ -608,6 +646,13 @@ if(TE_VITA)
     include("${TE_ENGINE}/cmake/OpenGlDependency.cmake")
     target_link_libraries(nativeee_libs INTERFACE SDL2::SDL2 OpenGL::GL FFmpeg::avcodec FFmpeg::swscale FFmpeg::avutil m)
     target_link_options(nativeee_libs INTERFACE "LINKER:--whole-archive,-lpthread,--no-whole-archive")
+elseif(TE_ANDROID)
+    # OpenGL ES 3.2 + EGL (the engine's OpenGlDependency.cmake Android arm), the shared SDL2, the static FFmpeg; liblog for
+    # the logcat lines, libandroid for the native window SDL hands EGL. bionic carries pthread and libm's symbols itself.
+    include("${TE_ENGINE}/cmake/OpenGlDependency.cmake")
+    include("${TE_ENGINE}/cmake/FindFFmpeg.cmake")
+    set(TE_HAVE_SDL_INPUT 1)
+    target_link_libraries(nativeee_libs INTERFACE SDL2::SDL2 OpenGL::GL FFmpeg::avcodec FFmpeg::swscale FFmpeg::avutil log android m)
 else()
 find_package(OpenGL REQUIRED)
 # FFmpeg (libavcodec / libavutil / libswscale): the movies' MPEG-2 video decoder (ps2r_ipu, behind ps2e_movie). The
@@ -657,7 +702,7 @@ endif()
 # The mod importer (engine/app/host/mod_import: a Mod Crate, a modified disc image, an xdelta / PPF / BPS patch or a folder of
 # files into one overlay folder of the mods folder) and its command line tool. The launcher's Mods
 # page links the same library (engine/app/host/mod_import/mod_import.cmake). Desktop only: the Vita never imports.
-if(NOT TE_VITA)
+if(NOT TE_VITA AND NOT TE_ANDROID)
     set(MOD_IMPORT_ENGINE_ROOT "${TE_ENGINE}")
     set(MOD_IMPORT_GAME_DIR "${CMAKE_SOURCE_DIR}/game")
     include("${TE_ENGINE}/app/host/mod_import/mod_import.cmake")
@@ -692,15 +737,26 @@ if(WIN32)
 else()
     set(TE_FIBER_SWITCH runner/te_fiber_switch.S)     # AAPCS64 / SysV x86-64
 endif()
-if(TE_VITA)
+if(TE_VITA OR TE_ANDROID)   # Android: no relaunch of the process under a fixed image either (an activity, not a program)
     set(TE_SAVESTATE_RUNNER runner/te_savestate_null.cpp)   # no fixed-address image / relaunch on the device: every entry refuses
 else()
     set(TE_SAVESTATE_RUNNER runner/te_savestate.cpp)
 endif()
-add_executable(twinsanityevolved runner/main.cpp runner/te_env.cpp runner/te_run.c runner/te_startup.cpp
+set(TE_RUNNER_SOURCES runner/main.cpp runner/te_env.cpp runner/te_run.c runner/te_startup.cpp
     runner/te_fiber.c ${TE_FIBER_SWITCH} runner/te_game.cpp ${TE_SAVESTATE_RUNNER}
     runner/te_probe.cpp runner/te_autopilot.cpp runner/te_profile.cpp runner/te_disc_log.cpp runner/te_region.cpp
     runner/te_cutscenes.cpp)
+if(TE_ANDROID)
+    # libmain.so: SDL2's Java activity loads libSDL2.so then libmain.so and calls SDL_main (runner/te_android.cpp), which
+    # sets up the app's folders and enters the runner's main(), renamed te_runner_main in this lane only.
+    add_library(twinsanityevolved SHARED ${TE_RUNNER_SOURCES} runner/te_android.cpp)
+    set_target_properties(twinsanityevolved PROPERTIES OUTPUT_NAME main)
+    set_source_files_properties(runner/main.cpp PROPERTIES COMPILE_DEFINITIONS "main=te_runner_main")
+    # every symbol resolved at link time (the NDK's default for shared libraries, stated): a missing body is a build error
+    target_link_options(twinsanityevolved PRIVATE "-Wl,--no-undefined" "-Wl,-z,max-page-size=16384")
+else()
+add_executable(twinsanityevolved ${TE_RUNNER_SOURCES})
+endif()
 # the game folder (ps2r.ini beside the game, its memory cards and mods): shared host code the launcher resolves the same way
 target_sources(twinsanityevolved PRIVATE "${TE_ENGINE}/app/host/game_folder.cpp")
 set_target_properties(twinsanityevolved PROPERTIES C_STANDARD 99 C_EXTENSIONS ON)   # te_run.c: as tegame (above)
@@ -794,7 +850,7 @@ add_executable(te_fiber_test runner/te_fiber_test.c runner/te_fiber.c ${TE_FIBER
 set_target_properties(te_fiber_test PROPERTIES C_STANDARD 99 C_EXTENSIONS ON)
 target_include_directories(te_fiber_test PRIVATE "${CMAKE_SOURCE_DIR}/runner")
 target_compile_options(te_fiber_test PRIVATE -Wall -Wextra)
-if(NOT TE_VITA)   # a host-run ctest; the Vita binary cannot run here
+if(NOT TE_VITA AND NOT TE_ANDROID)   # a host-run ctest; the Vita / Android binary cannot run here (Android: built, run under qemu by CI)
 add_test(NAME nativeee.te_fiber COMMAND te_fiber_test)
 set_tests_properties(nativeee.te_fiber PROPERTIES LABELS nativeee TIMEOUT 60)
 endif()
@@ -811,6 +867,9 @@ if(TE_VITA)
     else()
     target_link_libraries(twinsanityevolved PRIVATE tegame -Wl,--whole-archive te_platform_host -Wl,--no-whole-archive te_disc_identity nativeee_libs te_seam_stubs)
     endif()
+elseif(TE_ANDROID)
+    # CMake's WHOLE_ARCHIVE link feature does not list Android: the same lld bracket spelled out
+    target_link_libraries(twinsanityevolved PRIVATE tegame -Wl,--whole-archive te_platform_host -Wl,--no-whole-archive te_disc_identity nativeee_libs te_seam_stubs)
 else()
 target_link_libraries(twinsanityevolved PRIVATE tegame "$<LINK_LIBRARY:WHOLE_ARCHIVE,te_platform_host>" te_disc_identity nativeee_libs te_seam_stubs)
 endif()
@@ -856,6 +915,8 @@ if(TE_VITA)
     vita_create_vpk(twinsanityevolved.vpk ${VITA_TITLEID} eboot.bin VERSION ${VITA_VERSION} NAME ${VITA_APP_NAME} ${TE_VITA_VPK_EXTRA})
     add_custom_target(twinsanityevolved_vpk ALL DEPENDS twinsanityevolved.vpk)
     message(STATUS "TwinsanityEvolved: the Vita lane -- ${CMAKE_BINARY_DIR}/twinsanityevolved.vpk (title id ${VITA_TITLEID}); the judges' tools and the tests are host-only and skipped")
+elseif(TE_ANDROID)
+    message(STATUS "TwinsanityEvolved: the Android lane -- ${CMAKE_BINARY_DIR}/libmain.so (arm64-v8a, ${ANDROID_PLATFORM}); the judges' tools and the tests are host-only and skipped")
 else()
 # tools/judges: the graphics seam's host self-test (no game module; its frame is judged by title_frame_judge.py)
 add_executable(te_graphics_selftest tools/judges/graphics_selftest.cpp)

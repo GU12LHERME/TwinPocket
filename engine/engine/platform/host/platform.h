@@ -53,7 +53,10 @@
 // --- the GL header the render backend and the windowed tests include --------
 // `#include PS2R_GL_HEADER` is the one spelling; the macro resolves per OS here.
 #if defined(__ANDROID__)
-#define PS2R_GL_HEADER <GLES3/gl3.h>
+// The Android target (engine/platform/android/): OpenGL ES 3.2 through libGLESv3, with the GL 4.1 spellings the
+// backend uses mapped onto ES in gl_android.h. The rest of the target is the Linux folder (bionic is POSIX) with the
+// AArch64 fiber switch (posix/fiber_android_arm64.cpp; bionic has no ucontext switch).
+#define PS2R_GL_HEADER "engine/platform/android/gl_android.h"
 #define PS2R_HOST_ANDROID 1
 #define PS2R_HOST_MACOS 0
 #define PS2R_HOST_LINUX 0
@@ -78,7 +81,12 @@
 #ifndef GL_GLEXT_PROTOTYPES
 #define GL_GLEXT_PROTOTYPES 1
 #endif
+#if defined(PS2R_GLES_COMPAT_CHECK)
+// a host-side compile check of the Android GL mapping (gl_android.h) against the system's Khronos ES headers
+#define PS2R_GL_HEADER "engine/platform/android/gl_android.h"
+#else
 #define PS2R_GL_HEADER <GL/glcorearb.h>
+#endif
 #define PS2R_HOST_MACOS 0
 #define PS2R_HOST_LINUX 1
 #define PS2R_HOST_VITA 0

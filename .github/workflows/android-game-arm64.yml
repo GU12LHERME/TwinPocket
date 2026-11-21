@@ -1,0 +1,236 @@
+name: Android ARM64 game build (stage 1)
+
+# Stage 1 of the Android plan: the REAL code for Android arm64-v8a -- the game module (the decompilation compiled to
+# wasm32 by the pinned wasi-sdk and lowered to C by wabt's wasm2c on this machine, then compiled by the NDK), the
+# NativeEE engine (configured for Android: engine/platform's Linux folder, the AArch64 fibers, OpenGL ES 3.2) and the
+# runner -- linked as libmain.so with every symbol resolved (-Wl,--no-undefined), checked for the components' symbols,
+# and packaged with libSDL2.so and SDL2's Java glue as an APK (android/game). The build does not run the game: no device
+# here and no disc image (game data is never in the repository or the APK; tools/ci/asset_scan.py).
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - android-game-arm64
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-game-arm64-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  game-apk:
+    name: Game module + engine + runner -> libmain.so -> APK
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      ANDROID_NDK_VERSION: 30.0.16248370
+      ANDROID_API: '24'
+      SDL2_REF: release-2.30.9
+      LOG_DIR: ${{ github.workspace }}/android-game-logs
+      DEPS_DIR: ${{ github.workspace }}/build-android-deps
+      BUILD_DIR: ${{ github.workspace }}/build-android-arm64-game
+
+    steps:
+      - name: Check out project
+        uses: actions/checkout@v7
+
+      - name: Free disk space
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /opt/hostedtoolcache/CodeQL || true
+          df -h "$GITHUB_WORKSPACE"
+          mkdir -p "$LOG_DIR"
+
+      - name: Asset scan over the tree (no game data)
+        shell: bash
+        run: python3 tools/ci/asset_scan.py 2>&1 | tee "$LOG_DIR/asset-scan-tree.log"
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v4
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          gradle-version: '8.9'
+
+      - name: Install Android SDK, CMake, NDK and host tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "cmake;3.31.6" "ndk;${ANDROID_NDK_VERSION}" > /dev/null
+          ndk_home="${ANDROID_SDK_ROOT}/ndk/${ANDROID_NDK_VERSION}"
+          echo "ANDROID_NDK_HOME=${ndk_home}" >> "$GITHUB_ENV"
+          echo "${ANDROID_SDK_ROOT}/cmake/3.31.6/bin" >> "$GITHUB_PATH"
+          echo "NDK_LLVM=${ndk_home}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_ENV"
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ninja-build qemu-user g++-aarch64-linux-gnu > /dev/null
+
+      - name: Record tool versions
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            java -version 2>&1
+            gradle --version
+            cmake --version
+            ninja --version
+            python3 --version
+            "$NDK_LLVM/clang" --version
+          } 2>&1 | tee "$LOG_DIR/tool-versions.log"
+
+      - name: Fetch the pinned wasm toolchain (wasi-sdk 24, wabt 1.0.42)
+        shell: bash
+        run: tools/fetch_toolchain.sh 2>&1 | tee "$LOG_DIR/fetch-toolchain.log"
+
+      - name: Check out SDL2 (the engine's pin) for libSDL2.so and the Java glue
+        uses: actions/checkout@v7
+        with:
+          repository: libsdl-org/SDL
+          ref: release-2.30.9
+          path: .deps/SDL2
+
+      - name: AArch64 fiber switch (engine) under qemu-aarch64
+        shell: bash
+        run: |
+          set -euo pipefail
+          aarch64-linux-gnu-g++ -std=c++17 -O2 -Wall -Wextra -Werror -static -Iengine \
+            engine/tests/android/test_fiber_android_arm64.cpp engine/engine/platform/posix/fiber_android_arm64.cpp \
+            -o "$RUNNER_TEMP/test_fiber_android_arm64"
+          qemu-aarch64 "$RUNNER_TEMP/test_fiber_android_arm64" 2>&1 | tee "$LOG_DIR/fiber-test.log"
+
+      - name: Build SDL2 (shared) and FFmpeg (static, LGPL) for arm64-v8a
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/android/build_deps.sh "$GITHUB_WORKSPACE/.deps/SDL2" "$DEPS_DIR" 2>&1 | tee "$LOG_DIR/deps.log"
+
+      - name: Configure (android-arm64-game)
+        shell: bash
+        run: |
+          set -euo pipefail
+          cmake --preset android-arm64-game \
+            -DTE_ANDROID_SDL2_DIR="$DEPS_DIR/sdl2/lib/cmake/SDL2" \
+            -DTE_ANDROID_FFMPEG_PREFIX="$DEPS_DIR/ffmpeg" 2>&1 | tee "$LOG_DIR/configure.log"
+
+      - name: Build the engine for Android (NativeEE archives)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! cmake --build "$BUILD_DIR" --target nativeee > "$LOG_DIR/build-engine.log" 2>&1; then
+            grep -nE 'error|FAILED|undefined' "$LOG_DIR/build-engine.log" | head -150
+            tail -n 40 "$LOG_DIR/build-engine.log"; exit 1
+          fi
+          tail -n 5 "$LOG_DIR/build-engine.log"
+
+      - name: Build the game module, the runner and libmain.so
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! cmake --build --preset android-arm64-game > "$LOG_DIR/build-game.log" 2>&1; then
+            grep -nE 'error|FAILED|undefined' "$LOG_DIR/build-game.log" | head -150
+            tail -n 40 "$LOG_DIR/build-game.log"; exit 1
+          fi
+          tail -n 5 "$LOG_DIR/build-game.log"
+          test -s "$BUILD_DIR/libmain.so"
+
+      - name: Verify libmain.so (ELF, dependencies, the components' symbols)
+        shell: bash
+        run: |
+          set -euo pipefail
+          so="$BUILD_DIR/libmain.so"
+          ev="$LOG_DIR/libmain-evidence.txt"
+          : > "$ev"
+          fail=0
+          check() {   # check <label> <min count> <regex>   (over the demangled symbol table)
+            local n
+            n="$(grep -cE "$3" "$LOG_DIR/libmain-symbols.txt" || true)"
+            if [ "$n" -ge "$2" ]; then echo "PASS  $1: $n symbols match /$3/" | tee -a "$ev"
+            else echo "FAIL  $1: $n symbols match /$3/ (expected >= $2)" | tee -a "$ev"; fail=1; fi
+          }
+          {
+            echo "== file"; ls -l "$so"; sha256sum "$so"
+            echo "== ELF header"; "$NDK_LLVM/llvm-readelf" -h "$so"
+            echo "== dynamic section"; "$NDK_LLVM/llvm-readelf" -d "$so"
+            echo "== section sizes"; "$NDK_LLVM/llvm-size" -A "$so" | sort -k2 -n -r | head -20
+          } > "$LOG_DIR/libmain-elf.txt"
+          "$NDK_LLVM/llvm-nm" -C --defined-only "$so" > "$LOG_DIR/libmain-symbols.txt"
+          "$NDK_LLVM/llvm-nm" -D --undefined-only "$so" > "$LOG_DIR/libmain-undefined-dynamic.txt"
+          grep -q 'Class:.*ELF64' "$LOG_DIR/libmain-elf.txt" && grep -q 'Machine:.*AArch64' "$LOG_DIR/libmain-elf.txt" \
+            && echo "PASS  ELF64 AArch64 shared object" | tee -a "$ev" || { echo "FAIL  not an ELF64 AArch64 object" | tee -a "$ev"; fail=1; }
+          for lib in libSDL2.so libGLESv3.so libEGL.so liblog.so; do
+            if grep -q "Shared library: \[$lib\]" "$LOG_DIR/libmain-elf.txt"; then echo "PASS  NEEDED $lib" | tee -a "$ev"
+            else echo "FAIL  NEEDED $lib missing" | tee -a "$ev"; fail=1; fi
+          done
+          if grep -q 'libc++_shared' "$LOG_DIR/libmain-elf.txt"; then echo "FAIL  links libc++_shared (expected the static C++ runtime)" | tee -a "$ev"; fail=1; fi
+          echo "== components" | tee -a "$ev"
+          check "entry: SDL_main (runner/te_android.cpp)"                 1   ' T SDL_main$'
+          check "runner main (runner/main.cpp as te_runner_main)"         1   'te_runner_main'
+          check "runner: game fiber switch (runner/te_fiber_switch.S)"     1   ' te_fiber_switch$'
+          check "game module: wasm2c functions (w2c_game_*)"               5000 'w2c_game_'
+          check "game module: instantiation (wasm2c_game_instantiate)"      1   'wasm2c_game_instantiate'
+          check "game module: wasm2c runtime (wasm_rt_*)"                  5    'wasm_rt_'
+          check "seam: host thunks / ps2e_* bodies"                        50   'ps2e_'
+          check "engine: OpenGL ES backend (ps2r::*Gl*)"                   20   'ps2r::.*Gl[A-Z]'
+          check "engine: AArch64 fibers (posix/fiber_android_arm64.cpp)"   2    'ps2r_fiber_a64_switch|FiberPosix::Create'
+          check "engine: SDL input system"                                  5    'InputSystem'
+          check "engine: SDL audio sink"                                    2    'SdlAudioSink'
+          check "engine: disc (cdvd)"                                       5    'ps2r::cdvd::'
+          check "engine: IOP kernel"                                        5    'ps2r::iop::'
+          check "engine: title HLE (Crash Twinsanity)"                     5    'title'
+          check "FFmpeg: MPEG-2 decoder (movies)"                           1    'ff_mpeg2video_decoder'
+          echo "== undefined dynamic symbols resolved by NEEDED libraries: $(wc -l < "$LOG_DIR/libmain-undefined-dynamic.txt")" | tee -a "$ev"
+          echo "== total defined symbols: $(wc -l < "$LOG_DIR/libmain-symbols.txt")" | tee -a "$ev"
+          exit $fail
+
+      - name: Package the APK (android/game)
+        shell: bash
+        run: |
+          set -euo pipefail
+          jni="$RUNNER_TEMP/jniLibs"
+          mkdir -p "$jni/arm64-v8a"
+          cp "$BUILD_DIR/libmain.so" "$DEPS_DIR/sdl2/lib/libSDL2.so" "$jni/arm64-v8a/"
+          gradle --no-daemon --stacktrace -p android/game assembleDebug \
+            -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
+
+      - name: Verify the APK (package, native code, no game data)
+        shell: bash
+        run: |
+          set -euo pipefail
+          apk="android/game/app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" | tee "$LOG_DIR/apk-badging.log"
+          grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/apk-badging.log"
+          grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
+          unzip -l "$apk" | tee "$LOG_DIR/apk-contents.log"
+          x="$RUNNER_TEMP/apk-x"
+          rm -rf "$x"; mkdir -p "$x"; unzip -q "$apk" -d "$x"
+          cmp "$x/lib/arm64-v8a/libmain.so" "$BUILD_DIR/libmain.so"
+          cmp "$x/lib/arm64-v8a/libSDL2.so" "$DEPS_DIR/sdl2/lib/libSDL2.so"
+          echo "PASS  the APK carries the verified libmain.so and libSDL2.so byte for byte" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          python3 tools/ci/asset_scan.py "$x/lib" 2>&1 | tee "$LOG_DIR/asset-scan-apk.log"
+          if find "$x" -type f \( -iname '*.iso' -o -iname '*.bin' -o -iname '*.elf' -o -iname '*.irx' \) | grep -q .; then
+            echo "FAIL  disc / program files in the APK"; exit 1
+          fi
+          sha256sum "$apk" | tee "$LOG_DIR/apk-sha256.txt"
+
+      - name: Upload APK, libmain.so and evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-game-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            android/game/app/build/outputs/apk/debug/app-debug.apk
+            build-android-arm64-game/libmain.so
+            android-game-logs/
+          if-no-files-found: warn
+          retention-days: 14

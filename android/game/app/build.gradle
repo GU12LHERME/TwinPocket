@@ -1,0 +1,48 @@
+plugins {
+    id "com.android.application"
+}
+
+// The native code is built BEFORE Gradle by CMake (the android-arm64-game configuration: the game module, the engine and
+// the runner as libmain.so; tools/android/build_deps.sh: libSDL2.so). Gradle only packages them with SDL2's Java glue.
+//   -Psdl2SourceDir=<SDL release-2.30.9 source>   the Java glue (org.libsdl.app.*) of the same SDL as libSDL2.so
+//   -PnativeLibsDir=<dir>                         a jniLibs layout: <dir>/arm64-v8a/{libmain.so,libSDL2.so}
+def sdl2SourceDir = providers.gradleProperty("sdl2SourceDir").orNull
+if (sdl2SourceDir == null || !file("${sdl2SourceDir}/android-project/app/src/main/java").isDirectory()) {
+    throw new GradleException("Pass -Psdl2SourceDir=<SDL release-2.30.9 source directory>")
+}
+def nativeLibsDir = providers.gradleProperty("nativeLibsDir").orNull
+if (nativeLibsDir == null || !file("${nativeLibsDir}/arm64-v8a/libmain.so").isFile()
+        || !file("${nativeLibsDir}/arm64-v8a/libSDL2.so").isFile()) {
+    throw new GradleException("Pass -PnativeLibsDir=<dir> holding arm64-v8a/libmain.so and arm64-v8a/libSDL2.so")
+}
+
+android {
+    namespace "org.libsdl.app"
+    compileSdk 35
+
+    defaultConfig {
+        applicationId "com.twinsanityevolved.game"
+        minSdk 24
+        targetSdk 33
+        versionCode 1
+        versionName "0.1.0-android-stage1"
+        ndk {
+            abiFilters "arm64-v8a"
+        }
+    }
+
+    sourceSets {
+        main {
+            java.srcDir "${sdl2SourceDir}/android-project/app/src/main/java"
+            res.srcDir "${sdl2SourceDir}/android-project/app/src/main/res"
+            jniLibs.srcDirs = [nativeLibsDir]
+        }
+    }
+
+    packagingOptions {
+        jniLibs {
+            useLegacyPackaging true
+            keepDebugSymbols += ["**/libmain.so"]
+        }
+    }
+}

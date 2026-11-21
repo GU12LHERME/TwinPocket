@@ -79,6 +79,22 @@
         "ANDROID_STL": "c++_static",
         "TE_ANDROID_SMOKE_ONLY": "ON"
       }
+    },
+    {
+      "name": "android-arm64-game",
+      "displayName": "Android arm64-v8a: the game as libmain.so",
+      "description": "The Android lane (TE_ANDROID=ON): the game module (wasm2c), the NativeEE engine and the runner as libmain.so through the NDK toolchain (ANDROID_NDK_HOME). Needs -DTE_ANDROID_SDL2_DIR and -DTE_ANDROID_FFMPEG_PREFIX from tools/android/build_deps.sh and the pinned wasm toolchain (tools/fetch_toolchain.sh); android/game packages the APK.",
+      "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" },
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-android-arm64-game",
+      "toolchainFile": "${sourceDir}/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-24",
+        "ANDROID_STL": "c++_static",
+        "TE_ANDROID": "ON"
+      }
     }
   ],
   "buildPresets": [
@@ -88,7 +104,8 @@
 ,
     { "name": "vita-release",                "configurePreset": "vita-release",                "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved_vpk"] },
     { "name": "vita-module-release",         "configurePreset": "vita-module-release",         "condition": { "type": "notEquals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "targets": ["twinsanityevolved_vpk"] },
-    { "name": "android-arm64-smoke",         "configurePreset": "android-arm64-smoke",         "targets": ["te_android_ndk_smoke"] }
+    { "name": "android-arm64-smoke",         "configurePreset": "android-arm64-smoke",         "targets": ["te_android_ndk_smoke"] },
+    { "name": "android-arm64-game",          "configurePreset": "android-arm64-game",          "targets": ["twinsanityevolved"] }
   ],
   "testPresets": [
     { "name": "windows-clang-cl-release",     "configurePreset": "windows-clang-cl-release",     "condition": { "type": "equals", "lhs": "${hostSystemName}", "rhs": "Windows" }, "filter": { "include": { "label": "nativeee" } }, "output": { "outputOnFailure": true }, "execution": { "timeout": 300 } },

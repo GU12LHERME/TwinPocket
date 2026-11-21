@@ -60,6 +60,6 @@ add_library(te_seam_stubs STATIC "${TE_GEN}/seam/seam_stubs.cpp")
 target_include_directories(te_seam_stubs PUBLIC "${TE_GEN}/seam")
 add_dependencies(te_seam_stubs te_seam)
 
-if(NOT TE_VITA)   # host-run ctests (and te_test_support, which te_pdesc links); nothing of them is packed for the Vita
+if(NOT TE_VITA AND NOT TE_ANDROID)   # host-run ctests (and te_test_support, which te_pdesc links); nothing of them is packed for the Vita
     add_subdirectory(tests)
 endif()
