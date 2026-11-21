@@ -24,3 +24,30 @@ No game data is in the APK or the repository: the game reads your own disc image
 Status: stage 1 is the build (every symbol resolved at link time). Running the game on a device -- the disc found, the
 module's frames advancing, then the picture (stage 3), the pads (4) and the sound (5) -- is not verified by this build.
 The smoke APKs in `android/sdl2-smoke` and `android/nativeee-smoke` stay as they were.
+
+## Diagnostic build
+
+The launcher icon opens **LauncherActivity** (Java only, no native code). It shows the disc image check and what the
+last runs reached, and has these buttons:
+
+- **Iniciar jogo** -- the game (MainActivity, SDL2, in the `:game` process). Without a usable disc image it explains
+  where to put it instead of starting.
+- **Diagnóstico (sem o jogo)** -- ProbeActivity in the `:probe` process: lists the installed native libraries, loads
+  `libSDL2.so` and `libmain.so`, then runs `TeDiag.nativeProbe` (engine fibers, storage, disc image, an OpenGL ES 3.2
+  context and the engine's shaders as shipped and as `#version 320 es`). No game, no SDL window.
+- **Teste SDL (sem o jogo)** -- MainActivity with `--android-sdl-test`: SDL window, GLES renderer, gamepad events for
+  10 s (B / Back ends it). No engine, no game.
+- **Compartilhar relatório** / **Copiar relatório** -- one text file (`files/logs/report.txt`) with the status, every
+  log below and this app's own logcat, through the share sheet (LogProvider) or the clipboard.
+
+Logs (in `/data/data/com.twinsanityevolved.game/files/logs/`, private to the app):
+
+| file | written by | what |
+|---|---|---|
+| `stage-game.txt`, `stage-probe.txt` | native (`runner/te_android_diag.cpp`) | the last stage reached, synced: `running`, `crash <signal>`, `exited`, `finished` |
+| `latest-<process>.log`, `previous-<process>.log` | native | every stage, the runner's and engine's stdout / stderr, fatal signals |
+| `java-<process>.log`, `java-crash-<process>.txt` | Java (`Diag`) | activity steps, library loading, uncaught exceptions |
+| `probe-result.txt` | ProbeActivity | the diagnostic, one line per step (written before each step runs) |
+| `logcat.txt`, `report.txt` | the launcher | this app's logcat at the time of the report; the combined report |
+
+Every line also goes to logcat with the tag `TwinsanityEvolved`.
