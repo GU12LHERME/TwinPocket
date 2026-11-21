@@ -229,7 +229,7 @@ jobs:
           check "diagnostics: exit() wrapper (-Wl,--wrap=exit)"             1    ' __wrap_exit$'
           check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
           check "game stack inside the game thread (te_android_take_fiber_stack)" 1 'te_android_take_fiber_stack'
-          check "crash backtrace (te_android_diag.cpp WriteCrashBacktrace)"  1    'WriteCrashBacktrace'
+          check "crash backtrace unwinder callback (te_android_diag.cpp)"     1    'CollectCrashFrame'
           echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
           "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"
