@@ -596,6 +596,10 @@ foreach(entry ${TE_ENGINE_LIB_DIRS})
     list(APPEND TE_ENGINE_LIB_TARGETS "${_target}")
     list(APPEND TE_ENGINE_LIB_FILES "${TE_ENGINE_BUILD}/${_dir}/${CMAKE_STATIC_LIBRARY_PREFIX}${_target}${CMAKE_STATIC_LIBRARY_SUFFIX}")
 endforeach()
+if(TE_ANDROID)
+    # the engine archives this lane builds, for CI's keep-going rebuild of the engine tree (a list of all errors at once)
+    file(WRITE "${CMAKE_BINARY_DIR}/te_engine_targets.txt" "${TE_ENGINE_LIB_TARGETS}")
+endif()
 ExternalProject_Add(nativeee
     SOURCE_DIR "${TE_ENGINE}"
     BINARY_DIR "${TE_ENGINE_BUILD}"

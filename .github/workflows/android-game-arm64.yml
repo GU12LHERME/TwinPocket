@@ -127,8 +127,13 @@ jobs:
         run: |
           set -euo pipefail
           if ! cmake --build "$BUILD_DIR" --target nativeee > "$LOG_DIR/build-engine.log" 2>&1; then
-            grep -nE 'error|FAILED|undefined' "$LOG_DIR/build-engine.log" | head -150
-            tail -n 40 "$LOG_DIR/build-engine.log"; exit 1
+            tail -n 30 "$LOG_DIR/build-engine.log"
+            if [ -f "$BUILD_DIR/engine/build.ninja" ]; then
+              # keep going: every engine error of this commit in one pass
+              ninja -C "$BUILD_DIR/engine" -k 0 $(tr ';' ' ' < "$BUILD_DIR/te_engine_targets.txt") > "$LOG_DIR/build-engine-keep-going.log" 2>&1 || true
+              grep -E 'error:|undefined reference|FAILED:' "$LOG_DIR/build-engine-keep-going.log" | sort -u | head -200
+            fi
+            exit 1
           fi
           tail -n 5 "$LOG_DIR/build-engine.log"
 
@@ -136,9 +141,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if ! cmake --build --preset android-arm64-game > "$LOG_DIR/build-game.log" 2>&1; then
-            grep -nE 'error|FAILED|undefined' "$LOG_DIR/build-game.log" | head -150
-            tail -n 40 "$LOG_DIR/build-game.log"; exit 1
+          if ! cmake --build --preset android-arm64-game -- -k 0 > "$LOG_DIR/build-game.log" 2>&1; then
+            grep -E 'error:|undefined (reference|symbol)|FAILED:' "$LOG_DIR/build-game.log" | sort -u | head -200
+            tail -n 30 "$LOG_DIR/build-game.log"; exit 1
           fi
           tail -n 5 "$LOG_DIR/build-game.log"
           test -s "$BUILD_DIR/libmain.so"
