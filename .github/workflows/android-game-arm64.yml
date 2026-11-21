@@ -201,6 +201,11 @@ jobs:
           check "diagnostics: start-up stages (runner/te_android_diag.cpp)" 1    ' te_android_stage$'
           check "diagnostics: exit() wrapper (-Wl,--wrap=exit)"             1    ' __wrap_exit$'
           check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
+          echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
+          "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
+          echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"
+          "$NDK_LLVM/llvm-nm" "$so" | grep -E ' SDL_main$|TeDiag_nativeProbe$' | tee -a "$ev" || true
+          echo "== dynamic symbols defined: $("$NDK_LLVM/llvm-nm" -D --defined-only "$so" | wc -l)" | tee -a "$ev"
           if "$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -qE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$'; then
             n="$("$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -cE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$')"
             echo "PASS  exported to Java (dynamic symbols): $n of SDL_main / TeDiag.nativeProbe" | tee -a "$ev"
