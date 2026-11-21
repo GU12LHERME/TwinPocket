@@ -68,6 +68,7 @@
 extern "C" size_t vglMemFree(int type);
 #include "../../../runner/te_vita.h"   // te::vita::LogRunning (the log's synced start-up ends at the first picture)
 #endif
+#include "../../../runner/te_android_diag.h"   // TE_ANDROID_STAGE (the Android lane; nothing elsewhere)
 #include <cfenv>
 #include <chrono>
 #include <cmath>
@@ -4946,6 +4947,7 @@ void NotePresented() {
     if (!g.have_first_present) {
         g.have_first_present = true;
         g.first_present = Steady::now();
+        TE_ANDROID_STAGE("graphics: first picture presented");
 #if defined(__vita__)
         // the log's synced start-up ends here: from now on no thread -- this one, the drawing thread, above all: its pace
         // census every TE_GFX_SUMMARY_EVERY presents is ~40 lines -- waits on the memory card (runner/te_vita.cpp)

@@ -1,4 +1,4 @@
-name: Android ARM64 game build (stage 1)
+name: Android ARM64 game build (stage 1 + diagnostics)
 
 # Stage 1 of the Android plan: the REAL code for Android arm64-v8a -- the game module (the decompilation compiled to
 # wasm32 by the pinned wasi-sdk and lowered to C by wabt's wasm2c on this machine, then compiled by the NDK), the
@@ -198,6 +198,15 @@ jobs:
           check "host seam: disc reader (platform/nativeee/host te::io)"     5    'te::io::'
           check "engine: title HLE (Crash Twinsanity)"                     5    'title'
           check "FFmpeg: MPEG-2 decoder (movies)"                           1    'ff_mpeg2video_decoder'
+          check "diagnostics: start-up stages (runner/te_android_diag.cpp)" 1    ' te_android_stage$'
+          check "diagnostics: exit() wrapper (-Wl,--wrap=exit)"             1    ' __wrap_exit$'
+          check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
+          if "$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -qE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$'; then
+            n="$("$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -cE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$')"
+            echo "PASS  exported to Java (dynamic symbols): $n of SDL_main / TeDiag.nativeProbe" | tee -a "$ev"
+            [ "$n" -eq 2 ] || fail=1
+          else echo "FAIL  SDL_main / TeDiag.nativeProbe not exported" | tee -a "$ev"; fail=1; fi
+          if "$NDK_LLVM/llvm-readelf" -S "$so" | grep -q 'init_array'; then echo "PASS  .init_array present (the early diagnostics constructor)" | tee -a "$ev"; fi
           echo "== engine namespaces linked (symbol count per ps2r:: namespace)" | tee -a "$ev"
           grep -oE 'ps2r::[a-z0-9_]+' "$LOG_DIR/libmain-symbols.txt" | sort | uniq -c | sort -rn | tee -a "$ev"
           echo "== undefined dynamic symbols resolved by NEEDED libraries: $(wc -l < "$LOG_DIR/libmain-undefined-dynamic.txt")" | tee -a "$ev"
@@ -223,6 +232,15 @@ jobs:
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" | tee "$LOG_DIR/apk-badging.log"
           grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/apk-badging.log"
           grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
+          grep -q "launchable-activity: name='com.twinsanityevolved.game.LauncherActivity'" "$LOG_DIR/apk-badging.log"
+          echo "PASS  the launcher icon opens LauncherActivity (Java only; the game runs in the :game process)" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump xmltree "$apk" AndroidManifest.xml > "$LOG_DIR/apk-manifest.txt"
+          grep -q ':game' "$LOG_DIR/apk-manifest.txt" && grep -q ':probe' "$LOG_DIR/apk-manifest.txt" && grep -q 'LogProvider' "$LOG_DIR/apk-manifest.txt"
+          echo "PASS  manifest: MainActivity in :game, ProbeActivity in :probe, LogProvider" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag; do
+            unzip -p "$apk" 'classes*.dex' | grep -aq "com/twinsanityevolved/game/$cls" || { echo "FAIL  class $cls not in the dex"; exit 1; }
+          done
+          echo "PASS  dex: LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag" | tee -a "$LOG_DIR/libmain-evidence.txt"
           unzip -l "$apk" | tee "$LOG_DIR/apk-contents.log"
           x="$RUNNER_TEMP/apk-x"
           rm -rf "$x"; mkdir -p "$x"; unzip -q "$apk" -d "$x"

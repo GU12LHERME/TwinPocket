@@ -1,133 +1,175 @@
 // runner/te_android.cpp -- the Android lane's entry point (TE_ANDROID; CMakeLists.txt).
 //
-// SDL2's Java activity (org.libsdl.app.SDLActivity) loads libSDL2.so and libmain.so and calls SDL_main on its own
-// thread. This file is that SDL_main: it sends the program's stdout / stderr (where the runner and the engine write
-// their log lines) to logcat, gives the game the app's own folders and enters the runner's main(), which this lane
-// compiles as te_runner_main (CMakeLists.txt: runner/main.cpp's COMPILE_DEFINITIONS).
+// SDL2's Java activity (com.twinsanityevolved.game.MainActivity, an SDLActivity running in the ":game" process) loads
+// libSDL2.so and libmain.so and calls SDL_main on its own thread. When SDL_main returns, SDLActivity finishes: the game's
+// window closes and the launcher (LauncherActivity, the app's own process) comes back with what this run reached.
+//
+// SDL_main here: the start-up stages and logs (te_android_diag.h: logcat tag TwinsanityEvolved + files/logs), the app's
+// folders, the disc image, then the runner's main() (runner/main.cpp compiled as te_runner_main in this lane).
+//   - No usable disc image: a message box says what to put where, and SDL_main returns without starting the game.
+//   - "--android-sdl-test" (the launcher's "SDL test" button): an SDL window, a GLES renderer and the gamepad events for a
+//     few seconds, without the game -- the Android interface, EGL and the pads tested apart from the engine.
 //
 // The folders: the app-specific external storage directory (SDL_AndroidGetExternalStoragePath:
 // /storage/emulated/0/Android/data/<package>/files) is HOME and the working directory, so the runner's own lookups
-// (te_startup.cpp: <home>/.twinsanityevolved for ps2r.ini and the memory cards) land inside the app's storage. The
-// disc image is the user's own file, never part of the package: the first of
-//   1. the path on the first line of <files>/disc-image.txt,
-//   2. <files>/twinsanity.iso,
-//   3. the first *.iso in <files>,
-// is passed as --iso. Without one the runner starts as on the desktop without a disc (and says so in the log).
-// A picker through Android's document UI and the in-app settings are later stages of the Android plan.
+// (te_startup.cpp: <home>/.twinsanityevolved for ps2r.ini and the memory cards) land inside the app's storage. The disc
+// image is the user's own file, never part of the package (te::android::FindDiscImage).
 #include <SDL.h>
 #include <SDL_system.h>
 
-#include <android/log.h>
-#include <pthread.h>
 #include <unistd.h>
 
-#include <cctype>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
-#include <fstream>
 #include <string>
 #include <vector>
+
+#include "te_android_diag.h"
 
 int te_runner_main(int argc, char** argv);   // runner/main.cpp, renamed for this lane
 
 namespace {
 
-constexpr const char* kTag = "TwinsanityEvolved";
+void ShowMessage(Uint32 flags, const char* title, const std::string& text) {
+    te_android_log("message box: %s -- %s", title, text.c_str());
+    if (SDL_ShowSimpleMessageBox(flags, title, text.c_str(), nullptr) != 0)
+        te_android_log("SDL_ShowSimpleMessageBox failed: %s", SDL_GetError());
+}
 
-int g_log_pipe[2] = {-1, -1};
-
-// stdout and stderr into one pipe, its lines into logcat (the runner and the engine log with printf / fprintf)
-void* LogPump(void*) {
-    char buf[1024];
-    std::string line;
-    for (;;) {
-        const ssize_t n = ::read(g_log_pipe[0], buf, sizeof buf);
-        if (n <= 0) break;
-        for (ssize_t i = 0; i < n; ++i) {
-            if (buf[i] == '\n') {
-                __android_log_write(ANDROID_LOG_INFO, kTag, line.c_str());
-                line.clear();
-            } else {
-                line.push_back(buf[i]);
+// The launcher's SDL test: a window, a GLES-backed SDL renderer, gamepad events; no engine, no game.
+int SdlTest() {
+    TE_ANDROID_STAGE("sdl test: SDL_Init(VIDEO | GAMECONTROLLER | EVENTS)");
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0) {
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_Init failed: ") + SDL_GetError());
+        return 1;
+    }
+    TE_ANDROID_STAGE("sdl test: SDL_CreateWindow");
+    SDL_Window* w = SDL_CreateWindow("TwinsanityEvolved SDL test", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    if (!w) {
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+        return 1;
+    }
+    TE_ANDROID_STAGE("sdl test: SDL_CreateRenderer (OpenGL ES)");
+    SDL_Renderer* r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
+    if (!r) {
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
+        return 1;
+    }
+    SDL_RendererInfo info{};
+    SDL_GetRendererInfo(r, &info);
+    int ww = 0, wh = 0;
+    SDL_GetWindowSize(w, &ww, &wh);
+    te_android_log("sdl test: renderer %s, window %dx%d, %d joysticks", info.name, ww, wh, SDL_NumJoysticks());
+    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
+        if (SDL_IsGameController(i) && SDL_GameControllerOpen(i))
+            te_android_log("sdl test: game controller %d: %s", i, SDL_GameControllerNameForIndex(i));
+        else
+            te_android_log("sdl test: joystick %d (no controller mapping): %s", i, SDL_JoystickNameForIndex(i));
+    }
+    TE_ANDROID_STAGE("sdl test: drawing (10 s; B / Back ends it)");
+    const Uint32 start = SDL_GetTicks();
+    int presses = 0;
+    bool run = true;
+    Uint8 shade = 40;
+    while (run && SDL_GetTicks() - start < 10000) {
+        SDL_Event e;
+        while (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) run = false;
+            if (e.type == SDL_CONTROLLERBUTTONDOWN) {
+                ++presses;
+                te_android_log("sdl test: button %s",
+                               SDL_GameControllerGetStringForButton(static_cast<SDL_GameControllerButton>(e.cbutton.button)));
+                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_B || e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) run = false;
+                shade = static_cast<Uint8>(shade + 50);
+            }
+            if (e.type == SDL_KEYDOWN) {
+                te_android_log("sdl test: key %s", SDL_GetKeyName(e.key.keysym.sym));
+                if (e.key.keysym.sym == SDLK_AC_BACK) run = false;
             }
         }
+        const Uint32 t = SDL_GetTicks() - start;
+        SDL_SetRenderDrawColor(r, 20, static_cast<Uint8>(60 + (t / 20) % 120), shade, 255);
+        SDL_RenderClear(r);
+        SDL_Rect bar{0, wh - 40, static_cast<int>(static_cast<long>(ww) * t / 10000), 40};
+        SDL_SetRenderDrawColor(r, 240, 160, 30, 255);
+        SDL_RenderFillRect(r, &bar);
+        SDL_RenderPresent(r);
     }
-    if (!line.empty()) __android_log_write(ANDROID_LOG_INFO, kTag, line.c_str());
-    return nullptr;
-}
-
-void RedirectStdioToLogcat() {
-    std::setvbuf(stdout, nullptr, _IOLBF, 0);
-    std::setvbuf(stderr, nullptr, _IOLBF, 0);
-    if (::pipe(g_log_pipe) != 0) return;
-    ::dup2(g_log_pipe[1], STDOUT_FILENO);
-    ::dup2(g_log_pipe[1], STDERR_FILENO);
-    pthread_t thread;
-    if (pthread_create(&thread, nullptr, &LogPump, nullptr) == 0) pthread_detach(thread);
-}
-
-std::string FirstLine(const std::filesystem::path& file) {
-    std::ifstream f(file, std::ios::binary);
-    std::string line;
-    if (!f || !std::getline(f, line)) return {};
-    while (!line.empty() && (line.back() == '\r' || line.back() == ' ' || line.back() == '\t')) line.pop_back();
-    return line;
-}
-
-std::string FindDiscImage(const std::filesystem::path& files) {
-    namespace fs = std::filesystem;
-    std::error_code ec;
-    const std::string named = FirstLine(files / "disc-image.txt");
-    if (!named.empty() && fs::is_regular_file(named, ec)) return named;
-    if (fs::is_regular_file(files / "twinsanity.iso", ec)) return (files / "twinsanity.iso").string();
-    for (fs::directory_iterator it(files, ec), end; !ec && it != end; it.increment(ec)) {
-        if (!it->is_regular_file(ec)) continue;
-        std::string ext = it->path().extension().string();
-        for (char& c : ext) c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-        if (ext == ".iso") return it->path().string();
-    }
-    return {};
+    te_android_log("sdl test: done, %d button presses", presses);
+    SDL_DestroyRenderer(r);
+    SDL_DestroyWindow(w);
+    SDL_Quit();
+    return 0;
 }
 
 }  // namespace
 
 extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** argv) {
-    RedirectStdioToLogcat();
-    std::printf("[te.android] TwinsanityEvolved for Android (arm64-v8a) starting\n");
+    te_android_thread_altstack();
+    te_android_redirect_stdio();
+    TE_ANDROID_STAGE("SDL_main entered (SDL thread)");
+    for (int i = 0; i < argc; ++i) te_android_log("argv[%d] = %s", i, argv[i] ? argv[i] : "(null)");
 
+    bool sdl_test = false;
+    for (int i = 1; i < argc; ++i)
+        if (argv[i] && std::strcmp(argv[i], "--android-sdl-test") == 0) sdl_test = true;
+    if (sdl_test) {
+        const int rc = SdlTest();
+        te_android_finished(rc);
+        return rc;
+    }
+
+    TE_ANDROID_STAGE("app folders (SDL_AndroidGetExternalStoragePath)");
     const char* external = SDL_AndroidGetExternalStoragePath();
     const char* internal = SDL_AndroidGetInternalStoragePath();
+    te_android_log("external files folder: %s; internal files folder: %s", external ? external : "(none)",
+                   internal ? internal : "(none)");
     const std::string files = external && *external ? external : internal && *internal ? internal : "";
-    if (!files.empty()) {
-        std::error_code ec;
-        std::filesystem::create_directories(files, ec);
-        ::setenv("HOME", files.c_str(), 1);
-        if (::chdir(files.c_str()) != 0) std::printf("[te.android] chdir(%s) failed\n", files.c_str());
-        std::printf("[te.android] the app's folder: %s\n", files.c_str());
-    } else {
-        std::printf("[te.android] no app storage folder from SDL (%s)\n", SDL_GetError());
+    if (files.empty()) {
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved",
+                    std::string("O Android não informou a pasta do aplicativo (") + SDL_GetError() + "). O jogo não foi iniciado.");
+        te_android_finished(3);
+        return 3;
     }
+    std::error_code ec;
+    std::filesystem::create_directories(files, ec);
+    ::setenv("HOME", files.c_str(), 1);
+    if (::chdir(files.c_str()) != 0) te_android_log("chdir(%s) failed", files.c_str());
+
+    TE_ANDROID_STAGE("disc image lookup");
+    std::string how;
+    const std::string iso = te::android::FindDiscImage(files, &how);
+    std::string report;
+    if (iso.empty() || !te::android::CheckDiscImage(iso, &report)) {
+        const std::string why = iso.empty() ? how : report;
+        ShowMessage(SDL_MESSAGEBOX_WARNING, "TwinsanityEvolved - imagem do disco",
+                    "Nenhuma imagem de disco utilizável foi encontrada, então o jogo não foi iniciado.\n\n"
+                    "Copie a SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) para:\n" +
+                        files + "/twinsanity.iso\n\nDetalhe: " + why);
+        te_android_finished(2);
+        return 2;
+    }
+    te_android_log("disc image: %s", report.c_str());
 
     std::vector<std::string> args;
     args.emplace_back(argc > 0 && argv && argv[0] ? argv[0] : "twinsanityevolved");
     for (int i = 1; i < argc; ++i) args.emplace_back(argv[i]);
-    const std::string iso = files.empty() ? std::string() : FindDiscImage(files);
-    if (!iso.empty()) {
-        args.emplace_back("--iso");
-        args.push_back(iso);
-        std::printf("[te.android] disc image: %s\n", iso.c_str());
-    } else {
-        std::printf("[te.android] no disc image: put your own Crash Twinsanity image (SLES-52568 or SLUS-20909 v2.00) in %s "
-                    "as twinsanity.iso, or its path in disc-image.txt there\n", files.c_str());
-    }
+    args.emplace_back("--iso");
+    args.push_back(iso);
     std::vector<char*> cargs;
     for (std::string& a : args) cargs.push_back(a.data());
     cargs.push_back(nullptr);
+
+    TE_ANDROID_STAGE("entering the runner (te_runner_main)");
     const int rc = te_runner_main(static_cast<int>(args.size()), cargs.data());
-    std::printf("[te.android] the runner returned %d\n", rc);
     std::fflush(stdout);
     std::fflush(stderr);
+    if (rc != 0)
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved",
+                    "O jogo terminou com o código " + std::to_string(rc) +
+                        ". Volte ao inicializador e use \"Compartilhar relatório\" para enviar os logs.");
+    te_android_finished(rc);
     return rc;
 }

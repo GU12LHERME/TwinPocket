@@ -11,18 +11,42 @@
         android:hasCode="true"
         android:isGame="true"
         android:label="TwinsanityEvolved"
-        android:supportsRtl="true"
-        android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen">
+        android:supportsRtl="true">
+
+        <!-- The entry: Java only, the app's main process. Shows the last start's stages, starts the game. -->
         <activity
-            android:name="com.twinsanityevolved.game.MainActivity"
+            android:name="com.twinsanityevolved.game.LauncherActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
-            android:screenOrientation="sensorLandscape">
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- SDL2's activity with libSDL2.so + libmain.so, in its own process: a crash ends this process only. -->
+        <activity
+            android:name="com.twinsanityevolved.game.MainActivity"
+            android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:process=":game"
+            android:screenOrientation="sensorLandscape"
+            android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
+
+        <!-- The diagnostic mode: loads the native libraries and runs the probe without the game, in its own process. -->
+        <activity
+            android:name="com.twinsanityevolved.game.ProbeActivity"
+            android:exported="false"
+            android:process=":probe"
+            android:theme="@android:style/Theme.DeviceDefault.NoActionBar" />
+
+        <provider
+            android:name="com.twinsanityevolved.game.LogProvider"
+            android:authorities="com.twinsanityevolved.game.logs"
+            android:exported="false"
+            android:grantUriPermissions="true" />
     </application>
 </manifest>

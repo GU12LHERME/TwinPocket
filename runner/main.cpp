@@ -65,6 +65,7 @@
 #include "te_savestate_keys.h"
 #include "te_math_diag.h"
 #include "te_startup.h"
+#include "te_android_diag.h"   // the Android lane's start-up stages (TE_ANDROID_STAGE: nothing elsewhere)
 #if defined(__vita__)
 #include "te_vita.h"   // the Vita lane: baked arguments, the log file, the memory report
 #include "te_tick_lock.h"   // the tick lock's exit line
@@ -148,6 +149,7 @@ const char* GuestString(uint32_t address, std::size_t max) {
 }  // namespace te
 
 int main(int argc, char** argv) {
+    TE_ANDROID_STAGE("runner: main() entered");
     te::startup::AttachParentConsole();
 #if defined(__vita__)
     te::vita::Startup(&argc, &argv);
@@ -314,6 +316,7 @@ int main(int argc, char** argv) {
     // loaded, the row decides the field rate's default and how the data image is laid out; a release that needs an address
     // map it does not have is refused here with the sentence a player reads.
     ps2r::app::DiscIdentity disc_identity;
+    TE_ANDROID_STAGE("runner: identifying the disc image");
     const bool disc_identified = !iso.empty() && te::disc::LogIdentity(iso, &disc_identity, te::disc::VerifyRequested(verify_disc));
     const te::region::Selection region = te::region::Select(disc_identity, disc_identified, region_map_arg, folders.folder);
     std::fprintf(stderr, "[twinsanityevolved] %s\n", te::region::Describe(region).c_str());
@@ -674,6 +677,7 @@ int main(int argc, char** argv) {
     te::BindMainMemory(g_env, ram);
 
     // 2. the module
+    TE_ANDROID_STAGE("runner: instantiating the game module (wasm2c)");
     wasm_rt_init();
     w2c_game& instance = g_instance;
     wasm2c_game_instantiate(&instance, &g_env);
@@ -707,6 +711,7 @@ int main(int argc, char** argv) {
         elf.assign(std::istreambuf_iterator<char>(f), {});
     }
     te::RetailImage image;
+    TE_ANDROID_STAGE("runner: loading the game program from the disc");
     if (!te::region::LoadImage(g_env, elf, region, image, &error)) {
         std::fprintf(stderr, "[twinsanityevolved] retail image: %s\n", error.c_str());
         if (!region.native) te::startup::ShowError("Crash Twinsanity", error);   // another release's program the map is not for
@@ -767,6 +772,7 @@ int main(int argc, char** argv) {
 
     // 4c. the game fiber + the save-state sections + the checkpoint handler
     std::string fiber_error;
+    TE_ANDROID_STAGE("runner: preparing the game fiber");
     if (!te::game::Prepare(game_instance, test_trap, &fiber_error)) { std::fprintf(stderr, "[twinsanityevolved] %s\n", fiber_error.c_str()); return 5; }
     if (verbose || !g_save_requests.empty() || !load_state.empty()) {
         const te::game::Fiber& f = te::game::Get();
@@ -970,6 +976,7 @@ int main(int argc, char** argv) {
 #if defined(__vita__)
     te::vita::Step("entering the game fiber (module instantiated; the game's main runs next)");
 #endif
+    TE_ANDROID_STAGE("runner: entering the game fiber (the game's code runs from here)");
     for (;;) {
         const te::game::Reason reason = te::game::Resume();
         const te::game::Fiber& f = te::game::Get();

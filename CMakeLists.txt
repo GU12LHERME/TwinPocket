@@ -753,11 +753,13 @@ set(TE_RUNNER_SOURCES runner/main.cpp runner/te_env.cpp runner/te_run.c runner/t
 if(TE_ANDROID)
     # libmain.so: SDL2's Java activity loads libSDL2.so then libmain.so and calls SDL_main (runner/te_android.cpp), which
     # sets up the app's folders and enters the runner's main(), renamed te_runner_main in this lane only.
-    add_library(twinsanityevolved SHARED ${TE_RUNNER_SOURCES} runner/te_android.cpp)
+    add_library(twinsanityevolved SHARED ${TE_RUNNER_SOURCES} runner/te_android.cpp runner/te_android_diag.cpp)
     set_target_properties(twinsanityevolved PROPERTIES OUTPUT_NAME main)
     set_source_files_properties(runner/main.cpp PROPERTIES COMPILE_DEFINITIONS "main=te_runner_main")
     # every symbol resolved at link time (the NDK's default for shared libraries, stated): a missing body is a build error
-    target_link_options(twinsanityevolved PRIVATE "-Wl,--no-undefined" "-Wl,-z,max-page-size=16384")
+    target_link_options(twinsanityevolved PRIVATE "-Wl,--no-undefined" "-Wl,-z,max-page-size=16384"
+        # exit() from the runner / the engine logged with its status and stage (runner/te_android_diag.cpp __wrap_exit)
+        "-Wl,--wrap=exit")
 else()
 add_executable(twinsanityevolved ${TE_RUNNER_SOURCES})
 endif()
