@@ -206,12 +206,12 @@ jobs:
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"
           "$NDK_LLVM/llvm-nm" "$so" | grep -E ' SDL_main$|TeDiag_nativeProbe$' | tee -a "$ev" || true
           echo "== dynamic symbols defined: $("$NDK_LLVM/llvm-nm" -D --defined-only "$so" | wc -l)" | tee -a "$ev"
-          if "$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -qE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$'; then
-            n="$("$NDK_LLVM/llvm-nm" -D --defined-only "$so" | grep -cE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$')"
-            echo "PASS  exported to Java (dynamic symbols): $n of SDL_main / TeDiag.nativeProbe" | tee -a "$ev"
-            [ "$n" -eq 2 ] || fail=1
-          else echo "FAIL  SDL_main / TeDiag.nativeProbe not exported" | tee -a "$ev"; fail=1; fi
-          if "$NDK_LLVM/llvm-readelf" -S "$so" | grep -q 'init_array'; then echo "PASS  .init_array present (the early diagnostics constructor)" | tee -a "$ev"; fi
+          # (read into a file first: `nm | grep -q` under pipefail fails on nm's SIGPIPE when grep stops early)
+          "$NDK_LLVM/llvm-nm" -D --defined-only "$so" > "$LOG_DIR/libmain-dynamic-defined.txt"
+          n="$(grep -cE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$' "$LOG_DIR/libmain-dynamic-defined.txt" || true)"
+          if [ "$n" -eq 2 ]; then echo "PASS  exported to Java (dynamic symbols): SDL_main and TeDiag.nativeProbe" | tee -a "$ev"
+          else echo "FAIL  $n of SDL_main / TeDiag.nativeProbe exported" | tee -a "$ev"; fail=1; fi
+          if grep -q 'init_array' <("$NDK_LLVM/llvm-readelf" -S "$so"); then echo "PASS  .init_array present (the early diagnostics constructor)" | tee -a "$ev"; fi
           echo "== engine namespaces linked (symbol count per ps2r:: namespace)" | tee -a "$ev"
           grep -oE 'ps2r::[a-z0-9_]+' "$LOG_DIR/libmain-symbols.txt" | sort | uniq -c | sort -rn | tee -a "$ev"
           echo "== undefined dynamic symbols resolved by NEEDED libraries: $(wc -l < "$LOG_DIR/libmain-undefined-dynamic.txt")" | tee -a "$ev"
@@ -242,8 +242,9 @@ jobs:
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump xmltree "$apk" AndroidManifest.xml > "$LOG_DIR/apk-manifest.txt"
           grep -q ':game' "$LOG_DIR/apk-manifest.txt" && grep -q ':probe' "$LOG_DIR/apk-manifest.txt" && grep -q 'LogProvider' "$LOG_DIR/apk-manifest.txt"
           echo "PASS  manifest: MainActivity in :game, ProbeActivity in :probe, LogProvider" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          unzip -p "$apk" 'classes*.dex' > "$RUNNER_TEMP/classes.dex"
           for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag; do
-            unzip -p "$apk" 'classes*.dex' | grep -aq "com/twinsanityevolved/game/$cls" || { echo "FAIL  class $cls not in the dex"; exit 1; }
+            grep -aq "com/twinsanityevolved/game/$cls" "$RUNNER_TEMP/classes.dex" || { echo "FAIL  class $cls not in the dex"; exit 1; }
           done
           echo "PASS  dex: LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag" | tee -a "$LOG_DIR/libmain-evidence.txt"
           unzip -l "$apk" | tee "$LOG_DIR/apk-contents.log"
@@ -253,7 +254,8 @@ jobs:
           cmp "$x/lib/arm64-v8a/libSDL2.so" "$DEPS_DIR/sdl2/lib/libSDL2.so"
           echo "PASS  the APK carries the verified libmain.so and libSDL2.so byte for byte" | tee -a "$LOG_DIR/libmain-evidence.txt"
           python3 tools/ci/asset_scan.py "$x/lib" 2>&1 | tee "$LOG_DIR/asset-scan-apk.log"
-          if find "$x" -type f \( -iname '*.iso' -o -iname '*.bin' -o -iname '*.elf' -o -iname '*.irx' \) | grep -q .; then
+          disc_files="$(find "$x" -type f \( -iname '*.iso' -o -iname '*.bin' -o -iname '*.elf' -o -iname '*.irx' \))"
+          if [ -n "$disc_files" ]; then
             echo "FAIL  disc / program files in the APK"; exit 1
           fi
           sha256sum "$apk" | tee "$LOG_DIR/apk-sha256.txt"
