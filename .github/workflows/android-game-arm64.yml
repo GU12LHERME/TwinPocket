@@ -238,7 +238,10 @@ jobs:
           check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
           check "game stack inside the game thread (te_android_take_fiber_stack)" 1 'te_android_take_fiber_stack'
           check "crash backtrace unwinder callback (te_android_diag.cpp)"     1    'CollectCrashFrame'
-          check "input: sensors refused as pads (gamepad_backend.cpp IsSensor)" 1   'IsSensor'
+          # (IsSensor is inlined: its log text is the evidence that the sensor refusal is linked in)
+          "$NDK_LLVM/llvm-strings" "$so" > "$LOG_DIR/libmain-strings.txt"
+          if grep -q 'is a sensor, not a pad: ignored' "$LOG_DIR/libmain-strings.txt"; then echo "PASS  input: sensors refused as pads (gamepad_backend.cpp IsSensor, its log text linked)" | tee -a "$ev"
+          else echo "FAIL  input: the sensor refusal is not in libmain.so" | tee -a "$ev"; fail=1; fi
           check "input: stick log (GamepadBackend::LogSticks)"              1    'GamepadBackend::LogSticks'
           check "audio: configurable device buffer (RequestedBufferFrames)" 1    'SdlAudioSink::RequestedBufferFrames'
           check "audio: device callback timing (SdlAudioSink::Stats)"      1    'SdlAudioSink::Stats'
