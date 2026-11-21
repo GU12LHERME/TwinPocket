@@ -177,6 +177,9 @@ jobs:
             else echo "FAIL  NEEDED $lib missing" | tee -a "$ev"; fail=1; fi
           done
           if grep -q 'libc++_shared' "$LOG_DIR/libmain-elf.txt"; then echo "FAIL  links libc++_shared (expected the static C++ runtime)" | tee -a "$ev"; fail=1; fi
+          { echo "== libmain.so"; ls -l "$so" | awk '{print $5" bytes"}'; sha256sum "$so" | awk '{print "sha256 "$1}'
+            grep -E 'NEEDED|SONAME' "$LOG_DIR/libmain-elf.txt"
+            grep -E '^\s*\.(text|rodata|data|bss) ' "$LOG_DIR/libmain-elf.txt" || true; } | tee -a "$ev"
           echo "== components" | tee -a "$ev"
           check "entry: SDL_main (runner/te_android.cpp)"                 1   ' T SDL_main$'
           check "runner main (runner/main.cpp as te_runner_main)"         1   'te_runner_main'
@@ -189,10 +192,14 @@ jobs:
           check "engine: AArch64 fibers (posix/fiber_android_arm64.cpp)"   2    'ps2r_fiber_a64_switch|FiberPosix::Create'
           check "engine: SDL input system"                                  5    'InputSystem'
           check "engine: SDL audio sink"                                    2    'SdlAudioSink'
-          check "engine: disc (cdvd)"                                       5    'ps2r::cdvd::'
-          check "engine: IOP kernel"                                        5    'ps2r::iop::'
+          check "engine: disc image file system (cdvd IsoFs / DiscOverlay)" 5    ' (IsoFs|DiscOverlay)::'
+          check "engine: sound (SPU2 mixer / VAG decoder)"                  5    'ps2r::sound::'
+          check "engine: GS texture formats / transfers"                    5    'ps2r::gs'
+          check "host seam: disc reader (platform/nativeee/host te::io)"     5    'te::io::'
           check "engine: title HLE (Crash Twinsanity)"                     5    'title'
           check "FFmpeg: MPEG-2 decoder (movies)"                           1    'ff_mpeg2video_decoder'
+          echo "== engine namespaces linked (symbol count per ps2r:: namespace)" | tee -a "$ev"
+          grep -oE 'ps2r::[a-z0-9_]+' "$LOG_DIR/libmain-symbols.txt" | sort | uniq -c | sort -rn | tee -a "$ev"
           echo "== undefined dynamic symbols resolved by NEEDED libraries: $(wc -l < "$LOG_DIR/libmain-undefined-dynamic.txt")" | tee -a "$ev"
           echo "== total defined symbols: $(wc -l < "$LOG_DIR/libmain-symbols.txt")" | tee -a "$ev"
           exit $fail
