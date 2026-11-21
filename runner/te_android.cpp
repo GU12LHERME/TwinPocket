@@ -139,15 +139,34 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     if (::chdir(files.c_str()) != 0) te_android_log("chdir(%s) failed", files.c_str());
 
     TE_ANDROID_STAGE("disc image lookup");
-    std::string how;
-    const std::string iso = te::android::FindDiscImage(files, &how);
+    // 1. --te-iso <path>: the image the launcher checked (normally its copy in files/disc, made through Android's
+    //    document picker); 2. that copy; 3. the lookup in the external app folder (FindDiscImage)
+    std::string how, iso;
+    std::vector<std::string> runner_args;
+    for (int i = 1; i < argc; ++i) {
+        if (argv[i] && std::strcmp(argv[i], "--te-iso") == 0 && i + 1 < argc) {
+            iso = argv[++i];
+            how = "given by the launcher (--te-iso)";
+        } else {
+            runner_args.emplace_back(argv[i] ? argv[i] : "");
+        }
+    }
+    if (iso.empty() && internal && *internal) {
+        const std::string imported = std::string(internal) + "/disc/twinsanity.iso";
+        if (std::filesystem::is_regular_file(imported, ec)) {
+            iso = imported;
+            how = "the copy made by the launcher's ISO picker (files/disc)";
+        }
+    }
+    if (iso.empty()) iso = te::android::FindDiscImage(files, &how);
+    te_android_log("disc image candidate: %s (%s)", iso.empty() ? "(none)" : iso.c_str(), how.c_str());
     std::string report;
     if (iso.empty() || !te::android::CheckDiscImage(iso, &report)) {
         const std::string why = iso.empty() ? how : report;
         ShowMessage(SDL_MESSAGEBOX_WARNING, "TwinsanityEvolved - imagem do disco",
                     "Nenhuma imagem de disco utilizável foi encontrada, então o jogo não foi iniciado.\n\n"
-                    "Copie a SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) para:\n" +
-                        files + "/twinsanity.iso\n\nDetalhe: " + why);
+                    "Volte ao inicializador, toque em \"Selecionar ISO\" e escolha a SUA imagem do Crash Twinsanity "
+                    "(PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) no gerenciador de arquivos.\n\nDetalhe: " + why);
         te_android_finished(2);
         return 2;
     }
@@ -155,7 +174,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
 
     std::vector<std::string> args;
     args.emplace_back(argc > 0 && argv && argv[0] ? argv[0] : "twinsanityevolved");
-    for (int i = 1; i < argc; ++i) args.emplace_back(argv[i]);
+    for (const std::string& a : runner_args) args.push_back(a);
     args.emplace_back("--iso");
     args.push_back(iso);
     std::vector<char*> cargs;

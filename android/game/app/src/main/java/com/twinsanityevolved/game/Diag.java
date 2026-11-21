@@ -111,6 +111,21 @@ final class Diag {
         return false;
     }
 
+    /** The disc image copied in by the launcher's picker (Storage Access Framework): private to the app, every process. */
+    static File importedDisc(Context c) {
+        return new File(new File(c.getFilesDir(), "disc"), "twinsanity.iso");
+    }
+
+    /**
+     * The disc image the game will use: the copy the picker made (files/disc/twinsanity.iso) first, else the lookup in the
+     * app's external folder (runner/te_android_diag.cpp FindDiscImage). [path, how] (path null when none).
+     */
+    static String[] findDiscImage(Context c) {
+        File imported = importedDisc(c);
+        if (imported.isFile()) return new String[] {imported.getAbsolutePath(), "copiada pelo seletor de ISO (armazenamento privado do app)"};
+        return findDiscImage(c.getExternalFilesDir(null));
+    }
+
     /** The disc image lookup of runner/te_android_diag.cpp FindDiscImage: [path, how] (path null when none). */
     static String[] findDiscImage(File dir) {
         if (dir == null) return new String[] {null, "the app's external files folder is not available"};
@@ -153,6 +168,10 @@ final class Diag {
                 if (pvd[0] == 1 && pvd[1] == 'C' && pvd[2] == 'D' && pvd[3] == '0' && pvd[4] == '0' && pvd[5] == '1') {
                     String vol = new String(pvd, 40, 32, StandardCharsets.US_ASCII).trim();
                     report.append(String.format(Locale.US, "%.1f MB, ISO 9660, %d-byte sectors, volume \"%s\"", len / 1048576.0, l[0], vol));
+                    if (l[0] == 2048) {
+                        String boot = bootProgram(f, pvd);
+                        report.append(boot != null ? ", SYSTEM.CNF BOOT2 = " + boot : ", no SYSTEM.CNF in the root folder");
+                    }
                     return null;
                 }
             }
@@ -161,6 +180,44 @@ final class Diag {
         } catch (Exception e) {
             return "cannot read it: " + e.getMessage();
         }
+    }
+
+    private static int le32(byte[] b, int at) {
+        return (b[at] & 0xFF) | (b[at + 1] & 0xFF) << 8 | (b[at + 2] & 0xFF) << 16 | (b[at + 3] & 0xFF) << 24;
+    }
+
+    /** SYSTEM.CNF's BOOT2 line from the image's root folder (2048-byte sectors): the program the PS2 boots, or null. */
+    static String bootProgram(RandomAccessFile f, byte[] pvd) {
+        try {
+            int rootLba = le32(pvd, 156 + 2), rootLen = le32(pvd, 156 + 10);
+            if (rootLba <= 0 || rootLen <= 0 || rootLen > 1 << 20) return null;
+            byte[] dir = new byte[rootLen];
+            f.seek((long) rootLba * 2048);
+            f.readFully(dir);
+            int p = 0;
+            while (p < dir.length) {
+                int len = dir[p] & 0xFF;
+                if (len == 0) { p = (p / 2048 + 1) * 2048; continue; }
+                int nameLen = dir[p + 32] & 0xFF;
+                String name = new String(dir, p + 33, nameLen, StandardCharsets.US_ASCII).toUpperCase(Locale.US);
+                if (name.startsWith("SYSTEM.CNF")) {
+                    int lba = le32(dir, p + 2), size = Math.min(le32(dir, p + 10), 4096);
+                    byte[] cnf = new byte[Math.max(size, 0)];
+                    f.seek((long) lba * 2048);
+                    f.readFully(cnf);
+                    for (String line : new String(cnf, StandardCharsets.US_ASCII).split("[\\r\\n]+")) {
+                        if (line.trim().toUpperCase(Locale.US).startsWith("BOOT2")) {
+                            int eq = line.indexOf('=');
+                            return eq >= 0 ? line.substring(eq + 1).trim() : line.trim();
+                        }
+                    }
+                    return null;
+                }
+                p += len;
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
     }
 
     /** This app's own logcat lines (an app reads its own uid's log; the previous, crashed process's lines included). */

@@ -30,6 +30,11 @@ The smoke APKs in `android/sdl2-smoke` and `android/nativeee-smoke` stay as they
 The launcher icon opens **LauncherActivity** (Java only, no native code). It shows the disc image check and what the
 last runs reached, and has these buttons:
 
+- **Selecionar ISO** -- Android's document picker (`ACTION_OPEN_DOCUMENT`, no storage permission): the chosen file is
+  copied through the ContentResolver into the app's private `files/disc/twinsanity.iso` (progress shown, free space
+  checked, size and ISO 9660 / SYSTEM.CNF verified), and the read grant is kept. The game gets that path (`--te-iso`).
+  A file another app put in `Android/data/<package>/files` can be unreadable to this app (EACCES on Android 11+);
+  the picker avoids that.
 - **Iniciar jogo** -- the game (MainActivity, SDL2, in the `:game` process). Without a usable disc image it explains
   where to put it instead of starting.
 - **Diagnóstico (sem o jogo)** -- ProbeActivity in the `:probe` process: lists the installed native libraries, loads

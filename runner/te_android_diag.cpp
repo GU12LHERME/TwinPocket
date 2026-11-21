@@ -508,8 +508,13 @@ extern "C" JNIEXPORT jstring JNICALL Java_com_twinsanityevolved_game_TeDiag_nati
     }
 
     te_android_stage("probe: disc image");
-    std::string how;
-    const std::string iso = ext.empty() ? std::string() : te::android::FindDiscImage(ext, &how);
+    std::string how, iso;
+    if (!files.empty() && std::filesystem::is_regular_file(files + "/disc/twinsanity.iso")) {
+        iso = files + "/disc/twinsanity.iso";
+        how = "the copy made by the launcher's ISO picker";
+    } else if (!ext.empty()) {
+        iso = te::android::FindDiscImage(ext, &how);
+    }
     if (iso.empty()) {
         P("disc image: NONE -- %s", how.c_str());
     } else {

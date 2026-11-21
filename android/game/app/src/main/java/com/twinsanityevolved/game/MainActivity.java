@@ -11,6 +11,7 @@ import org.libsdl.app.SDLActivity;
  */
 public final class MainActivity extends SDLActivity {
     static final String EXTRA_SDL_TEST = "com.twinsanityevolved.game.SDL_TEST";
+    static final String EXTRA_ISO = "com.twinsanityevolved.game.ISO";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -45,7 +46,11 @@ public final class MainActivity extends SDLActivity {
 
     @Override
     protected String[] getArguments() {
-        return isSdlTest() ? new String[] {"--android-sdl-test"} : new String[0];
+        if (isSdlTest()) return new String[] {"--android-sdl-test"};
+        // the disc image the launcher checked (runner/te_android.cpp: --te-iso, taken off before the runner's arguments)
+        String iso = getIntent() != null ? getIntent().getStringExtra(EXTRA_ISO) : null;
+        Diag.log(this, "game", "disc image for the game: " + (iso != null ? iso : "(none from the launcher: the native lookup decides)"));
+        return iso != null ? new String[] {"--te-iso", iso} : new String[0];
     }
 
     @Override
