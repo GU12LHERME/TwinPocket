@@ -21,6 +21,7 @@
 #include "engine/render/backend.h"   // MeshVertex (the raw mesh draws' stream)
 #endif
 
+#include "engine/render/backends/gl/gl_glsl_es.h"
 #include "engine/render/backends/gl/gl_shader_sources.h"
 #include "engine/render/backends/gl/gl_uniform_cache.h"
 #include "engine/render/backends/gl/gl_census.h"
@@ -243,6 +244,10 @@ uint32_t GlShaderLibrary::CompileShader(uint32_t type, const char* source) {
 #if PS2R_HOST_VITA
     const std::string vita = VitaGlsl(type, source);
     source = vita.c_str();
+#elif PS2R_HOST_ANDROID
+    // OpenGL ES 3.2: the GLSL 4.10 text as GLSL ES 3.20 (gl_glsl_es.cpp)
+    const std::string es = GlslToEs(type == GL_FRAGMENT_SHADER, source);
+    source = es.c_str();
 #endif
     glShaderSource(shader, 1, &source, nullptr);
 #if PS2R_HOST_VITA
@@ -259,6 +264,16 @@ uint32_t GlShaderLibrary::CompileShader(uint32_t type, const char* source) {
         log[0] = '\0';
         glGetShaderInfoLog(shader, sizeof(log), nullptr, log);
         std::fprintf(stderr, "[gl] shader compile error: %s\n", log);
+#if PS2R_HOST_ANDROID
+        // the first lines of the source as compiled (the ES header shifts the desktop text's line numbers by its length)
+        int es_line = 1;
+        for (const char* p = source; *p && es_line <= 24; ++es_line) {
+            const char* e = std::strchr(p, '\n');
+            const int n = e ? int(e - p) : int(std::strlen(p));
+            std::fprintf(stderr, "[gl]   %2d| %.*s\n", es_line, n, p);
+            p = e ? e + 1 : p + n;
+        }
+#endif
 #if PS2R_HOST_VITA
         // the source as handed to vitaGL, numbered, to match the compiler's line numbers
         int line_no = 1;

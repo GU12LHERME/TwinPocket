@@ -7,6 +7,7 @@ add_library(ps2r_render_gl STATIC
     gl_device.cpp
     gl_shader_library.cpp
     gl_shader_sources.cpp
+    gl_glsl_es.cpp
     gl_uniform_cache.cpp
     gl_state_cache.cpp
     gl_vertex_stream.cpp

@@ -73,7 +73,7 @@ jobs:
           echo "${ANDROID_SDK_ROOT}/cmake/3.31.6/bin" >> "$GITHUB_PATH"
           echo "NDK_LLVM=${ndk_home}/toolchains/llvm/prebuilt/linux-x86_64/bin" >> "$GITHUB_ENV"
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends ninja-build qemu-user g++-aarch64-linux-gnu > /dev/null
+          sudo apt-get install -y -qq --no-install-recommends ninja-build qemu-user g++-aarch64-linux-gnu glslang-tools > /dev/null
 
       - name: Record tool versions
         shell: bash
@@ -118,6 +118,22 @@ jobs:
           aarch64-linux-gnu-gcc -std=gnu99 -O1 -Wall -Wextra -static -Irunner tools/android/test_game_stack_bounds.c \
             runner/te_fiber.c runner/te_fiber_switch.S -o "$RUNNER_TEMP/test_game_stack_bounds" -lpthread
           qemu-aarch64 "$RUNNER_TEMP/test_game_stack_bounds" 2>&1 | tee "$LOG_DIR/game-stack-bounds.log"
+
+      - name: The engine's shaders as GLSL ES 3.20 (gl_glsl_es.cpp) through glslangValidator
+        shell: bash
+        run: |
+          set -euo pipefail
+          out="$RUNNER_TEMP/glsl-es"
+          mkdir -p "$out"
+          clang++ -std=c++17 -O1 -Iengine tools/android/glsl_es_check.cpp engine/engine/render/backends/gl/gl_glsl_es.cpp \
+            engine/engine/render/backends/gl/gl_shader_sources.cpp -o "$RUNNER_TEMP/glsl_es_check"
+          "$RUNNER_TEMP/glsl_es_check" "$out" > /dev/null
+          fail=0
+          for f in "$out"/*; do
+            if glslangValidator "$f" > "$f.log" 2>&1; then echo "PASS  GLSL ES 3.20: $(basename "$f")"
+            else echo "FAIL  GLSL ES 3.20: $(basename "$f")"; grep -E 'ERROR' "$f.log" | head -10; fail=1; fi
+          done 2>&1 | tee "$LOG_DIR/glsl-es-check.log"
+          ! grep -q '^FAIL' "$LOG_DIR/glsl-es-check.log"
 
       - name: Build SDL2 (shared) and FFmpeg (static, LGPL) for arm64-v8a
         shell: bash
