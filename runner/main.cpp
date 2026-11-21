@@ -979,6 +979,12 @@ int main(int argc, char** argv) {
     TE_ANDROID_STAGE("runner: entering the game fiber (the game's code runs from here)");
     for (;;) {
         const te::game::Reason reason = te::game::Resume();
+#if defined(__ANDROID__)
+        {
+            static bool te_first_yield = true;
+            if (te_first_yield) { te_first_yield = false; TE_ANDROID_STAGE("runner: the game fiber yielded back for the first time"); }
+        }
+#endif
         const te::game::Fiber& f = te::game::Get();
         if (reason == te::game::Reason::Checkpoint) {
             std::string error;

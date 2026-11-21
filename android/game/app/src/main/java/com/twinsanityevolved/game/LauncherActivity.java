@@ -164,6 +164,11 @@ public final class LauncherActivity extends Activity {
         if (java != null) b.append("\nLOG JAVA DO JOGO (fim)\n").append(java);
         String nat = Diag.tailLines(new File(Diag.logsDir(this), "latest-game.log"), 40);
         if (nat != null) b.append("\nLOG NATIVO DO JOGO (fim)\n").append(nat);
+        String fullNat = Diag.readFile(new File(Diag.logsDir(this), "latest-game.log"), 200000);
+        if (fullNat != null && fullNat.contains("FATAL")) {
+            String frames = Diag.symbolizeFrames(this, fullNat);
+            if (!frames.isEmpty()) b.append("\nFUNÇÕES NO TRAVAMENTO (libmain.so)\n").append(frames);
+        }
         b.append("\nLogs: ").append(Diag.logsDir(this).getAbsolutePath()).append('\n');
         return b.toString();
     }
@@ -383,6 +388,8 @@ public final class LauncherActivity extends Activity {
                 if (content == null) continue;
                 b.append("\n===== ").append(name).append(" =====\n").append(content).append('\n');
             }
+            String frames = Diag.symbolizeFrames(c, b.toString());
+            if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);
             final String report = b.toString();
             Diag.write(new File(dir, "report.txt"), report);
             runOnUiThread(() -> {

@@ -108,6 +108,17 @@ jobs:
             -o "$RUNNER_TEMP/test_fiber_android_arm64"
           qemu-aarch64 "$RUNNER_TEMP/test_fiber_android_arm64" 2>&1 | tee "$LOG_DIR/fiber-test.log"
 
+      - name: Game fiber (runner) and the Android game-stack layout under qemu-aarch64
+        shell: bash
+        run: |
+          set -euo pipefail
+          aarch64-linux-gnu-gcc -std=gnu99 -O2 -static -Irunner runner/te_fiber_test.c runner/te_fiber.c runner/te_fiber_switch.S \
+            -o "$RUNNER_TEMP/te_fiber_test"
+          qemu-aarch64 "$RUNNER_TEMP/te_fiber_test" 2>&1 | tee "$LOG_DIR/runner-fiber-test.log"
+          aarch64-linux-gnu-gcc -std=gnu99 -O1 -Wall -Wextra -static -Irunner tools/android/test_game_stack_bounds.c \
+            runner/te_fiber.c runner/te_fiber_switch.S -o "$RUNNER_TEMP/test_game_stack_bounds" -lpthread
+          qemu-aarch64 "$RUNNER_TEMP/test_game_stack_bounds" 2>&1 | tee "$LOG_DIR/game-stack-bounds.log"
+
       - name: Build SDL2 (shared) and FFmpeg (static, LGPL) for arm64-v8a
         shell: bash
         run: |
@@ -201,6 +212,8 @@ jobs:
           check "diagnostics: start-up stages (runner/te_android_diag.cpp)" 1    ' te_android_stage$'
           check "diagnostics: exit() wrapper (-Wl,--wrap=exit)"             1    ' __wrap_exit$'
           check "diagnostics: JNI probe (TeDiag.nativeProbe)"               1    'Java_com_twinsanityevolved_game_TeDiag_nativeProbe'
+          check "game stack inside the game thread (te_android_take_fiber_stack)" 1 'te_android_take_fiber_stack'
+          check "crash backtrace (te_android_diag.cpp WriteCrashBacktrace)"  1    'WriteCrashBacktrace'
           echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
           "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"

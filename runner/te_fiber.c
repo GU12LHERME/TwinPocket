@@ -17,6 +17,17 @@
 
 extern void te_fiber_trampoline(void);
 
+#if defined(__ANDROID__)
+/* Android: the game's stack is carved out of the game thread's own pthread stack (runner/te_android.cpp
+   te_android_take_fiber_stack), never a separate mapping. ART checks the stack pointer of a thread that calls into Java
+   against the stack bounds it recorded for that thread: SDL calls Java (JNI) from the game's code, and a frame on a
+   mapping at 0x3100'0000'0000 lies below the thread's recorded stack end, so ART threw StackOverflowError there (the
+   device report: "JNI CallStaticBooleanMethod called with pending exception java.lang.StackOverflowError"). Inside the
+   thread's own stack the frames are where ART expects them. NULL when no region was provided (then the mapping below). */
+extern void* te_android_take_fiber_stack(size_t size);
+extern int te_android_is_fiber_stack(const void* stack);
+#endif
+
 /* The asm's offsets (te_fiber_switch.S / te_fiber_win64.c) are the struct's. */
 #if defined(_WIN64)
 _Static_assert(offsetof(te_fiber_ctx, rip) == 72, "te_fiber_ctx: rip at 72 (te_fiber_win64.c)");
@@ -158,6 +169,15 @@ uint64_t te_fiber_frame_pointer(const te_fiber_ctx* ctx) {
 
 void* te_fiber_map_stack(uint64_t hint, size_t size, int* at_hint) {
     const size_t guard = te_fiber_guard_bytes;
+#if defined(__ANDROID__)
+    {
+        void* region = te_android_take_fiber_stack(size);
+        if (region) {
+            if (at_hint) *at_hint = 0;
+            return region;
+        }
+    }
+#endif
     void* want = (void*)(uintptr_t)(hint - guard);   /* a 32-bit target truncates the 48-bit hint; its arm below ignores it */
 #if defined(_WIN32)
     // Reserve + commit in one step (the commit is a charge, no page is touched until the game runs); the guard below the
@@ -191,6 +211,9 @@ void* te_fiber_map_stack(uint64_t hint, size_t size, int* at_hint) {
 void te_fiber_unmap_stack(void* stack, size_t size) {
     const size_t guard = te_fiber_guard_bytes;
     if (!stack) return;
+#if defined(__ANDROID__)
+    if (te_android_is_fiber_stack(stack)) return;   /* part of the game thread's stack: nothing to unmap */
+#endif
 #if defined(_WIN32)
     (void)size;
     VirtualFree((char*)stack - guard, 0, MEM_RELEASE);

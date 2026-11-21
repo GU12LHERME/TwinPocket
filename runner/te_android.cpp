@@ -17,6 +17,9 @@
 #include <SDL.h>
 #include <SDL_system.h>
 
+#include <alloca.h>
+#include <pthread.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 #include <cstdio>
@@ -26,9 +29,49 @@
 #include <string>
 #include <vector>
 
+#include <jni.h>
+
 #include "te_android_diag.h"
 
 int te_runner_main(int argc, char** argv);   // runner/main.cpp, renamed for this lane
+
+// --- the game thread and the game's stack ---------------------------------------------------------------------------------
+// The runner does not run on SDL's thread ("SDLThread": a Java thread with ART's default 1 MB stack). It runs on a
+// native thread of its own with a large stack (kGameThreadStack), attached to the JVM through SDL, and the game fiber's
+// stack (runner/te_game.h kStackSize, 32 MB) is a region of THAT stack (te_android_take_fiber_stack, used by
+// te_fiber.c te_fiber_map_stack): every frame the game's code makes -- including SDL's JNI calls made from it -- lies
+// inside the stack bounds ART recorded for the calling thread. On the separate mapping the desktop uses, ART saw those
+// frames below the thread's stack end and threw StackOverflowError at the first JNI call (the device report, stage 11).
+namespace {
+constexpr size_t kGameThreadStack = 160u << 20;   // 160 MB of address space (pages are touched only as used)
+constexpr size_t kFiberRegion = (32u << 20) + (1u << 20);   // the game fiber's 32 MB + slack
+constexpr size_t kFiberGuard = 64u << 10;          // a no-access band at the region's low end (an overflow faults)
+uint8_t* g_fiber_region = nullptr;                  // [g_fiber_region, + kFiberRegion) inside the game thread's stack
+bool g_fiber_taken = false;
+}  // namespace
+
+extern "C" void* te_android_take_fiber_stack(size_t size) {
+    if (!g_fiber_region || g_fiber_taken || size + kFiberGuard > kFiberRegion) {
+        te_android_log("game stack: no region from the game thread for %zu bytes (region %p, taken %d) -- a separate mapping is used",
+                       size, static_cast<void*>(g_fiber_region), g_fiber_taken ? 1 : 0);
+        return nullptr;
+    }
+    g_fiber_taken = true;
+    // the region's lowest page-aligned band no-access: the fiber's overflow faults there instead of writing into the
+    // host's frames below
+    const uintptr_t page = static_cast<uintptr_t>(::sysconf(_SC_PAGESIZE));
+    const uintptr_t lo = (reinterpret_cast<uintptr_t>(g_fiber_region) + page - 1) & ~(page - 1);
+    const int prot = ::mprotect(reinterpret_cast<void*>(lo), kFiberGuard, PROT_NONE);
+    uint8_t* stack = reinterpret_cast<uint8_t*>(lo + kFiberGuard);
+    te_android_log("game stack: %zu bytes at [%p, %p) inside the game thread's stack (guard %s)", size, static_cast<void*>(stack),
+                   static_cast<void*>(stack + size), prot == 0 ? "on" : "not set");
+    return stack;
+}
+
+extern "C" int te_android_is_fiber_stack(const void* stack) {
+    const uint8_t* p = static_cast<const uint8_t*>(stack);
+    return g_fiber_region && p >= g_fiber_region && p < g_fiber_region + kFiberRegion;
+}
 
 namespace {
 
@@ -136,6 +179,14 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     std::error_code ec;
     std::filesystem::create_directories(files, ec);
     ::setenv("HOME", files.c_str(), 1);
+    // the game folder (ps2r.ini, the memory cards, mods): private internal storage (runner/te_startup.cpp ExecutableDir
+    // reads TE_ANDROID_GAME_DIR on this lane; the executable's own folder is /system/bin, which no app can write)
+    if (internal && *internal) {
+        const std::string game_dir = std::string(internal) + "/game";
+        std::filesystem::create_directories(game_dir + "/userdata", ec);
+        ::setenv("TE_ANDROID_GAME_DIR", game_dir.c_str(), 1);
+        te_android_log("game folder (settings, memory cards): %s", game_dir.c_str());
+    }
     if (::chdir(files.c_str()) != 0) te_android_log("chdir(%s) failed", files.c_str());
 
     TE_ANDROID_STAGE("disc image lookup");
@@ -181,8 +232,48 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     for (std::string& a : args) cargs.push_back(a.data());
     cargs.push_back(nullptr);
 
-    TE_ANDROID_STAGE("entering the runner (te_runner_main)");
-    const int rc = te_runner_main(static_cast<int>(args.size()), cargs.data());
+    TE_ANDROID_STAGE("starting the game thread (large native stack, attached to the JVM)");
+    struct GameStart {
+        int argc;
+        char** argv;
+        int rc;
+    } start{static_cast<int>(args.size()), cargs.data(), 99};
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setstacksize(&attr, kGameThreadStack);
+    pthread_t game;
+    const int created = pthread_create(&game, &attr, [](void* opaque) -> void* {
+        auto* st = static_cast<GameStart*>(opaque);
+        pthread_setname_np(pthread_self(), "TEGame");
+        te_android_thread_altstack();
+        // attach this thread to the JVM the way SDL does it (SDL's own key detaches it at the thread's end)
+        JNIEnv* env = static_cast<JNIEnv*>(SDL_AndroidGetJNIEnv());
+        pthread_attr_t self;
+        void* lo = nullptr;
+        size_t sz = 0;
+        if (pthread_getattr_np(pthread_self(), &self) == 0) {
+            pthread_attr_getstack(&self, &lo, &sz);
+            pthread_attr_destroy(&self);
+        }
+        // the game fiber's stack: a region of this frame (alloca), above everything the runner calls from here
+        g_fiber_region = static_cast<uint8_t*>(alloca(kFiberRegion));
+        g_fiber_taken = false;
+        te_android_log("game thread: JNIEnv %p, stack [%p, %p) %zu MB, fiber region [%p, %p)", static_cast<void*>(env), lo,
+                       static_cast<void*>(static_cast<uint8_t*>(lo) + sz), sz >> 20, static_cast<void*>(g_fiber_region),
+                       static_cast<void*>(g_fiber_region + kFiberRegion));
+        TE_ANDROID_STAGE("entering the runner (te_runner_main) on the game thread");
+        st->rc = te_runner_main(st->argc, st->argv);
+        g_fiber_region = nullptr;
+        return nullptr;
+    }, &start);
+    pthread_attr_destroy(&attr);
+    if (created != 0) {
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved", "Não foi possível criar a thread do jogo (erro " + std::to_string(created) + ").");
+        te_android_finished(4);
+        return 4;
+    }
+    pthread_join(game, nullptr);
+    const int rc = start.rc;
     std::fflush(stdout);
     std::fflush(stderr);
     if (rc != 0)

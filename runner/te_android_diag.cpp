@@ -6,7 +6,10 @@
 #include <EGL/eglext.h>
 #include <GLES3/gl32.h>
 #include <android/log.h>
+#include <dlfcn.h>
 #include <errno.h>
+#include <ucontext.h>
+#include <unwind.h>
 #include <fcntl.h>
 #include <jni.h>
 #include <pthread.h>
@@ -106,7 +109,58 @@ const char* SignalName(int sig) {
 const int kSignals[] = {SIGSEGV, SIGBUS, SIGILL, SIGFPE, SIGABRT, SIGTRAP};
 struct sigaction g_old[32];
 
-void OnFatalSignal(int sig, siginfo_t* info, void* /*ucontext*/) {
+// One frame of the crash backtrace: "#NN <what> 0x<pc> <library>+0x<offset> (<symbol>+0x<delta>)". The library offset
+// is what the launcher's report symbolises against the installed libmain.so's symbol table (Diag.symbolize) and what
+// llvm-symbolizer / ndk-stack read.
+void WriteFrame(int index, const char* what, uintptr_t pc) {
+    char line[512];
+    Dl_info info{};
+    const bool found = pc && dladdr(reinterpret_cast<void*>(pc), &info) && info.dli_fname;
+    const char* lib = "?";
+    if (found) {
+        lib = std::strrchr(info.dli_fname, '/');
+        lib = lib ? lib + 1 : info.dli_fname;
+    }
+    const uintptr_t off = found ? pc - reinterpret_cast<uintptr_t>(info.dli_fbase) : 0;
+    if (found && info.dli_sname)
+        std::snprintf(line, sizeof line, "  #%02d %s 0x%016lx %s+0x%lx (%s+0x%lx)\n", index, what, static_cast<unsigned long>(pc), lib,
+                      static_cast<unsigned long>(off), info.dli_sname, static_cast<unsigned long>(pc - reinterpret_cast<uintptr_t>(info.dli_saddr)));
+    else
+        std::snprintf(line, sizeof line, "  #%02d %s 0x%016lx %s+0x%lx\n", index, what, static_cast<unsigned long>(pc), lib,
+                      static_cast<unsigned long>(off));
+    __android_log_write(ANDROID_LOG_FATAL, kTag, line);
+    SafeWrite(g_log_fd, line);
+}
+
+struct CrashFrames {
+    uintptr_t pc[64];
+    int n;
+};
+_Unwind_Reason_Code CollectCrashFrame(struct _Unwind_Context* ctx, void* opaque) {
+    auto* f = static_cast<CrashFrames*>(opaque);
+    const uintptr_t pc = _Unwind_GetIP(ctx);
+    if (pc && f->n < 64) f->pc[f->n++] = pc;
+    return f->n < 64 ? _URC_NO_REASON : _URC_END_OF_STACK;
+}
+
+void WriteCrashBacktrace(void* ucontext) {
+    SafeWrite(g_log_fd, "backtrace (the registers at the signal, then the unwound frames):\n");
+    __android_log_write(ANDROID_LOG_FATAL, kTag, "backtrace (the registers at the signal, then the unwound frames):");
+    if (ucontext) {
+        const auto* uc = static_cast<const ucontext_t*>(ucontext);
+        WriteFrame(0, "pc", static_cast<uintptr_t>(uc->uc_mcontext.pc));
+        WriteFrame(0, "lr", static_cast<uintptr_t>(uc->uc_mcontext.regs[30]));
+        char sp[128];
+        std::snprintf(sp, sizeof sp, "  sp 0x%016lx\n", static_cast<unsigned long>(uc->uc_mcontext.sp));
+        SafeWrite(g_log_fd, sp);
+        __android_log_write(ANDROID_LOG_FATAL, kTag, sp);
+    }
+    CrashFrames frames{};
+    _Unwind_Backtrace(&CollectCrashFrame, &frames);
+    for (int i = 0; i < frames.n; ++i) WriteFrame(i, "pc", frames.pc[i]);
+}
+
+void OnFatalSignal(int sig, siginfo_t* info, void* ucontext) {
     char line[512];
     line[0] = 0;
     char num[24], addr[24], stage[24];
@@ -126,6 +180,7 @@ void OnFatalSignal(int sig, siginfo_t* info, void* /*ucontext*/) {
     __android_log_write(ANDROID_LOG_FATAL, kTag, line);
     SafeWrite(g_log_fd, line);
     SafeWrite(g_log_fd, "\n");
+    WriteCrashBacktrace(ucontext);
     if (g_log_fd >= 0) ::fsync(g_log_fd);
     char state[96];
     std::strcpy(state, "crash ");

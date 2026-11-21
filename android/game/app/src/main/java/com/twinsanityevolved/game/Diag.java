@@ -220,6 +220,99 @@ final class Diag {
         return null;
     }
 
+    // --- symbolising native crash frames against the installed libmain.so --------------------------------------------
+    // The crash handler (runner/te_android_diag.cpp) writes "libmain.so+0x<offset>" and ART / debuggerd write
+    // "#NN pc <offset>  .../libmain.so"; libmain.so is installed unstripped (extractNativeLibs), so its ELF .symtab names
+    // every function of the runner, the engine and the game module (w2c_game_*). Names stay mangled (C++).
+    private static long[] symAddr;
+    private static long[] symSize;
+    private static int[] symName;
+    private static byte[] strtab;
+
+    private static long le64(byte[] b, int at) {
+        return (le32(b, at) & 0xFFFFFFFFL) | ((long) le32(b, at + 4) << 32);
+    }
+
+    private static synchronized boolean loadSymbols(File so) {
+        if (symAddr != null) return true;
+        try (RandomAccessFile f = new RandomAccessFile(so, "r")) {
+            byte[] eh = new byte[64];
+            f.readFully(eh);
+            if (eh[0] != 0x7F || eh[1] != 'E' || eh[4] != 2) return false;
+            long shoff = le64(eh, 0x28);
+            int shentsize = (eh[0x3A] & 0xFF) | (eh[0x3B] & 0xFF) << 8, shnum = (eh[0x3C] & 0xFF) | (eh[0x3D] & 0xFF) << 8;
+            byte[] sh = new byte[shentsize * shnum];
+            f.seek(shoff);
+            f.readFully(sh);
+            int symtab = -1;
+            for (int i = 0; i < shnum; i++) if (le32(sh, i * shentsize + 4) == 2) symtab = i;   // SHT_SYMTAB
+            if (symtab < 0) return false;
+            int base = symtab * shentsize;
+            long symOff = le64(sh, base + 0x18), symLen = le64(sh, base + 0x20);
+            int link = le32(sh, base + 0x28);
+            long strOff = le64(sh, link * shentsize + 0x18), strLen = le64(sh, link * shentsize + 0x20);
+            byte[] syms = new byte[(int) symLen];
+            f.seek(symOff);
+            f.readFully(syms);
+            strtab = new byte[(int) strLen];
+            f.seek(strOff);
+            f.readFully(strtab);
+            int n = (int) (symLen / 24), k = 0;
+            long[][] tmp = new long[n][];
+            for (int i = 0; i < n; i++) {
+                int at = i * 24;
+                if ((syms[at + 4] & 0xF) != 2) continue;   // STT_FUNC
+                long value = le64(syms, at + 8);
+                if (value == 0) continue;
+                tmp[k++] = new long[] {value, le64(syms, at + 16), le32(syms, at)};
+            }
+            java.util.Arrays.sort(tmp, 0, k, (a, b) -> Long.compare(a[0], b[0]));
+            symAddr = new long[k];
+            symSize = new long[k];
+            symName = new int[k];
+            for (int i = 0; i < k; i++) { symAddr[i] = tmp[i][0]; symSize[i] = tmp[i][1]; symName[i] = (int) tmp[i][2]; }
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    private static String name(int at) {
+        int end = at;
+        while (end < strtab.length && strtab[end] != 0) end++;
+        return new String(strtab, at, end - at, StandardCharsets.US_ASCII);
+    }
+
+    /** "symbol+0xdelta" for an offset in libmain.so, or null. */
+    static String symbolize(Context c, long offset) {
+        if (!loadSymbols(new File(c.getApplicationInfo().nativeLibraryDir, "libmain.so"))) return null;
+        int lo = 0, hi = symAddr.length - 1, best = -1;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            if (symAddr[mid] <= offset) { best = mid; lo = mid + 1; } else hi = mid - 1;
+        }
+        if (best < 0) return null;
+        long delta = offset - symAddr[best];
+        if (symSize[best] > 0 && delta >= symSize[best] + 4096) return null;
+        return name(symName[best]) + "+0x" + Long.toHexString(delta);
+    }
+
+    /** Every libmain.so frame in `text` (the crash handler's and ART / debuggerd's forms), one symbolised line each. */
+    static String symbolizeFrames(Context c, String text) {
+        if (text == null) return "";
+        StringBuilder b = new StringBuilder();
+        java.util.LinkedHashSet<Long> seen = new java.util.LinkedHashSet<>();
+        java.util.regex.Matcher m1 = java.util.regex.Pattern.compile("libmain\\.so\\+0x([0-9a-fA-F]+)").matcher(text);
+        while (m1.find()) seen.add(Long.parseUnsignedLong(m1.group(1), 16));
+        java.util.regex.Matcher m2 = java.util.regex.Pattern.compile("pc ([0-9a-fA-F]{8,16})\\s+\\S*libmain\\.so").matcher(text);
+        while (m2.find()) seen.add(Long.parseUnsignedLong(m2.group(1), 16));
+        for (long off : seen) {
+            String sym = symbolize(c, off);
+            b.append("  libmain.so+0x").append(Long.toHexString(off)).append("  ").append(sym != null ? sym : "(no symbol)").append('\n');
+        }
+        return b.toString();
+    }
+
     /** This app's own logcat lines (an app reads its own uid's log; the previous, crashed process's lines included). */
     static String captureLogcat(int lines) {
         StringBuilder b = new StringBuilder();

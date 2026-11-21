@@ -37,6 +37,11 @@ fs::path ExecutableDir() {
     std::error_code ec;
     const fs::path p = fs::canonical(path, ec);
     return (ec ? fs::path(path) : p).parent_path();
+#elif defined(__ANDROID__)
+    // an app has no executable of its own (/proc/self/exe is /system/bin/app_process64): the game folder is the app's
+    // private storage, named by runner/te_android.cpp
+    const char* dir = std::getenv("TE_ANDROID_GAME_DIR");
+    return dir && *dir ? fs::path(dir) : fs::path();
 #elif defined(__linux__)
     std::error_code ec;
     const fs::path p = fs::read_symlink("/proc/self/exe", ec);
