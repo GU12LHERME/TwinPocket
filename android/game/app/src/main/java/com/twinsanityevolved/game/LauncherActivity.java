@@ -119,8 +119,8 @@ public final class LauncherActivity extends Activity {
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
         new Choice(Settings.DRAW_DISTANCE, "Distância de detalhe (LOD, experimental)",
             "Mantém os modelos detalhados por mais distância, só entre os que o jogo já carregou. Exige mais da GPU",
-            "original", new String[] {"original", "medium", "long", "max"},
-            new String[] {"Original", "Média (2x)", "Longa (3x)", "Máxima (4x)"}),
+            "original", new String[] {"original", "medium", "long", "max", "extreme", "ultra"},
+            new String[] {"Original", "Média (2x)", "Longa (3x)", "Máxima (4x)", "Extrema (6x)", "Ultra (8x)"}),
     };
     static final Choice[] AUDIO = {
         new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",

@@ -28,9 +28,9 @@ const char* const kSensitivityKeys[] = {"1.00", "1.33", "1.66", "2.00"};
 const float kSensitivities[] = {1.00f, 1.33f, 1.66f, 2.00f};
 constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: the engine's own
 // the draw distance's levels (te_lod_policy.h): ps2r.ini words, and their percents of the game's distances
-const char* const kDistanceKeys[] = {"original", "medium", "long", "max"};
-const uint32_t kDistancePercents[] = {100, 200, 300, 400};
-constexpr uint32_t kDistanceCount = 4, kDefaultDistance = 0;   // the game's own
+const char* const kDistanceKeys[] = {"original", "medium", "long", "max", "extreme", "ultra"};
+const uint32_t kDistancePercents[] = {100, 200, 300, 400, 600, 800};
+constexpr uint32_t kDistanceCount = 6, kDefaultDistance = 0;   // the game's own
 
 struct State {
     uint32_t driver = kDefaultDriver, buffer = kDefaultBuffer;
@@ -228,7 +228,7 @@ uint32_t DrawDistanceChoices() { return Count() ? kDistanceCount : 0; }
 uint32_t DrawDistanceChoice() { return g.distance; }
 
 std::string DrawDistanceLabel(uint32_t choice) {
-    static const char* const kNames[] = {"original", "medium (2x)", "long (3x)", "max (4x)"};
+    static const char* const kNames[] = {"original", "medium (2x)", "long (3x)", "max (4x)", "extreme (6x)", "ultra (8x)"};
     return choice < kDistanceCount ? kNames[choice] : "";
 }
 

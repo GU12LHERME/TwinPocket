@@ -10,7 +10,7 @@
 
 namespace te::lod {
 
-// The setting's percent (100, 200, 300, 400): written into the module's block now, or when it registers
+// The setting's percent (100, 200, 300, 400, 600, 800): written into the module's block now, or when it registers
 void SetPercent(uint32_t percent);
 uint32_t Percent();
 // ps2e_gfx2_lod_policy: the module's block (a guest address), once

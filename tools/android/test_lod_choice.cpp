@@ -2,7 +2,7 @@
 // platform/nativeee/wasm/graphics_models.cpp LodModelAt) against the walk the port had before the draw distance (the PS2
 // renderer's LodMeshAt), over random levels of detail and distances:
 //   - at the draw distance's 100 % (the default: original) the choice is the game's own, for every distance;
-//   - at 200 / 300 / 400 % a model drawn by the game's choice is drawn at the same or a finer level -- unless it is a far
+//   - at 200 - 800 % a model drawn by the game's choice is drawn at the same or a finer level -- unless it is a far
 //     stand-in (nearest > 0) the closer distance now hides -- and the finest level reaches percent / 100 times as far;
 //   - the largest distances do not overflow.
 #include <cmath>
@@ -56,7 +56,7 @@ int main() {
             ++total;
             const int32_t original = te_lod_level_at(&lod, distance);
             same += original == Reference(&lod, distance) && te_lod_distance(distance, 100) == distance;
-            for (uint32_t percent : {200u, 300u, 400u}) {
+            for (uint32_t percent : {200u, 300u, 400u, 600u, 800u}) {
                 const int32_t level = te_lod_level_at(&lod, te_lod_distance(distance, percent));
                 if (original >= 0 && level > original) ++coarser;
                 if (original >= 0 && level < 0 && lod.nearest == 0) ++unhidden;
@@ -66,8 +66,8 @@ int main() {
     char what[160];
     std::snprintf(what, sizeof what, "original (100 %%): the game's own choice for all %ld distances", total);
     Check(same == total, what);
-    Check(coarser == 0, "200 / 300 / 400 %: never a coarser level than the game's choice");
-    Check(unhidden == 0, "200 / 300 / 400 %: a model the game draws is never hidden (but a far stand-in, nearest > 0)");
+    Check(coarser == 0, "200 - 800 %: never a coarser level than the game's choice");
+    Check(unhidden == 0, "200 - 800 %: a model the game draws is never hidden (but a far stand-in, nearest > 0)");
 
     // the finest level's reach: a model whose first switch is at 30 units keeps its finest mesh to 30 x percent / 100
     te_gfx_lod lod{};
@@ -76,7 +76,7 @@ int main() {
     lod.switchDistances[1] = 80 * 80;
     lod.switchDistances[2] = 0xFFFFFFFFu;
     lod.farthest = 120 * 120;
-    for (uint32_t percent : {100u, 200u, 300u, 400u}) {
+    for (uint32_t percent : {100u, 200u, 300u, 400u, 600u, 800u}) {
         uint32_t reach = 0;
         for (uint32_t units = 1; units < 1000; ++units)
             if (te_lod_level_at(&lod, te_lod_distance(units * units, percent)) == 0) reach = units;
@@ -86,6 +86,7 @@ int main() {
         Check(reach + 1 == want, what);
     }
     Check(te_lod_distance(0xFFFFFFFFu, 400) == 0xFFFFFFFFu / 16u, "the largest squared distance at 400 %: no overflow");
+    Check(te_lod_distance(0xFFFFFFFFu, 800) == 0xFFFFFFFFu / 64u, "the largest squared distance at 800 %: no overflow");
     std::printf("%s\n", g_failures ? "LOD CHOICE: FAILED" : "LOD CHOICE: OK");
     return g_failures ? 1 : 0;
 }

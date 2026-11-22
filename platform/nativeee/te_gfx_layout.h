@@ -178,7 +178,7 @@ typedef struct te_gfx_lod {           // Lod, 0x24: the squares of its distances
 // counters only grow (the host takes their differences per window); the two reaches are the host's to clear.
 typedef struct te_gfx_lod_policy {
     uint32_t version;                 // TE_GFX_LOD_POLICY_VERSION
-    uint32_t percent;                 // the host's: 100 (default), 200, 300, 400
+    uint32_t percent;                 // the host's: 100 (default), 200, 300, 400, 600, 800
     uint32_t lookups;                 // LodModelAt calls (a model with levels, in view)
     uint32_t multi_level;             // ... of a model with two levels or more (a choice the distance can change)
     uint32_t near_limited;            // ... of a model drawn only from a distance on (nearest > 0: a far stand-in)

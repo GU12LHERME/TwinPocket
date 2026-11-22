@@ -17,7 +17,7 @@ namespace te::port_settings {
 //   android.audio_buffer   = 1024 | 2048 (default) | 4096                         frames a callback, next start
 //   android.stick_deadzone = 0.05 | 0.10 | 0.15 (default) | 0.20 | 0.25          at once
 //   android.stick_sensitivity = 1.00 | 1.33 (default) | 1.66 | 2.00              at once
-//   android.draw_distance  = original (default) | medium | long | max            at once (the graphic options' row; 0.5-0.6's
+//   android.draw_distance  = original (default) | medium | long | max | extreme | ultra           at once (the graphic options' row; 0.5-0.6's
 //                            100 / 150 / 200 / 300 read as original / medium / medium / long)
 
 // The rows of the page, in order
@@ -40,9 +40,9 @@ void Set(uint32_t row, uint32_t choice);
 std::string Describe();
 
 // THE DRAW DISTANCE (experimental; the graphic options' row on Android, te_display.h RowDrawDistance): the levels of detail
-// at 100 / 200 / 300 / 400 % of the game's distances (te_lod_policy.h: the choice is made in the module's LodModelAt, among
+// at 100 / 200 / 300 / 400 / 600 / 800 % of the game's distances (te_lod_policy.h: the choice is made in the module's LodModelAt, among
 // the meshes already loaded). Only on Android; every other lane keeps the game's own choice.
-uint32_t DrawDistanceChoices();                 // 4 on Android (original, medium, long, max), 0 elsewhere
+uint32_t DrawDistanceChoices();                 // 6 on Android (original .. ultra), 0 elsewhere
 uint32_t DrawDistanceChoice();
 std::string DrawDistanceLabel(uint32_t choice);
 void SetDrawDistance(uint32_t choice);
