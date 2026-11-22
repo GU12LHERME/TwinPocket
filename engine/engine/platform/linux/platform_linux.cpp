@@ -1,5 +1,10 @@
 // platform/linux/platform_linux.cpp
 #include "engine/platform/linux/platform_linux.h"
+
+#if defined(__ANDROID__)
+#include <sys/resource.h>   // setpriority (the frame threads' nice)
+#include <unistd.h>         // gettid
+#endif
 #include "engine/platform/posix/fiber_posix.h"
 
 #include <pthread.h>
@@ -120,11 +125,25 @@ void PlatformLinux::PinCurrentThreadInteractive(const char* name, ThreadRole rol
     SetThreadName(name);
     if (pinned) return;
     pinned = true;
+#if defined(__ANDROID__)
+    // Android (this folder serves it: platform.cpp): the frame's own threads -- the pacer, the game thread, the renderer
+    // -- at THREAD_PRIORITY_URGENT_DISPLAY (nice -8: the value Android gives its own display-critical threads, which an app
+    // may set on its threads without any permission), so the background threads (the texture decoders, the disc reader,
+    // the system's) never delay a frame on a busy core. The workers and every other role keep the default (0). nice is
+    // per thread on Linux (the tid); a device that refuses it leaves the default. The callers' TE_NO_QOS=1 skips this
+    // call altogether (an A/B).
+    if (role == ThreadRole::Pacer || role == ThreadRole::Game || role == ThreadRole::Graphics) {
+        if (::setpriority(PRIO_PROCESS, static_cast<id_t>(::gettid()), -8) != 0) {
+            // refused: the default priority
+        }
+    }
+#else
     (void)role;   // no ranks here (below); the roles are Win32's
     // No QoS class on Linux: CFS has no performance/efficiency-core placement
     // to pin against, and raising a thread's priority needs CAP_SYS_NICE. The
     // scheduling intent (every emulation thread in the same class as main)
     // already holds under the default policy.
+#endif
 }
 
 uint64_t PlatformLinux::PhysFootprintBytes() {
