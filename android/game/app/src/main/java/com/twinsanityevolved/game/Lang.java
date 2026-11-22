@@ -124,6 +124,10 @@ final class Lang {
 
         // controls
         e("Zona morta dos analógicos", "Stick deadzone");
+        e("Vibração no launcher", "Launcher vibration");
+        e("Um toque curto ao confirmar e ao trocar de aba (o motor do aparelho)", "A short tap on confirm and on tab change (the device's motor)");
+        e("Ligada — padrão", "On — default");
+        e("Desligada", "Off");
         e("Quanto do centro do analógico é ignorado", "How much of the stick's centre is ignored");
         e("15% — padrão", "15% — default");
         e("Sensibilidade dos analógicos", "Stick sensitivity");

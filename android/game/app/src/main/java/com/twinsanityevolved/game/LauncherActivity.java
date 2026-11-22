@@ -144,6 +144,8 @@ public final class LauncherActivity extends Activity {
             "0.15", new String[] {"0.05", "0.10", "0.15", "0.20", "0.25"}, new String[] {"5%", "10%", "15% — padrão", "20%", "25%"}),
         new Choice(Settings.STICK_SENSITIVITY, "Sensibilidade dos analógicos", "Maior: o personagem chega à velocidade máxima com menos inclinação",
             "1.33", new String[] {"1.00", "1.33", "1.66", "2.00"}, new String[] {"100%", "133% — padrão", "166%", "200%"}),
+        new Choice(Haptics.KEY, "Vibração no launcher", "Um toque curto ao confirmar e ao trocar de aba (o motor do aparelho)",
+            "on", new String[] {"on", "off"}, new String[] {"Ligada — padrão", "Desligada"}),
     };
     static final Choice LANGUAGE = new Choice(Lang.KEY, "Idioma / Language", null, "auto", new String[] {"auto", "pt-BR", "en"},
         new String[] {"Automático (idioma do sistema)", "Português (Brasil)", "English"});
@@ -324,16 +326,25 @@ public final class LauncherActivity extends Activity {
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_BUTTON_L1:
+                    Haptics.tap(this, e, false);
                     showTab((currentTab + TAB_NAMES.length - 1) % TAB_NAMES.length);
                     tabs.get(currentTab).requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_BUTTON_R1:
+                    Haptics.tap(this, e, false);
                     showTab((currentTab + 1) % TAB_NAMES.length);
                     tabs.get(currentTab).requestFocus();
                     return true;
                 case KeyEvent.KEYCODE_BUTTON_START:
+                    Haptics.tap(this, e, true);
                     startGame(false);
                     return true;
+                case KeyEvent.KEYCODE_BUTTON_A:
+                case KeyEvent.KEYCODE_DPAD_CENTER:
+                case KeyEvent.KEYCODE_ENTER:
+                    // a confirm on a focused control (the press goes on to the view as before)
+                    if (getCurrentFocus() != null) Haptics.tap(this, e, true);
+                    break;
                 default:
                     break;
             }
