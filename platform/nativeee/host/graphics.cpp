@@ -107,6 +107,9 @@ extern "C" size_t vglMemFree(int type);
 #include "savestate.h"
 #include "te_gfx_layout.h"
 #include "te_display.h"
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+#include <SDL.h>   // the app lifecycle events (AppLifecycleWatch)
+#endif
 #include "te_glyph_texels.h"
 #include "te_graphics_hooks.h"
 #include "te_harness.h"
@@ -201,6 +204,10 @@ struct Gfx {
     ps2e_draw* dev = nullptr;
     ps2e_draw_presentation presentation{};   // the display settings, set before or after the device exists
     bool create_failed = false;
+    // Android: the window's surface gone (the app in the background) -- the render thread presents nothing until the
+    // foreground hands it the new surface (AppLifecycleWatch)
+    std::atomic<bool> surface_lost{false};
+    std::atomic<uint64_t> presents_skipped_background{0};
     bool pal = false;
     int display_w = 512, display_h = 448;
     FrameStart frame{};
@@ -449,6 +456,16 @@ struct Gfx {
     long diag_delay_from = 0, diag_delay_to = 0;   // TE_VITA_DIAG_RENDER_DELAY_FROM / _TO: the delay's presents (0: all)
     long diag_delay_every = 0;                     // TE_VITA_DIAG_RENDER_DELAY_EVERY: one picture in N delayed (0 / 1: every one)
 } g;
+
+// The swap of a finished picture -- skipped while the window has no surface (the Android app in the background: SDL
+// destroyed the EGL surface; a swap there fails and draws nothing). The picture itself was drawn (the frame target).
+static void PresentToSurface() {
+    if (g.surface_lost.load(std::memory_order_acquire)) {
+        g.presents_skipped_background.fetch_add(1, std::memory_order_relaxed);
+        return;
+    }
+    ps2e_draw_present(g.dev);
+}
 std::atomic<uint64_t> g_capture_picture{0};   // te_graphics_request_capture: the picture whose submits are logged
 
 #if defined(__vita__)
@@ -1136,6 +1153,40 @@ void PostRender(std::function<void()> fn) {
     }
     rt.wake.notify_one();
 }
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+// Android: minimising the app destroys the window's EGL surface and coming back makes a new one (SDL's Java side), and SDL
+// moves its GL context only on the thread that pumps its events -- the game thread here. The context lives on the render
+// thread (RenderLoop: ps2e_draw_bind_thread), which kept drawing onto the destroyed surface after the return: a black
+// screen with the sound playing. So: on the way to the background the render thread stops presenting; back in the
+// foreground (SDL_APP_DIDENTERFOREGROUND: the new surface exists by then) it binds its context again -- SDL_GL_MakeCurrent
+// with the window's current surface -- and presents again. Without a render thread (the context on the pumping thread)
+// SDL's own backup / restore does it and nothing is done here. An SDL event watch: called where the event is sent.
+int AppLifecycleWatch(void*, SDL_Event* e) {
+    if (!g.rt.started || !g.dev) return 0;
+    switch (e->type) {
+        case SDL_APP_WILLENTERBACKGROUND:
+        case SDL_APP_DIDENTERBACKGROUND:
+            if (!g.surface_lost.exchange(true, std::memory_order_acq_rel))
+                std::fprintf(stderr, "[te.gfx] the app to the background: presents paused (the window's surface goes away)\n");
+            break;
+        case SDL_APP_DIDENTERFOREGROUND:
+            if (g.surface_lost.load(std::memory_order_acquire)) {
+                PostRender([] {
+                    const bool bound = ps2e_draw_bind_thread(g.dev, 1) != 0;
+                    g.surface_lost.store(false, std::memory_order_release);
+                    std::fprintf(stderr, "[te.gfx] the app back in the foreground: the render thread's context on the new surface %s "
+                                         "(%llu present(s) skipped meanwhile)\n", bound ? "bound" : "NOT bound",
+                                 (unsigned long long)g.presents_skipped_background.load(std::memory_order_relaxed));
+                });
+            }
+            break;
+        default:
+            break;
+    }
+    return 0;
+}
+#endif
+
 void StartRenderThread() {
     auto& rt = g.rt;
     if (!rt.enabled || rt.started || !g.dev) return;
@@ -1184,6 +1235,9 @@ bool EnsureDevice() {
         return false;
     }
     te::display::Apply();   // the display settings read before the device existed
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+    SDL_AddEventWatch(AppLifecycleWatch, nullptr);
+#endif
     std::fprintf(stderr, "[te.gfx] %s\n", te::display::Describe().c_str());
     if (g.gpu_timers) ps2e_draw_set_gpu_timers(g.dev, g.gpu_timers);   // (no GL call: the queries are made at the first frame)
     if (te::prof::DrawBenchWanted()) te::prof::DrawBench(g.dev);   // TE_PROF_BENCH=2: before any frame (the GL thread is this one)
@@ -5063,7 +5117,7 @@ void RenderFrame(Gfx::Frame& f, Show show) {
         TE_PROF_SCOPE("ps2e_draw_present");
         // the tick lock (te_tick_lock.h): the display buffer this swap queues holds the picture for its lock's refreshes
         if (show == Show::Present) te::tick_lock::BeforeSwap(f.lock_fields);
-        if (show == Show::Present) ps2e_draw_present(g.dev);
+        if (show == Show::Present) PresentToSurface();
         else ps2e_draw_capture_frame(g.dev);
     }
 #if defined(__vita__)
@@ -5107,7 +5161,7 @@ void RenderBetween(Gfx::Frame& prev, Gfx::Frame& cur, double fraction, int64_t s
             rt.target_slot = cur_slot;
             rt.target_fraction = 1.0;
         }
-        ps2e_draw_present(g.dev);
+        PresentToSurface();
 #if defined(__vita__)
         te::vita_gpu::OnPresented();
 #endif
@@ -5181,7 +5235,7 @@ void RenderBetween(Gfx::Frame& prev, Gfx::Frame& cur, double fraction, int64_t s
     rt.target_slot = cur_slot;
     rt.target_fraction = interpolated ? fraction : 1.0;
     const auto ti2 = Steady::now();
-    ps2e_draw_present(g.dev);
+    PresentToSurface();
 #if defined(__vita__)
     te::vita_gpu::OnPresented();
 #endif
