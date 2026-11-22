@@ -181,27 +181,9 @@ final class Lang {
         e("Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
           "Original: as the game. Balanced: anisotropic 4x, LOD 2x. Quality: anisotropic 16x, LOD 4x. The resolution does not change (2x not validated yet)");
         e("Equilibrado", "Balanced");
-        e("Conquistas", "Achievements");
-        e("Conquistas locais do port (não são do RetroAchievements). Desbloqueadas: ", "The port's local achievements (not RetroAchievements). Unlocked: ");
-        e("Explorador da ilha", "Island explorer");
-        e("Volte à praia da ilha inicial vindo de outra área", "Come back to the first island's beach from another area");
-        e("Recepção gelada", "Cold welcome");
-        e("Chegue ao laboratório do iceberg", "Reach the iceberg lab");
-        e("De volta às aulas", "Back to school");
-        e("Chegue ao pátio da academia", "Reach the academy's courtyard");
-        e("O outro lado", "The other side");
-        e("Chegue à ilha do outro lado", "Reach the island on the other side");
-        e("Uma nova dimensão", "A new dimension");
-        e("Chegue à décima dimensão", "Reach the tenth dimension");
-        e("Só contam visitas jogando: carregar um save ou usar mods não desbloqueia nada.", "Only visits while playing count: loading a save or using mods unlocks nothing.");
-        e("Zerar conquistas", "Reset achievements");
-        e("Apaga só as conquistas; saves e configurações não mudam", "Deletes only the achievements; saves and settings do not change");
-        e("Zerar conquistas?", "Reset the achievements?");
-        e("Todas as conquistas voltam a bloqueadas. Os saves continuam.", "Every achievement is locked again. The saves stay.");
-        e("Zerar", "Reset");
         e("Restaurar apenas gráficos", "Restore graphics only");
-        e("Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
-          "For a black screen or a failed start: only the graphic options go back to their defaults (audio, controls, language, saves and achievements stay)");
+        e("Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
+          "For a black screen or a failed start: only the graphic options go back to their defaults (audio, controls, language and saves stay)");
         e("Restaurar apenas gráficos?", "Restore the graphics only?");
         e("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão.",
           "Filter, resolution, aspect, FPS, VSync, anisotropic, FXAA, dithering, LOD and counter go back to their defaults.");

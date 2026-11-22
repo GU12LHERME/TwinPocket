@@ -149,7 +149,7 @@ public final class LauncherActivity extends Activity {
     };
     static final Choice LANGUAGE = new Choice(Lang.KEY, "Idioma / Language", null, "auto", new String[] {"auto", "pt-BR", "en"},
         new String[] {"Automático (idioma do sistema)", "Português (Brasil)", "English"});
-    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Conquistas", "Diagnóstico"};
+    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Diagnóstico"};
 
     private int dp(float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
@@ -399,15 +399,12 @@ public final class LauncherActivity extends Activity {
                 page.addView(choiceRow(st, LANGUAGE));
                 note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
                 page.addView(actionRow("Restaurar apenas gráficos",
-                    "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
+                    "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
                     v -> confirmRestoreGraphics()));
                 page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
                 note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
                 note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
                         + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
-                break;
-            case 4:
-                achievementsPage();
                 break;
             default:
                 page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
@@ -417,7 +414,7 @@ public final class LauncherActivity extends Activity {
                         "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
                             prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
                             Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
-                            showTab(5);
+                            showTab(4);
                         }));
                 page.addView(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
                 page.addView(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
@@ -681,72 +678,6 @@ public final class LauncherActivity extends Activity {
             return false;
         });
         return row;
-    }
-
-    // ---- local achievements (platform/nativeee/host/achievements.cpp; achievements.txt beside ps2r.ini) ----
-    static final String[][] ACHIEVEMENTS = {   // id, title, how
-        {"reach_island", "Explorador da ilha", "Volte à praia da ilha inicial vindo de outra área"},
-        {"reach_iceberg", "Recepção gelada", "Chegue ao laboratório do iceberg"},
-        {"reach_academy", "De volta às aulas", "Chegue ao pátio da academia"},
-        {"reach_other_island", "O outro lado", "Chegue à ilha do outro lado"},
-        {"reach_dimension", "Uma nova dimensão", "Chegue à décima dimensão"},
-    };
-
-    private File achievementsFile() {
-        return new File(new Settings(this).file().getParentFile(), "achievements.txt");
-    }
-
-    private void achievementsPage() {
-        java.util.Map<String, Long> got = new java.util.HashMap<>();
-        String text = Diag.readFile(achievementsFile(), 0);
-        if (text != null)
-            for (String line : text.split("\n")) {
-                int eq = line.indexOf('=');
-                if (eq <= 0 || line.startsWith("#")) continue;
-                try { got.put(line.substring(0, eq), Long.parseLong(line.substring(eq + 1).trim())); } catch (NumberFormatException ignored) {}
-            }
-        int count = 0;
-        for (String[] a : ACHIEVEMENTS) if (got.containsKey(a[0])) count++;
-        note(T("Conquistas locais do port (não são do RetroAchievements). Desbloqueadas: ") + count + " / " + ACHIEVEMENTS.length);
-        java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
-        for (String[] a : ACHIEVEMENTS) {
-            Long when = got.get(a[0]);
-            TextView state = text(when != null ? "✓ " + df.format(new java.util.Date(when * 1000)) : "—", 13, when != null ? GOOD : SUBTLE, true);
-            state.setPadding(dp(12), 0, 0, 0);
-            View row = rowFrame(a[1], a[2], state);
-            page.addView(row);
-        }
-        note("Só contam visitas jogando: carregar um save ou usar mods não desbloqueia nada.");
-        page.addView(actionRow("Zerar conquistas", "Apaga só as conquistas; saves e configurações não mudam", v ->
-            new AlertDialog.Builder(this)
-                .setTitle(T("Zerar conquistas?"))
-                .setMessage(T("Todas as conquistas voltam a bloqueadas. Os saves continuam."))
-                .setPositiveButton(T("Zerar"), (d, w) -> {
-                    boolean ok = !achievementsFile().exists() || achievementsFile().delete();
-                    Diag.log(this, "main", "achievements reset (" + (ok ? "done" : "NOT deleted") + ")");
-                    showTab(4);
-                })
-                .setNegativeButton(T("Cancelar"), null)
-                .show()));
-    }
-
-    // Recovery: the graphic options alone back to the Android profile (a black screen or a failed start after a graphics
-    // change); the audio, the controls, the language, the ISO, the saves and the achievements are not touched
-    private void confirmRestoreGraphics() {
-        new AlertDialog.Builder(this)
-            .setTitle(T("Restaurar apenas gráficos?"))
-            .setMessage(T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."))
-            .setPositiveButton(T("Restaurar"), (d, w) -> {
-                Settings st = new Settings(this);
-                boolean ok = true;
-                for (Choice c : GRAPHICS) ok &= st.set(c.key, c.def);
-                ok &= st.set(Settings.FULLSCREEN, "fullscreen");
-                Diag.log(this, "main", "graphics restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
-                Toast.makeText(this, ok ? T("Gráficos restaurados") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
-                showTab(currentTab);
-            })
-            .setNegativeButton(T("Cancelar"), null)
-            .show();
     }
 
     private void confirmRestore() {
