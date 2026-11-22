@@ -640,7 +640,7 @@ public final class LauncherActivity extends Activity {
         head.setOrientation(LinearLayout.VERTICAL);
         head.setPadding(dp(4), dp(10), dp(4), dp(14));
         head.addView(text("Crash Twinsanity", 30, FG, true));
-        head.addView(text("TwinsanityEvolved · port nativo Android", 13, SUBTLE, false));
+        head.addView(text("Port nativo para Android", 13, SUBTLE, false));
         TextView label = text("JOGO SELECIONADO", 11, SUBTLE, true);
         label.setPadding(0, dp(18), 0, dp(2));
         head.addView(label);
@@ -687,7 +687,17 @@ public final class LauncherActivity extends Activity {
         actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", () -> startActivity(new Intent(this, ProbeActivity.class)));
         actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", this::startSdlTest);
         section("APLICATIVO");
-        actionRow("Sair do aplicativo", "Fecha o TwinsanityEvolved (configurações, saves e a ISO ficam guardados)", this::confirmExit);
+        actionRow("Licenças de código aberto", "Os projetos em que este port se baseia e as suas licenças", () -> dialog(T("Licenças de código aberto"),
+            T("Este port usa código de projetos de código aberto, cujas licenças pedem que o aviso de copyright acompanhe as cópias:\n\n")
+                + "• TwinsanityEvolved — MIT License, Copyright (c) 2026 the TwinsanityEvolved contributors\n"
+                + "• NativeEE — MIT License, Copyright (c) 2026 The NativeEE contributors\n"
+                + "• twinsanity-reversed (github.com/Smartkin/twinsanity-reversed)\n"
+                + "• SDL2 — zlib License\n"
+                + "• FFmpeg — LGPL v2.1 ou posterior\n"
+                + "• libchdr — BSD 3-Clause License\n\n"
+                + T("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco."),
+            null, new String[] {T("OK")}, 0, 0, null));
+        actionRow("Sair do aplicativo", "Fecha o Crash Twinsanity (configurações, saves e a ISO ficam guardados)", this::confirmExit);
         note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
         note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
                 + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
@@ -956,7 +966,7 @@ public final class LauncherActivity extends Activity {
             T(gameAlive
                 ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
                   + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
-                : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados."),
+                : "O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados."),
             null, new String[] {T("Sair"), T("Cancelar")}, 1, 1, i -> { if (i == 0) exitApp(); });
     }
 
@@ -1500,7 +1510,7 @@ public final class LauncherActivity extends Activity {
             File dir = Diag.logsDir(c);
             Diag.write(new File(dir, "logcat.txt"), Diag.captureLogcat(4000));
             StringBuilder b = new StringBuilder();
-            b.append("TwinsanityEvolved Android — relatório de diagnóstico — ").append(Diag.now()).append("\n\n");
+            b.append("Crash Twinsanity Android — relatório de diagnóstico — ").append(Diag.now()).append("\n\n");
             b.append(statusText()).append('\n');
             String[] order = {"stage-game.txt", "java-crash-game.txt", "java-game.log", "latest-game.log", "previous-game.log",
                               "stage-probe.txt", "java-crash-probe.txt", "probe-result.txt", "latest-probe.log",
@@ -1541,15 +1551,15 @@ public final class LauncherActivity extends Activity {
                 if (share) {
                     Intent send = new Intent(Intent.ACTION_SEND);
                     send.setType("text/plain");
-                    send.putExtra(Intent.EXTRA_SUBJECT, "TwinsanityEvolved Android — relatório");
+                    send.putExtra(Intent.EXTRA_SUBJECT, "Crash Twinsanity Android — relatório");
                     send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor("report.txt"));
-                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do TwinsanityEvolved (anexo report.txt).");
+                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Crash Twinsanity (anexo report.txt).");
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivity(Intent.createChooser(send, "Compartilhar relatório"));
                 } else {
                     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     String clip = report.length() > 250000 ? report.substring(report.length() - 250000) : report;
-                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("TwinsanityEvolved report", clip));
+                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Crash Twinsanity report", clip));
                     Toast.makeText(c, T("Relatório copiado (") + clip.length() + T(" caracteres)"), Toast.LENGTH_LONG).show();
                 }
             });

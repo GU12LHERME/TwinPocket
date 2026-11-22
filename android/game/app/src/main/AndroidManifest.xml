@@ -12,7 +12,9 @@
         android:extractNativeLibs="true"
         android:hasCode="true"
         android:isGame="true"
-        android:label="TwinsanityEvolved"
+        android:icon="@mipmap/ic_crash_launcher"
+        android:roundIcon="@mipmap/ic_crash_launcher_round"
+        android:label="Crash Twinsanity"
         android:supportsRtl="true">
 
         <!-- The entry: Java only, the app's main process. The landscape launcher: the game, the settings (ps2r.ini), the diagnostics. -->
@@ -48,7 +50,7 @@
 
         <provider
             android:name="com.twinsanityevolved.game.LogProvider"
-            android:authorities="com.twinsanityevolved.game.logs"
+            android:authorities="${applicationId}.logs"
             android:exported="false"
             android:grantUriPermissions="true" />
     </application>

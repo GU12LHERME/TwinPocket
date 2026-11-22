@@ -16,7 +16,7 @@ import java.io.FileNotFoundException;
  * granted per share through FLAG_GRANT_READ_URI_PERMISSION. Not exported: nothing else can open it unasked.
  */
 public final class LogProvider extends ContentProvider {
-    static final String AUTHORITY = "com.twinsanityevolved.game.logs";
+    static final String AUTHORITY = "com.crashtwinsanity.android.logs";   // = the manifest's ${applicationId}.logs
 
     static Uri uriFor(String name) {
         return Uri.parse("content://" + AUTHORITY + "/" + name);

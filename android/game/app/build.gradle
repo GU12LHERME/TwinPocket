@@ -21,11 +21,11 @@ android {
     compileSdk 35
 
     defaultConfig {
-        applicationId "com.twinsanityevolved.game"
+        applicationId "com.crashtwinsanity.android"
         minSdk 24
         targetSdk 33
-        versionCode 35
-        versionName "0.23.0-android-saves"
+        versionCode 36
+        versionName "0.24.0"
         ndk {
             abiFilters "arm64-v8a"
         }

@@ -1164,7 +1164,7 @@ bool EnsureDevice() {
     cfg.window_height = g.display_h * 2;
     cfg.window_width = (cfg.window_height * 4 + 1) / 3;
     cfg.headless = g.headless ? 1 : 0;
-    cfg.title = "TwinsanityEvolved";
+    cfg.title = "Crash Twinsanity";
     // the threads' locks made before the device's memory is (the Vita: below)
     PrimeThreadSync();
     // PS2E_DRAW_STENCIL_DIAG=1 (the cryscave flicker diagnosis): the engine logs the stencil's histogram at the shadow bracket's

@@ -90,19 +90,19 @@ void ShowMessage(Uint32 flags, const char* title, const std::string& text) {
 int SdlTest() {
     TE_ANDROID_STAGE("sdl test: SDL_Init(VIDEO | GAMECONTROLLER | EVENTS)");
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_Init failed: ") + SDL_GetError());
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Crash Twinsanity - SDL test", std::string("SDL_Init failed: ") + SDL_GetError());
         return 1;
     }
     TE_ANDROID_STAGE("sdl test: SDL_CreateWindow");
-    SDL_Window* w = SDL_CreateWindow("TwinsanityEvolved SDL test", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
+    SDL_Window* w = SDL_CreateWindow("Crash Twinsanity SDL test", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
     if (!w) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_CreateWindow failed: ") + SDL_GetError());
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Crash Twinsanity - SDL test", std::string("SDL_CreateWindow failed: ") + SDL_GetError());
         return 1;
     }
     TE_ANDROID_STAGE("sdl test: SDL_CreateRenderer (OpenGL ES)");
     SDL_Renderer* r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
     if (!r) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved - SDL test", std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Crash Twinsanity - SDL test", std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
         return 1;
     }
     SDL_RendererInfo info{};

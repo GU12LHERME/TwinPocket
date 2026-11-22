@@ -54,7 +54,7 @@ final class Lang {
         e("Selecionar ISO", "Select ISO");
         e("Sair do aplicativo", "Exit application");
         e("JOGO SELECIONADO", "SELECTED GAME");
-        e("TwinsanityEvolved · port nativo Android", "TwinsanityEvolved · native Android port");
+        e("Port nativo para Android", "Native Android port");
         e("A  Confirmar      B  Voltar      LB / RB  Abas      ◀ ▶  Alterar      START  Jogar",
           "A  Confirm      B  Back      LB / RB  Tabs      ◀ ▶  Change      START  Play");
         e("Jogar", "Play");
@@ -62,6 +62,11 @@ final class Lang {
         e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
         e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
         e("RESTAURAR", "RESTORE");
+        e("Licenças de código aberto", "Open source licenses");
+        e("Os projetos em que este port se baseia e as suas licenças", "The projects this port is built on and their licenses");
+        e("Este port usa código de projetos de código aberto, cujas licenças pedem que o aviso de copyright acompanhe as cópias:\n\n",
+          "This port uses code from open source projects whose licenses ask that the copyright notice travel with copies:\n\n");
+        e("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco.", "No game data is part of the app: the game uses YOUR disc image.");
         e("Saves", "Saves");
         e("Os saves do cartão de memória do jogo: backup, restauração e exclusão.", "The game's memory card saves: backup, restore and deletion.");
         e("BACKUP", "BACKUP");
@@ -106,7 +111,7 @@ final class Lang {
         e("Modo diagnóstico", "Diagnostic mode");
         e("Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
           "Logs the GPU messages, the sticks and the game's vibration and lets L3 + R3 capture a frame (leave off to play)");
-        e("Fecha o TwinsanityEvolved (configurações, saves e a ISO ficam guardados)", "Closes TwinsanityEvolved (settings, saves and the ISO are kept)");
+        e("Fecha o Crash Twinsanity (configurações, saves e a ISO ficam guardados)", "Closes Crash Twinsanity (settings, saves and the ISO are kept)");
         e("versão ", "version ");
         e("Nenhuma ISO selecionada", "No ISO selected");
         e("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
@@ -272,8 +277,8 @@ final class Lang {
                 + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo.",
           "The game is still open in the background. Leave it from the game (Options → android settings → return to launcher) "
                 + "so no unsaved progress is lost. Exiting anyway ends the game.");
-        e("O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados.",
-          "TwinsanityEvolved will close. Settings, saves and the ISO stay stored.");
+        e("O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados.",
+          "Crash Twinsanity will close. Settings, saves and the ISO stay stored.");
         e("Sair", "Exit");
         e("Cancelar", "Cancel");
         e("OK", "OK");

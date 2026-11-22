@@ -61,7 +61,7 @@ public final class ProbeActivity extends Activity {
     }
 
     private void run() {
-        step("== TwinsanityEvolved diagnostic (no game) -- " + Diag.now());
+        step("== Crash Twinsanity diagnostic (no game) -- " + Diag.now());
         step("device: " + Build.MANUFACTURER + " " + Build.MODEL + " (" + Build.DEVICE + "), Android " + Build.VERSION.RELEASE
                 + " API " + Build.VERSION.SDK_INT + ", ABIs " + android.text.TextUtils.join(",", Build.SUPPORTED_ABIS));
         String libDir = getApplicationInfo().nativeLibraryDir;

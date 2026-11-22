@@ -10,8 +10,8 @@ import org.libsdl.app.SDLActivity;
  * here ends this process only: the launcher, in the app's main process, shows what the run reached.
  */
 public final class MainActivity extends SDLActivity {
-    static final String EXTRA_SDL_TEST = "com.twinsanityevolved.game.SDL_TEST";
-    static final String EXTRA_ISO = "com.twinsanityevolved.game.ISO";
+    static final String EXTRA_SDL_TEST = "com.crashtwinsanity.android.SDL_TEST";
+    static final String EXTRA_ISO = "com.crashtwinsanity.android.ISO";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {

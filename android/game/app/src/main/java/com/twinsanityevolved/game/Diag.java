@@ -27,7 +27,7 @@ import java.util.Locale;
  * native side makes, and the helpers the launcher's report uses.
  */
 final class Diag {
-    static final String TAG = "TwinsanityEvolved";
+    static final String TAG = "CrashTwinsanity";
 
     private Diag() {}
 
