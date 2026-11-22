@@ -680,6 +680,25 @@ public final class LauncherActivity extends Activity {
         return row;
     }
 
+    // Recovery: the graphic options alone back to the Android profile (a black screen or a failed start after a graphics
+    // change); the audio, the controls, the language, the ISO and the saves are not touched
+    private void confirmRestoreGraphics() {
+        new AlertDialog.Builder(this)
+            .setTitle(T("Restaurar apenas gráficos?"))
+            .setMessage(T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."))
+            .setPositiveButton(T("Restaurar"), (d, w) -> {
+                Settings st = new Settings(this);
+                boolean ok = true;
+                for (Choice c : GRAPHICS) ok &= st.set(c.key, c.def);
+                ok &= st.set(Settings.FULLSCREEN, "fullscreen");
+                Diag.log(this, "main", "graphics restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
+                Toast.makeText(this, ok ? T("Gráficos restaurados") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
+                showTab(currentTab);
+            })
+            .setNegativeButton(T("Cancelar"), null)
+            .show();
+    }
+
     private void confirmRestore() {
         new AlertDialog.Builder(this)
             .setTitle(T("Restaurar configurações padrão?"))
