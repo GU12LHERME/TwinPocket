@@ -24,8 +24,8 @@ android {
         applicationId "com.twinsanityevolved.game"
         minSdk 24
         targetSdk 33
-        versionCode 32
-        versionName "0.21.1-android-launcher-oled"
+        versionCode 33
+        versionName "0.22.0-android-otimizacao"
         ndk {
             abiFilters "arm64-v8a"
         }
