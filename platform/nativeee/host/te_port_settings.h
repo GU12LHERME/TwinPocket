@@ -17,6 +17,7 @@ namespace te::port_settings {
 //   android.audio_buffer   = 1024 | 2048 (default) | 4096                         frames a callback, next start
 //   android.stick_deadzone = 0.05 | 0.10 | 0.15 (default) | 0.20 | 0.25          at once
 //   android.stick_sensitivity = 1.00 | 1.33 (default) | 1.66 | 2.00              at once
+//   android.fxaa = off (default) | on;  android.dithering = off (default) | original     at once (the graphic options' rows)
 //   android.draw_distance  = original (default) | medium | long | max (0.8.2's extreme / ultra read as max)           at once (the graphic options' row; 0.5-0.6's
 //                            100 / 150 / 200 / 300 read as original / medium / medium / long)
 
@@ -53,5 +54,16 @@ uint32_t DrawDistanceChoices();                 // 4 on Android (original, mediu
 uint32_t DrawDistanceChoice();
 std::string DrawDistanceLabel(uint32_t choice);
 void SetDrawDistance(uint32_t choice);
+
+// ANTI-ALIASING and DITHERING (the graphic options' rows on Android; 0 choices elsewhere): android.fxaa = off | on (the
+// edge-directed smoothing of the scan-out: gl_shader_sources.cpp kScanoutFxaaFragSrc) and android.dithering = off (the
+// port's 24-bit picture, the default) | original (the PS2's own present: the frame copied to 16 bits with the GS's DIMX
+// dithering -- the engine's CT16 scan-out). Applied at once (te_graphics_set_present_options).
+uint32_t FxaaChoices();
+uint32_t Fxaa();
+void SetFxaa(uint32_t choice);
+uint32_t DitheringChoices();
+uint32_t Dithering();
+void SetDithering(uint32_t choice);
 
 }  // namespace te::port_settings

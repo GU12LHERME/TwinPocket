@@ -1157,6 +1157,57 @@ void main() {
 }
 )GLSL";
 
+// The anti-aliased scanout (ScanoutDesc::fxaa; TwinsanityEvolved's Android option): a single-pass, edge-directed smoothing
+// of the frame as it is shown -- the luma of the sample and its four diagonal neighbours (in the SOURCE's texels) finds a
+// contrast edge; across a strong edge two to four taps along the edge's direction are averaged, and the wider average is
+// kept only while it stays inside the neighbourhood's luma range (so thin lines and text do not bleed); flat areas are
+// the plain sample. With u_dither the result then takes the CT16 present's step (the same as the dithered scanout).
+const char* const kScanoutFxaaFragSrc = R"GLSL(
+#version 410 core
+
+in vec2 v_texcoord;
+uniform sampler2D u_texture;
+uniform vec2 u_source_size;
+uniform int u_dither;
+uniform int u_dimx[16];
+out vec4 frag_color;
+
+float luma(vec3 c) { return dot(c, vec3(0.299, 0.587, 0.114)); }
+
+void main() {
+    vec2 px = 1.0 / u_source_size;
+    vec3 c = texture(u_texture, v_texcoord).rgb;
+    float lc = luma(c);
+    float l0 = luma(texture(u_texture, v_texcoord + vec2(-px.x, -px.y)).rgb);
+    float l1 = luma(texture(u_texture, v_texcoord + vec2( px.x, -px.y)).rgb);
+    float l2 = luma(texture(u_texture, v_texcoord + vec2(-px.x,  px.y)).rgb);
+    float l3 = luma(texture(u_texture, v_texcoord + vec2( px.x,  px.y)).rgb);
+    float lo = min(lc, min(min(l0, l1), min(l2, l3)));
+    float hi = max(lc, max(max(l0, l1), max(l2, l3)));
+    vec3 result = c;
+    if (hi - lo >= max(0.04, hi * 0.15)) {
+        // the edge runs across the larger luma difference: the direction along it
+        vec2 dir = vec2((l2 + l3) - (l0 + l1), (l0 + l2) - (l1 + l3));
+        float damp = max((l0 + l1 + l2 + l3) * 0.03, 0.008);
+        float scale = 1.0 / (min(abs(dir.x), abs(dir.y)) + damp);
+        dir = clamp(dir * scale, vec2(-6.0), vec2(6.0)) * px;
+        vec3 near_avg = 0.5 * (texture(u_texture, v_texcoord - dir * (1.0 / 6.0)).rgb +
+                               texture(u_texture, v_texcoord + dir * (1.0 / 6.0)).rgb);
+        vec3 wide_avg = 0.5 * near_avg + 0.25 * (texture(u_texture, v_texcoord - dir * 0.5).rgb +
+                                                 texture(u_texture, v_texcoord + dir * 0.5).rgb);
+        float lw = luma(wide_avg);
+        result = (lw < lo || lw > hi) ? near_avg : wide_avg;
+    }
+    if (u_dither != 0) {
+        ivec2 p = ivec2(floor(v_texcoord * u_source_size));
+        float d = float(u_dimx[(p.y & 3) * 4 + (p.x & 3)]);
+        vec3 v = clamp(floor(result * 255.0 + 0.5) + d, 0.0, 255.0);
+        result = floor(v / 8.0) / 31.0;
+    }
+    frag_color = vec4(result, 1.0);
+}
+)GLSL";
+
 // ---- stencil-composite programs (OLD s9_composite_native.inc:53-215, byte-identical) ----
 // The accumulator CLEAR arms folded (unused by the NEW device -- the CLEAR runs the
 // register program, whose live arms these are -- kept for the text-hash gate).
@@ -1682,6 +1733,7 @@ const char* GlShaderSources::Ps2Fragment() { return kPs2FragSrc; }
 const char* GlShaderSources::ScanoutVertex() { return kScanoutVertSrc; }
 const char* GlShaderSources::ScanoutFragment() { return kScanoutFragSrc; }
 const char* GlShaderSources::ScanoutDitherFragment() { return kScanoutDitherFragSrc; }
+const char* GlShaderSources::ScanoutFxaaFragment() { return kScanoutFxaaFragSrc; }
 const char* GlShaderSources::StencilClearFragment() { return kStencilClearFragSrc; }
 const char* GlShaderSources::StencilStripFragment() { return kStencilStripFragSrc; }
 const char* GlShaderSources::StencilInvertFragment() { return kStencilInvertFragSrc; }

@@ -236,6 +236,8 @@ uint32_t Choices(uint32_t row) {
     case RowGameRate: return 2;
     case RowDrawDistance: return te::port_settings::DrawDistanceChoices();
     case RowAnisotropy: return AnisoChoices();
+    case RowAntiAliasing: return te::port_settings::FxaaChoices();
+    case RowDithering: return te::port_settings::DitheringChoices();
     default: return 0;
     }
 }
@@ -280,6 +282,8 @@ std::string RowLabel(uint32_t row) {
     case RowGameRate: return MS(Id::GameRate);
     case RowDrawDistance: return "draw distance";
     case RowAnisotropy: return "anisotropic filter";
+    case RowAntiAliasing: return "anti-aliasing";
+    case RowDithering: return "dithering";
     default: return "";
     }
 }
@@ -319,6 +323,8 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     case RowGameRate: return choice == 0 ? MS(Id::GameRatePal) : MS(Id::GameRateSixty);
     case RowDrawDistance: return te::port_settings::DrawDistanceLabel(choice);
     case RowAnisotropy: return choice == 0 ? std::string("off") : choice < 5 ? std::to_string(kAnisoLevels[choice]) + "x" : std::string();
+    case RowAntiAliasing: return choice == 0 ? "off" : choice == 1 ? "fxaa" : "";
+    case RowDithering: return choice == 0 ? "off" : choice == 1 ? "original (ps2)" : "";
     case RowDisplayMode: {
         static const Id ids[] = {Id::Windowed, Id::Fullscreen, Id::Borderless};
         return choice < 3 ? MS(ids[choice]) : "";
@@ -348,6 +354,8 @@ uint32_t Value(uint32_t row) {
     case RowGameRate: return g_settings.game_hz == 50 ? 0u : 1u;
     case RowDrawDistance: return te::port_settings::DrawDistanceChoice();
     case RowAnisotropy: return std::min(AnisoIndex(g_settings.anisotropy), AnisoChoices() ? AnisoChoices() - 1 : 0u);
+    case RowAntiAliasing: return te::port_settings::Fxaa();
+    case RowDithering: return te::port_settings::Dithering();
     default: return 0;
     }
 }
@@ -397,6 +405,8 @@ void Set(uint32_t row, uint32_t choice) {
         std::fprintf(stderr, "[twinsanityevolved] display: game rate %d Hz from the next start (this run: %d Hz)\n",
                      g_settings.game_hz, g_settings.running_hz);
         return;
+    case RowAntiAliasing: te::port_settings::SetFxaa(choice); return;
+    case RowDithering: te::port_settings::SetDithering(choice); return;
     case RowAnisotropy:
         g_settings.anisotropy = kAnisoLevels[choice];
         Persist("video.anisotropy", std::to_string(g_settings.anisotropy));

@@ -83,6 +83,7 @@ struct ps2e_draw {
     bool in_frame = false;
     bool capture = false;
     bool present_ct16 = false;   // ps2e_draw_set_present_ct16
+    bool present_fxaa = false;   // ps2e_draw_set_present_fxaa
     uint64_t dimx = render::kDefaultDimx;
     uint64_t presented = 0;
     // the next texture id: atomic -- ps2e_draw_texture_reserve takes ids from any thread; the drawing thread's creations
@@ -3222,6 +3223,7 @@ void Scanout(ps2e_draw* d, bool to_window) {
     sd.dst = {(ww - dw) / 2 + ox, (wh - dh) / 2 + oy, dw, dh};
     sd.filter = want.nearest ? render::PresentationFilter::Nearest : render::PresentationFilter::Linear;
     sd.dither16 = d->present_ct16;   // The retail CT16 scanout
+    sd.fxaa = d->present_fxaa;       // the anti-aliased scanout (the Android port's option)
     sd.dimx = d->dimx;
     sd.to_window = to_window;
     d->last_out_x = sd.dst.x;
@@ -3266,6 +3268,10 @@ void ps2e_draw_set_present_ct16(ps2e_draw* d, int enable, uint64_t dimx) {
     d->present_ct16 = enable != 0;
     d->dimx = dimx ? dimx : render::kDefaultDimx;
 }
+void ps2e_draw_set_present_fxaa(ps2e_draw* d, int enable) {
+    if (d) d->present_fxaa = enable != 0;
+}
+
 int ps2e_draw_present_ct16(const ps2e_draw* d) { return d && d->present_ct16 ? 1 : 0; }
 
 void ps2e_draw_arm_capture(ps2e_draw* d, int armed) {

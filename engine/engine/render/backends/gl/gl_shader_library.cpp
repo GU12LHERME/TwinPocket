@@ -3727,10 +3727,27 @@ bool GlShaderLibrary::BuildStencilPrograms() {
     return true;
 }
 
+uint32_t GlShaderLibrary::ScanoutFxaaProgram() {
+    if (!scanout_fxaa_tried_) {
+        scanout_fxaa_tried_ = true;
+        scanout_fxaa_program_ = BuildProgram(ScanoutVertexSource(), GlShaderSources::ScanoutFxaaFragment(), "scanout fxaa");
+        if (scanout_fxaa_program_) {
+            scanout_fxaa_tex_loc_ = glGetUniformLocation(scanout_fxaa_program_, "u_texture");
+            scanout_fxaa_size_loc_ = glGetUniformLocation(scanout_fxaa_program_, "u_source_size");
+            scanout_fxaa_dither_loc_ = glGetUniformLocation(scanout_fxaa_program_, "u_dither");
+            scanout_fxaa_dimx_loc_ = glGetUniformLocation(scanout_fxaa_program_, "u_dimx");
+        }
+        std::fprintf(stderr, "[gl] anti-aliased scanout: %s\n", scanout_fxaa_program_ ? "built" : "NOT built (the plain scanout stays)");
+    }
+    return scanout_fxaa_program_;
+}
+
 void GlShaderLibrary::Destroy() {
     if (ps2_program_) { glDeleteProgram(ps2_program_); ps2_program_ = 0; }
     if (scanout_program_) { glDeleteProgram(scanout_program_); scanout_program_ = 0; }
     if (scanout_dither_program_) { glDeleteProgram(scanout_dither_program_); scanout_dither_program_ = 0; }
+    if (scanout_fxaa_program_) { glDeleteProgram(scanout_fxaa_program_); scanout_fxaa_program_ = 0; }
+    scanout_fxaa_tried_ = false;
     if (strip_program_) { glDeleteProgram(strip_program_); strip_program_ = 0; }
     if (invert_program_) { glDeleteProgram(invert_program_); invert_program_ = 0; }
     if (const_program_) { glDeleteProgram(const_program_); const_program_ = 0; }

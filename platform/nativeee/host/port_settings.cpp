@@ -12,6 +12,8 @@
 #include "te_input.h"
 #include "te_lod_policy.h"
 
+extern "C" void te_graphics_set_present_options(int ct16, int fxaa);   // graphics.cpp
+
 namespace te::port_settings {
 
 namespace {
@@ -39,6 +41,7 @@ struct State {
     uint32_t running_driver = kDefaultDriver, running_buffer = kDefaultBuffer;   // what this run started with
     uint32_t deadzone = kDefaultDeadzone, sensitivity = kDefaultSensitivity;
     uint32_t distance = kDefaultDistance;
+    uint32_t fxaa = 0, dithering = 0;   // off, off
     // the action rows' confirmation: the row pressed once (RowCount = none), the boundary it was pressed at, and the last one
     // done (its label says so until the page is left)
     uint32_t armed = RowCount;
@@ -112,6 +115,12 @@ void Configure(const std::string& ini_text) {
         else g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
         if (g.distance >= kDistanceShown) g.distance = kDistanceShown - 1;   // 0.8.2's extreme (6x) / ultra (8x): max (4x)
         te::lod::SetPercent(kDistancePercents[g.distance]);
+    }
+    {
+        std::string v;
+        g.fxaa = ps2r::SettingsFile::GetFromText(ini_text, "android.fxaa", &v) && v == "on" ? 1u : 0u;
+        g.dithering = ps2r::SettingsFile::GetFromText(ini_text, "android.dithering", &v) && v == "original" ? 1u : 0u;
+        if (g.fxaa || g.dithering) te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
     }
     ApplySticks();
     {
@@ -236,6 +245,8 @@ void Set(uint32_t row, uint32_t choice) {
         Persist("android.stick_sensitivity", kSensitivityKeys[g.sensitivity]);
         ApplySticks();
         SetDrawDistance(kDefaultDistance);
+        SetFxaa(0);
+        SetDithering(0);
         te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
         te::display::Set(te::display::RowVSync, te::display::kDefaultVSync ? 1u : 0u);
 #if defined(__ANDROID__)
@@ -274,6 +285,23 @@ std::string Describe() {
                   g.buffer != g.running_buffer ? " (next start)" : "", kDeadzoneKeys[g.deadzone], kSensitivityKeys[g.sensitivity],
                   kDistanceKeys[g.distance]);
     return buf;
+}
+
+uint32_t FxaaChoices() { return Count() ? 2u : 0u; }
+uint32_t Fxaa() { return g.fxaa; }
+void SetFxaa(uint32_t choice) {
+    if (choice > 1) return;
+    g.fxaa = choice;
+    Persist("android.fxaa", choice ? "on" : "off");
+    te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
+}
+uint32_t DitheringChoices() { return Count() ? 2u : 0u; }
+uint32_t Dithering() { return g.dithering; }
+void SetDithering(uint32_t choice) {
+    if (choice > 1) return;
+    g.dithering = choice;
+    Persist("android.dithering", choice ? "original" : "off");
+    te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
 }
 
 uint32_t DrawDistanceChoices() { return Count() ? kDistanceShown : 0; }

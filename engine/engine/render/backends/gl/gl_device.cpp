@@ -2094,13 +2094,24 @@ void GlDevice::Present(const ScanoutDesc& desc) {
         const int vw = desc.dst.w > 0 ? desc.dst.w : window_w_;
         const int vh = desc.dst.h > 0 ? desc.dst.h : window_h_;
         state_.Viewport(desc.dst.x, desc.dst.y, vw, vh);
-        state_.UseProgram(desc.dither16 ? shaders_.ScanoutDitherProgram() : shaders_.ScanoutProgram());
+        const uint32_t fxaa = desc.fxaa ? shaders_.ScanoutFxaaProgram() : 0u;
+        state_.UseProgram(fxaa ? fxaa : desc.dither16 ? shaders_.ScanoutDitherProgram() : shaders_.ScanoutProgram());
         state_.ActiveTexture(GL_TEXTURE0);
         state_.BindTex2D(s->tex);
         const uint32_t sampler = desc.filter == PresentationFilter::Linear ? present_linear_ :
             desc.filter == PresentationFilter::Nearest ? present_nearest_ : 0;
         glBindSampler(0,sampler);
-        if (desc.dither16) {
+        if (fxaa) {
+            glUniform1i(shaders_.ScanoutFxaaTextureLocation(), 0);
+            glUniform2f(shaders_.ScanoutFxaaSourceSizeLocation(), float(s->desc.width), float(s->desc.height));
+            glUniform1i(shaders_.ScanoutFxaaDitherLocation(), desc.dither16 ? 1 : 0);
+            GLint dimx[16];
+            for (int i = 0; i < 16; ++i) {
+                const int cell = int((desc.dimx >> (4 * i)) & 7u);
+                dimx[i] = cell >= 4 ? cell - 8 : cell;   // 3-bit two's complement
+            }
+            glUniform1iv(shaders_.ScanoutFxaaMatrixLocation(), 16, dimx);
+        } else if (desc.dither16) {
             glUniform1i(shaders_.ScanoutDitherTextureLocation(), 0);
             glUniform2f(shaders_.ScanoutDitherSourceSizeLocation(), float(s->desc.width), float(s->desc.height));
             GLint dimx[16];

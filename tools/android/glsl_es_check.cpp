@@ -13,7 +13,7 @@ int main(int argc, char** argv) {
     struct Item { const char* name; const char* (*text)(); bool fragment; };
     const Item items[] = {
         {"ps2", &S::Ps2Vertex, false}, {"ps2", &S::Ps2Fragment, true}, {"scanout", &S::ScanoutVertex, false},
-        {"scanout", &S::ScanoutFragment, true}, {"scanout_dither", &S::ScanoutDitherFragment, true},
+        {"scanout", &S::ScanoutFragment, true}, {"scanout_dither", &S::ScanoutDitherFragment, true}, {"scanout_fxaa", &S::ScanoutFxaaFragment, true},
         {"stencil_clear", &S::StencilClearFragment, true}, {"stencil_strip", &S::StencilStripFragment, true},
         {"stencil_invert", &S::StencilInvertFragment, true}, {"const", &S::ConstVertex, false}, {"const", &S::ConstFragment, true},
         {"opaque_mask", &S::OpaqueMaskFragment, true}, {"copy", &S::CopyVertex, false}, {"copy", &S::CopyFragment, true},

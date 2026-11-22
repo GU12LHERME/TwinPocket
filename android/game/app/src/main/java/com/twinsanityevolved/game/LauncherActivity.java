@@ -110,6 +110,12 @@ public final class LauncherActivity extends Activity {
         new Choice(Settings.ANISOTROPY, "Filtragem anisotrópica",
             "Texturas do chão e paredes mais nítidas em ângulo; limitada ao máximo do driver (o log diz o aplicado)",
             "1", new String[] {"1", "2", "4", "8", "16"}, new String[] {"Desligada — padrão", "2x", "4x", "8x", "16x"}),
+        new Choice(Settings.FXAA, "Antisserrilhado (FXAA)",
+            "Suaviza bordas serrilhadas na imagem final; pode suavizar um pouco textos e o HUD",
+            "off", new String[] {"off", "on"}, new String[] {"Desligado — padrão", "FXAA"}),
+        new Choice(Settings.DITHERING, "Dithering",
+            "Original: a saída de 16 bits com dithering do próprio PS2. Desligado: a imagem de 24 bits do port, mais lisa",
+            "off", new String[] {"off", "original"}, new String[] {"Desligado — padrão", "Original (PS2)"}),
         new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
             "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
         new Choice(Settings.ASPECT, "Proporção da tela",
@@ -618,7 +624,7 @@ public final class LauncherActivity extends Activity {
     private void confirmRestore() {
         new AlertDialog.Builder(this)
             .setTitle(T("Restaurar configurações padrão?"))
-            .setMessage(T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica desligada, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
+            .setMessage(T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
                     + T("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas)."))
             .setPositiveButton(T("Restaurar"), (d, w) -> {
                 Settings st = new Settings(this);

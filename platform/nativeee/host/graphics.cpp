@@ -384,6 +384,7 @@ struct Gfx {
     bool options_read = false;
     bool headless = false, log = false;
     bool present_ct16 = false;   // the dithered 16-bit present (te::Settings / TE_GFX_PRESENT_CT16; the hook toggles it)
+    bool present_fxaa = false;   // the anti-aliased present (the Android port's option: te_graphics_set_present_options)
     int gpu_timers = 0;          // TE_GFX_GPU_TIMERS: the GPU phase timer's mode (ps2e_draw_set_gpu_timers; 0 off)
     std::string dump_dir;
     long dump_every = 0, dump_at = 0, summary_every = 600;
@@ -803,7 +804,8 @@ void ReadOptions() {
                      g.ll_ahead, g.ll_ahead == 1 ? "" : "s",
                      g.ll_render_delay_us ? " -- TEST: the drawing thread sleeps TE_VITA_DIAG_RENDER_DELAY_US per picture" : "");
 #endif
-    g.present_ct16 = te::GetSettings().present_ct16 || EnvFlag("TE_GFX_PRESENT_CT16");
+    // (|| : the Android port's dithering option may have asked already -- te_graphics_set_present_options, before the device)
+    g.present_ct16 = g.present_ct16 || te::GetSettings().present_ct16 || EnvFlag("TE_GFX_PRESENT_CT16");
     if (const char* v = std::getenv("TE_GFX_GPU_TIMERS")) {
         g.gpu_timers = std::strcmp(v, "phases") == 0 ? 2 : std::strcmp(v, "breaks") == 0 ? 3 : (v[0] && v[0] != '0') ? 1 : 0;
     }
@@ -1202,6 +1204,7 @@ bool EnsureDevice() {
     if (EagerTexturesOn()) ps2e_draw_set_texture_resolver(g.dev, ResolveTexture, nullptr);
     StartRenderThread();
     if (g.present_ct16) te_graphics_set_present_ct16(1);
+    if (g.present_fxaa) OnRender([] { ps2e_draw_set_present_fxaa(g.dev, 1); });
     // the judges' dumps / the harness leg read the present back (a keyed harness arms the capture per picture instead)
     if (!g.dump_dir.empty() || (te::harness::Armed() && g.harness_keys.empty())) OnRender([] { ps2e_draw_arm_capture(g.dev, 1); });
     {
@@ -6758,6 +6761,19 @@ extern "C" int te_graphics_set_present_ct16(int on) {
     return 1;
 }
 extern "C" int te_graphics_present_ct16(void) { return g.present_ct16 ? 1 : 0; }
+// The Android port's graphic options (te_port_settings.h): the dithered 16-bit present (the PS2's own: dithering
+// "original") and the anti-aliased present. Before the device exists the request is kept (applied when it is made)
+extern "C" void te_graphics_set_present_options(int ct16, int fxaa) {
+    g.present_ct16 = ct16 != 0;
+    g.present_fxaa = fxaa != 0;
+    if (!g.dev) return;
+    OnRender([] {
+        ps2e_draw_set_present_ct16(g.dev, g.present_ct16 ? 1 : 0, 0);
+        ps2e_draw_set_present_fxaa(g.dev, g.present_fxaa ? 1 : 0);
+    });
+    std::fprintf(stderr, "[te.gfx] present: dithering %s, anti-aliasing %s\n", g.present_ct16 ? "original (the PS2's 16-bit dithered copy)" : "off",
+                 g.present_fxaa ? "on (edge-directed smoothing)" : "off");
+}
 extern "C" void te_graphics_on_render(void (*fn)(void* user), void* user) { OnRender([fn, user] { fn(user); }); }
 extern "C" void te_graphics_post_render(void (*fn)(void* user), void* user) { PostRender([fn, user] { fn(user); }); }
 extern "C" void te_graphics_record_movie_quad(uint32_t texture, float x0, float y0, float x1, float y1, float u0, float v0,

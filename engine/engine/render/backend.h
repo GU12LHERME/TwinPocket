@@ -179,6 +179,10 @@ struct ScanoutDesc {
     // each channel's 8 bits plus the DIMX cell of the frame pixel (-4..3), the top five kept, expanded to full range
     bool dither16 = false;
     uint64_t dimx = kDefaultDimx;    // GS DIMX
+    // The anti-aliased present (TwinsanityEvolved's Android option): the edge-directed smoothing of the scanout shader
+    // (gl_shader_sources.cpp kScanoutFxaaFragSrc), with the CT16 step after it when dither16 is set; a backend without it
+    // shows the plain scan-out
+    bool fxaa = false;
     // false = the scan-out is RESOLVED (the armed capture reads it: a judge's hash of a picture) but never reaches the
     // window: no blit to the default framebuffer, no swap. A producer that presents at its own cadence (a scene
     // interpolator between game pictures) resolves every picture it does not show this way. Default: shown.

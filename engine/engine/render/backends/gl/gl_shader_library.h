@@ -79,6 +79,13 @@ public:
     int ScanoutDitherTextureLocation() const { return scanout_dither_tex_loc_; }
     int ScanoutDitherSourceSizeLocation() const { return scanout_dither_size_loc_; }
     int ScanoutDitherMatrixLocation() const { return scanout_dither_dimx_loc_; }
+    // The anti-aliased scanout (ScanoutDesc::fxaa): built at its first use (0 if the driver refuses it: the plain scanout is
+    // used); u_texture, u_source_size, u_dither, u_dimx[16]
+    uint32_t ScanoutFxaaProgram();
+    int ScanoutFxaaTextureLocation() const { return scanout_fxaa_tex_loc_; }
+    int ScanoutFxaaSourceSizeLocation() const { return scanout_fxaa_size_loc_; }
+    int ScanoutFxaaDitherLocation() const { return scanout_fxaa_dither_loc_; }
+    int ScanoutFxaaMatrixLocation() const { return scanout_fxaa_dimx_loc_; }
     const GlUniformLocations& Locations() const { return loc_; }
     uint32_t StencilStripProgram() const { return strip_program_; }
     uint32_t StencilInvertProgram() const { return invert_program_; }
@@ -260,6 +267,9 @@ private:
     GlStencilLocations sloc_;
     int scanout_tex_loc_ = -1;
     int scanout_dither_tex_loc_ = -1, scanout_dither_size_loc_ = -1, scanout_dither_dimx_loc_ = -1;
+    uint32_t scanout_fxaa_program_ = 0;
+    bool scanout_fxaa_tried_ = false;
+    int scanout_fxaa_tex_loc_ = -1, scanout_fxaa_size_loc_ = -1, scanout_fxaa_dither_loc_ = -1, scanout_fxaa_dimx_loc_ = -1;
     GlUniformLocations loc_;
     bool zero_to_one_depth_ = false;
     bool gs_z24_depth_ = false;

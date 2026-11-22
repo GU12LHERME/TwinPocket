@@ -17,6 +17,7 @@ public:
     static const char* ScanoutFragment();
     // The CT16 dithered scanout (the vertex is the plain scanout's)
     static const char* ScanoutDitherFragment();
+    static const char* ScanoutFxaaFragment();
     static const char* StencilClearFragment();
     static const char* StencilStripFragment();
     static const char* StencilInvertFragment();

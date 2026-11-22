@@ -163,8 +163,16 @@ final class Lang {
         e("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).",
           "The launcher changes at once; the port's options inside the game stay in English (the game's font).");
         e("Restaurar configurações padrão?", "Restore the default settings?");
-        e("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica desligada, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ",
-          "Widescreen 16:9, VSync on, bilinear filter, anisotropic off, resolution 1x, 60 FPS, counter off, LOD original, OpenSL ES with ");
+        e("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ",
+          "Widescreen 16:9, VSync on, bilinear filter, anisotropic, FXAA and dithering off, resolution 1x, 60 FPS, counter off, LOD original, OpenSL ES with ");
+        e("Antisserrilhado (FXAA)", "Anti-aliasing (FXAA)");
+        e("Suaviza bordas serrilhadas na imagem final; pode suavizar um pouco textos e o HUD",
+          "Smooths jagged edges in the final picture; may soften text and the HUD slightly");
+        e("FXAA", "FXAA");
+        e("Dithering", "Dithering");
+        e("Original: a saída de 16 bits com dithering do próprio PS2. Desligado: a imagem de 24 bits do port, mais lisa",
+          "Original: the PS2's own dithered 16-bit output. Off: the port's smoother 24-bit picture");
+        e("Original (PS2)", "Original (PS2)");
         e("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas).",
           "buffer 2048, sticks at their defaults. The ISO and the saves do not change; the game's widescreen option is kept in the save (Options → graphic options).");
         e("Restaurar", "Restore");

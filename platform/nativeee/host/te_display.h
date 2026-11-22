@@ -94,10 +94,10 @@ std::string Describe();
 
 // The seam's rows (Platform::Graphics::DisplaySetting*): the settings the page shows, in this order.
 // RowDrawDistance: the Android port's experimental draw distance (te_port_settings.h); no choices -- not shown -- elsewhere
-// RowAnisotropy: anisotropic filtering, on Android only (off / 2x / 4x / 8x / 16x up to the driver's maximum; hidden without the
+// RowAntiAliasing / RowDithering: Android only (te_port_settings.h). RowAnisotropy: anisotropic filtering, on Android only (off / 2x / 4x / 8x / 16x up to the driver's maximum; hidden without the
 // extension)
 enum Row : uint32_t { RowAspect = 0, RowScale, RowTextureFilter, RowVSync, RowFrameRate, RowDisplayMode, RowFpsCounter, RowGameRate,
-                     RowDrawDistance, RowAnisotropy, RowCount };
+                     RowDrawDistance, RowAnisotropy, RowAntiAliasing, RowDithering, RowCount };
 uint32_t Choices(uint32_t row);
 std::string RowLabel(uint32_t row);
 std::string ChoiceLabel(uint32_t row, uint32_t choice);

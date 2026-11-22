@@ -477,6 +477,8 @@ void ps2e_draw_capture_frame(ps2e_draw* device);
  * major from the lowest); 0 = the GS's default matrix. Takes effect from the next present. */
 void ps2e_draw_set_present_ct16(ps2e_draw* device, int enable, uint64_t dimx);
 int ps2e_draw_present_ct16(const ps2e_draw* device);
+/* The anti-aliased present (an edge-directed smoothing of the scan-out; 0 = the plain scan-out, the default). */
+void ps2e_draw_set_present_fxaa(ps2e_draw* device, int enable);
 #define PS2E_DRAW_HAS_PRESENT_CT16 1
 
 /* ---- presentation (the title's Display page; TwinsanityEvolved) ------------------------------------------*/

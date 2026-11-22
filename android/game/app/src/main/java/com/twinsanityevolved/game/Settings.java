@@ -28,6 +28,8 @@ final class Settings {
     static final String STICK_DEADZONE = "android.stick_deadzone";
     static final String STICK_SENSITIVITY = "android.stick_sensitivity";
     static final String DRAW_DISTANCE = "android.draw_distance";
+    static final String FXAA = "android.fxaa";
+    static final String DITHERING = "android.dithering";
     static final String TEXTURE_FILTER = "video.texture_filter";
     static final String ANISOTROPY = "video.anisotropy";
     static final String SCALE = "video.scale";
