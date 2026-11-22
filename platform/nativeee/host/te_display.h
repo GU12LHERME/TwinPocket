@@ -61,8 +61,9 @@ float WidescreenAspect();
 std::string Describe();
 
 // The seam's rows (Platform::Graphics::DisplaySetting*): the settings the page shows, in this order.
+// RowDrawDistance: the Android port's experimental draw distance (te_port_settings.h); no choices -- not shown -- elsewhere
 enum Row : uint32_t { RowAspect = 0, RowScale, RowTextureFilter, RowVSync, RowFrameRate, RowDisplayMode, RowFpsCounter, RowGameRate,
-                     RowCount };
+                     RowDrawDistance, RowCount };
 uint32_t Choices(uint32_t row);
 std::string RowLabel(uint32_t row);
 std::string ChoiceLabel(uint32_t row, uint32_t choice);

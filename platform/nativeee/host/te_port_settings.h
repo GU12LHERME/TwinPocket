@@ -17,6 +17,7 @@ namespace te::port_settings {
 //   android.audio_buffer   = 1024 | 2048 (default) | 4096                         frames a callback, next start
 //   android.stick_deadzone = 0.05 | 0.10 | 0.15 (default) | 0.20 | 0.25          at once
 //   android.stick_sensitivity = 1.00 | 1.33 (default) | 1.66 | 2.00              at once
+//   android.draw_distance  = 100 (default) | 150 | 200 | 300                       at once (the graphic options' row)
 
 // The rows of the page, in order
 enum Row : uint32_t { RowAudioDriver = 0, RowAudioBuffer, RowStickDeadzone, RowStickSensitivity, RowRestoreDefaults, RowCount };
@@ -36,5 +37,15 @@ uint32_t Value(uint32_t row);
 void Set(uint32_t row, uint32_t choice);
 // One line for the log
 std::string Describe();
+
+// THE DRAW DISTANCE (experimental; the graphic options' row on Android, te_display.h RowDrawDistance): the levels of detail
+// chosen as if every model were nearer (Platform::Graphics::DrawDistancePercent, game/src/game/scenery.cpp LodDistanceAt), so
+// the finer meshes and the last one drawn reach that much farther. Only the loaded chunks' models; the camera's far plane, the
+// chunks' streaming, the culling, the collisions and the instances' updates are the game's own. 100 on every other lane.
+uint32_t DrawDistanceChoices();                 // 4 on Android (100, 150, 200, 300 %), 0 elsewhere
+uint32_t DrawDistanceChoice();
+std::string DrawDistanceLabel(uint32_t choice);
+void SetDrawDistance(uint32_t choice);
+uint32_t DrawDistancePercent();
 
 }  // namespace te::port_settings

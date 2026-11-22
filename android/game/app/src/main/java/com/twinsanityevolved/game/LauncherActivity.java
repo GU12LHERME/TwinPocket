@@ -114,6 +114,10 @@ public final class LauncherActivity extends Activity {
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
         new Choice(Settings.FPS_COUNTER, "Contador de FPS", "Mostra o FPS no canto da tela durante o jogo",
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
+        new Choice(Settings.DRAW_DISTANCE, "Distância de renderização (experimental)",
+            "Modelos detalhados e objetos distantes aparecem mais longe; só o que o jogo já carregou. Exige mais da GPU",
+            "100", new String[] {"100", "150", "200", "300"},
+            new String[] {"Original (100%)", "Alta (150%)", "Muito alta (200%)", "Experimental (300%)"}),
     };
     static final Choice[] AUDIO = {
         new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",
@@ -449,7 +453,7 @@ public final class LauncherActivity extends Activity {
     private void confirmRestore() {
         new AlertDialog.Builder(this)
             .setTitle("Restaurar configurações padrão?")
-            .setMessage("Filtro bilinear, resolução 1x, proporção automática, 60 FPS, VSync e contador desligados, OpenSL ES com "
+            .setMessage("Filtro bilinear, resolução 1x, proporção automática, 60 FPS, VSync e contador desligados, distância original, OpenSL ES com "
                     + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam.")
             .setPositiveButton("Restaurar", (d, w) -> {
                 Settings st = new Settings(this);

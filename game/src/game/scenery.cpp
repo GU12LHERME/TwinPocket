@@ -1765,6 +1765,20 @@ void SceneryMeshes::SetBox(f32 extra, const Box* box, s32 index)
     boxes[index].max.w = extra;
 }
 
+// TwinsanityEvolved: the culling's squared distance a level of detail is chosen by, at the platform's draw distance (percent of
+// the game's own: Platform::Graphics::DrawDistancePercent) -- 100 or less is the distance itself, as on the console; above, the
+// distance is taken as that much nearer (squared: divided by the percent's square), so every switch and the farthest drawn
+// come that much farther out
+inline u32 LodDistanceAt(s32 distance, u32 percent)
+{
+    if (percent <= 100)
+    {
+        return static_cast<u32>(distance);
+    }
+
+    return static_cast<u32>(static_cast<u64>(static_cast<u32>(distance)) * 10000u / (static_cast<u64>(percent) * percent));
+}
+
 // Every item in view (the view's outcome set so), the next one's matrix loaded while one is drawn: the LODs' meshes for the
 // culling's distance
 u32 SceneryMeshes::Draw(ChunkView* view)
@@ -1777,6 +1791,8 @@ u32 SceneryMeshes::Draw(ChunkView* view)
         return total;
     }
 
+    // TwinsanityEvolved: the platform's draw distance, asked once per cell (before the culling starts)
+    const u32 lodPercent = Platform::Graphics::DrawDistancePercent();
     CallVirtual<void>(view, view->vtable, ChunkView::SlotLoadModel, &matrices[0]);
     if (!(total < 2))
     {
@@ -1814,7 +1830,7 @@ u32 SceneryMeshes::Draw(ChunkView* view)
             }
         }
 
-        RigidModel* model = Platform::Graphics::LodModelAt(static_cast<Lod*>(items[index]), static_cast<u32>(view->distance));
+        RigidModel* model = Platform::Graphics::LodModelAt(static_cast<Lod*>(items[index]), LodDistanceAt(view->distance, lodPercent));
         if (model != nullptr)
         {
             Platform::Graphics::DrawPlacedModel(model, view, &matrices[index]);
@@ -1835,6 +1851,8 @@ u32 SceneryMeshes::DrawCulled(ChunkView* view)
         return 0;
     }
 
+    // TwinsanityEvolved: the platform's draw distance, asked once per cell (before the culling starts)
+    const u32 lodPercent = Platform::Graphics::DrawDistancePercent();
     view->TestBoxOnVu0(&boxes[0], &matrices[0]);
     u32 index = 0;
     u32 total = meshCount + lodCount;
@@ -1876,7 +1894,7 @@ u32 SceneryMeshes::DrawCulled(ChunkView* view)
         if (inView != 0)
         {
             Matrix4x4* matrix = &matrices[index];
-            RigidModel* model = Platform::Graphics::LodModelAt(static_cast<Lod*>(items[index]), static_cast<u32>(view->distance));
+            RigidModel* model = Platform::Graphics::LodModelAt(static_cast<Lod*>(items[index]), LodDistanceAt(view->distance, lodPercent));
             if (model != nullptr)
             {
                 Platform::Graphics::DrawPlacedModel(model, view, matrix);

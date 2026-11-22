@@ -790,6 +790,12 @@ void Platform::Graphics::DisplaySettingPageTitle(char* out, u32 size)
     }
 }
 
+// The PS2 draws its levels of detail at the game's own distances
+u32 Platform::Graphics::DrawDistancePercent()
+{
+    return 100;
+}
+
 // The PS2's widescreen option draws for a 16:9 TV
 f32 Platform::Graphics::WidescreenAspect()
 {

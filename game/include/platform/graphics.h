@@ -253,6 +253,11 @@ void ClipBoxAt(const Matrix4x4* view, const Box* box, u32* flags, const Matrix4x
 // (none nearer than its nearest or past its farthest)
 void DrawPlacedModel(RigidModel* model, ChunkView* view, const Matrix4x4* world);
 RigidModel* LodModelAt(Lod* lod, u32 distance);
+// TwinsanityEvolved: the platform's draw distance for the levels of detail, in percent of the game's own (100: as on the
+// console; the Android port's experimental 150 / 200 / 300 keep each model's finer meshes and its last one drawn that much
+// farther). Only what the loaded chunks hold is drawn: the chunks' streaming, the camera's far plane, the culling and the
+// instances' updates are the game's own. Asked once per scenery cell drawn (the PS2: 100)
+u32 DrawDistancePercent();
 // A chunk's view for the frame's particles (the matrices it starts with: its camera's place in it among them) loaded as the
 // frame's index'th, which their distances from the camera and their drawing go by. Returns it, an opaque handle (the PS2 also
 // keeps it in the word 0x100 bytes past the matrices)

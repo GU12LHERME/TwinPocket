@@ -90,6 +90,7 @@ ps2e_graphics_cull_matrices
 ps2e_graphics_clip_box
 ps2e_graphics_clip_box_at
 ps2e_graphics_draw_placed_model
+ps2e_graphics_draw_distance_percent
 ps2e_graphics_load_particle_view
 ps2e_graphics_draw_sprite
 ps2e_graphics_draw_turned_sprite

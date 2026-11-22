@@ -200,6 +200,7 @@ uint32_t Choices(uint32_t row) {
     case RowDisplayMode: return 3;
     case RowFpsCounter: return 2;
     case RowGameRate: return 2;
+    case RowDrawDistance: return te::port_settings::DrawDistanceChoices();
     default: return 0;
     }
 }
@@ -242,6 +243,7 @@ std::string RowLabel(uint32_t row) {
     case RowDisplayMode: return MS(Id::DisplayMode);
     case RowFpsCounter: return MS(Id::PerfOverlay);   // "fps overlay": the engine's name for the same row
     case RowGameRate: return MS(Id::GameRate);
+    case RowDrawDistance: return "draw distance";
     default: return "";
     }
 }
@@ -276,6 +278,7 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     }
     case RowFpsCounter: return choice == 0 ? MS(Id::Aniso1) /* "off" */ : "on";
     case RowGameRate: return choice == 0 ? MS(Id::GameRatePal) : MS(Id::GameRateSixty);
+    case RowDrawDistance: return te::port_settings::DrawDistanceLabel(choice);
     case RowDisplayMode: {
         static const Id ids[] = {Id::Windowed, Id::Fullscreen, Id::Borderless};
         return choice < 3 ? MS(ids[choice]) : "";
@@ -299,6 +302,7 @@ uint32_t Value(uint32_t row) {
     case RowDisplayMode: return uint32_t(g_settings.fullscreen);
     case RowFpsCounter: return g_settings.fps_counter ? 1u : 0u;
     case RowGameRate: return g_settings.game_hz == 50 ? 0u : 1u;
+    case RowDrawDistance: return te::port_settings::DrawDistanceChoice();
     default: return 0;
     }
 }
@@ -343,6 +347,9 @@ void Set(uint32_t row, uint32_t choice) {
         Persist("game.hz", std::to_string(g_settings.game_hz));
         std::fprintf(stderr, "[twinsanityevolved] display: game rate %d Hz from the next start (this run: %d Hz)\n",
                      g_settings.game_hz, g_settings.running_hz);
+        return;
+    case RowDrawDistance:   // the scenery asks it once per cell (Platform::Graphics::DrawDistancePercent): nothing to apply
+        te::port_settings::SetDrawDistance(choice);
         return;
     default: return;
     }
@@ -411,6 +418,9 @@ void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice) {
 ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) { return IsPortRow(setting) ? 1 : 0; }
 
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size) { CopyLabel(te::port_settings::Title(), out, size); }
+
+// Platform::Graphics::DrawDistancePercent: the levels of detail's distance (te_port_settings.h: 100 but on Android's row)
+ps2e_s32 ps2e_graphics_draw_distance_percent(void) { return static_cast<ps2e_s32>(te::port_settings::DrawDistancePercent()); }
 
 // Platform::Graphics::WidescreenAspect: the shape the game's widescreen option draws for (te_display.h)
 ps2e_f32 ps2e_graphics_widescreen_aspect(void) { return te::display::WidescreenAspect(); }

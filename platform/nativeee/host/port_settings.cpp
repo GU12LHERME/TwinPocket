@@ -26,11 +26,15 @@ constexpr uint32_t kDeadzoneCount = 5, kDefaultDeadzone = 2;    // 0.15: the eng
 const char* const kSensitivityKeys[] = {"1.00", "1.33", "1.66", "2.00"};
 const float kSensitivities[] = {1.00f, 1.33f, 1.66f, 2.00f};
 constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: the engine's own
+const char* const kDistanceKeys[] = {"100", "150", "200", "300"};
+const uint32_t kDistancePercents[] = {100, 150, 200, 300};
+constexpr uint32_t kDistanceCount = 4, kDefaultDistance = 0;   // the game's own
 
 struct State {
     uint32_t driver = kDefaultDriver, buffer = kDefaultBuffer;
     uint32_t running_driver = kDefaultDriver, running_buffer = kDefaultBuffer;   // what this run started with
     uint32_t deadzone = kDefaultDeadzone, sensitivity = kDefaultSensitivity;
+    uint32_t distance = kDefaultDistance;
 } g;
 
 uint32_t IndexOf(const char* const* keys, uint32_t count, const std::string& value, uint32_t fallback) {
@@ -86,6 +90,7 @@ void Configure(const std::string& ini_text) {
     g.buffer = g.running_buffer = Read(ini_text, "android.audio_buffer", kBufferKeys, kBuffers, kDefaultBuffer);
     g.deadzone = Read(ini_text, "android.stick_deadzone", kDeadzoneKeys, kDeadzoneCount, kDefaultDeadzone);
     g.sensitivity = Read(ini_text, "android.stick_sensitivity", kSensitivityKeys, kSensitivityCount, kDefaultSensitivity);
+    g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
     ApplySticks();
     std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
 #else
@@ -174,7 +179,8 @@ void Set(uint32_t row, uint32_t choice) {
     case RowRestoreDefaults:
         if (choice != 1) return;
         // this page's rows, and the graphic options the Android port sets a default for (te_display.h): the texture filter
-        // (bilinear), the resolution (1x), the frame rate (60), vsync (off) and the fps counter (off); the aspect and the
+        // (bilinear), the resolution (1x), the frame rate (60), vsync (off), the fps counter (off) and the draw distance
+        // (100 %); the aspect and the
         // display mode stay the player's (the screen's shape)
         g.driver = kDefaultDriver;
         g.buffer = kDefaultBuffer;
@@ -185,6 +191,7 @@ void Set(uint32_t row, uint32_t choice) {
         Persist("android.stick_deadzone", kDeadzoneKeys[g.deadzone]);
         Persist("android.stick_sensitivity", kSensitivityKeys[g.sensitivity]);
         ApplySticks();
+        SetDrawDistance(kDefaultDistance);
         te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
         te::display::Set(te::display::RowVSync, 0);
         te::display::Set(te::display::RowTextureFilter, uint32_t(te::display::kDefaultTextureFilter));
@@ -198,11 +205,30 @@ void Set(uint32_t row, uint32_t choice) {
 }
 
 std::string Describe() {
-    char buf[256];
-    std::snprintf(buf, sizeof buf, "android settings: audio driver %s%s, audio buffer %s%s, stick deadzone %s, stick sensitivity %s",
-                  kDriverKeys[g.driver], g.driver != g.running_driver ? " (next start)" : "", kBufferKeys[g.buffer],
-                  g.buffer != g.running_buffer ? " (next start)" : "", kDeadzoneKeys[g.deadzone], kSensitivityKeys[g.sensitivity]);
+    char buf[320];
+    std::snprintf(buf, sizeof buf, "android settings: audio driver %s%s, audio buffer %s%s, stick deadzone %s, stick sensitivity %s, "
+                  "draw distance %s %%", kDriverKeys[g.driver], g.driver != g.running_driver ? " (next start)" : "", kBufferKeys[g.buffer],
+                  g.buffer != g.running_buffer ? " (next start)" : "", kDeadzoneKeys[g.deadzone], kSensitivityKeys[g.sensitivity],
+                  kDistanceKeys[g.distance]);
     return buf;
 }
+
+uint32_t DrawDistanceChoices() { return Count() ? kDistanceCount : 0; }
+uint32_t DrawDistanceChoice() { return g.distance; }
+
+std::string DrawDistanceLabel(uint32_t choice) {
+    static const char* const kNames[] = {"100 (original)", "150 (high)", "200 (very high)", "300 (experimental)"};
+    return choice < kDistanceCount ? kNames[choice] : "";
+}
+
+void SetDrawDistance(uint32_t choice) {
+    if (choice >= kDistanceCount) return;
+    g.distance = choice;
+    Persist("android.draw_distance", kDistanceKeys[choice]);
+    std::fprintf(stderr, "[twinsanityevolved] android settings: draw distance %s %% (the levels of detail; experimental)\n",
+                 kDistanceKeys[choice]);
+}
+
+uint32_t DrawDistancePercent() { return Count() ? kDistancePercents[g.distance] : 100u; }
 
 }  // namespace te::port_settings
