@@ -441,7 +441,10 @@ elseif(TE_ANDROID)
     # memory is ever read or written. The same switch takes float->i32 by its bits first (identical for all 2^32 inputs).
     # The bulk copies / fills keep their range checks. OFF = the checked build, for an A/B or a hunt for a stray access.
     if(TE_ANDROID_UNCHECKED_MEMORY)
-        target_compile_definitions(tegame PUBLIC TE_W2C_UNCHECKED_MEMORY=1)
+        # + TE_W2C_FIXED_TABLE: call_indirect compares the index with the table's fixed size (the rewrite asserts the
+        # module never grows it) instead of loading table.size from the instance at every call; an index past the end
+        # still takes the full check. Plain C, no ARMv7 instruction: the same result on every target.
+        target_compile_definitions(tegame PUBLIC TE_W2C_UNCHECKED_MEMORY=1 TE_W2C_FIXED_TABLE=1)
     endif()
 else()
     set_source_files_properties(${TE_W2C_SOURCES} PROPERTIES COMPILE_OPTIONS "-O1")   # 39 MB of C: -O1 keeps the build minutes, not hours
