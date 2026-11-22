@@ -143,6 +143,11 @@ final class Settings {
      * file names no audio driver yet -- so a player's choice survives the move to the shared file.
      */
     void migrate(SharedPreferences prefs) {
+        // the draw distance's percents of 0.5.0 - 0.6.0 (100 / 150 / 200 / 300) as the levels of 0.7.0 (the game reads both)
+        String dd = get(DRAW_DISTANCE, null);
+        if ("100".equals(dd)) set(DRAW_DISTANCE, "original");
+        else if ("150".equals(dd) || "200".equals(dd)) set(DRAW_DISTANCE, "medium");
+        else if ("300".equals(dd)) set(DRAW_DISTANCE, "long");
         if (prefs.getBoolean("settings_migrated", false)) return;
         String driver = prefs.getString("audio_driver", null);
         if (driver != null && !has(AUDIO_DRIVER)

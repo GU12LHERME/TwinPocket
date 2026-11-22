@@ -171,6 +171,28 @@ typedef struct te_gfx_lod {           // Lod, 0x24: the squares of its distances
     uint32_t switchDistances[TE_GFX_LOD_SWITCHES];
 } te_gfx_lod;
 
+// TwinsanityEvolved: the levels of detail's DRAW DISTANCE and its census (platform/nativeee/wasm/graphics_models.cpp
+// LodModelAt, platform/nativeee/host/lod_policy.cpp). The module's own block, registered once (ps2e_gfx2_lod_policy): the
+// host writes `percent` (100 = the game's own choice, bit for bit; above, each model's level is chosen as if it were that
+// many times nearer: its finer meshes and its last one reach that much farther), the module counts what it chose. The
+// counters only grow (the host takes their differences per window); the two reaches are the host's to clear.
+typedef struct te_gfx_lod_policy {
+    uint32_t version;                 // TE_GFX_LOD_POLICY_VERSION
+    uint32_t percent;                 // the host's: 100 (default), 200, 300, 400
+    uint32_t lookups;                 // LodModelAt calls (a model with levels, in view)
+    uint32_t multi_level;             // ... of a model with two levels or more (a choice the distance can change)
+    uint32_t near_limited;            // ... of a model drawn only from a distance on (nearest > 0: a far stand-in)
+    uint32_t chosen[4];               // the level drawn: 0 the finest .. 3
+    uint32_t cut_far;                 // none drawn: past its farthest
+    uint32_t cut_near;                // none drawn: nearer than its nearest
+    uint32_t finer;                   // a finer level than the game's own choice (the setting's doing)
+    uint32_t drawn_past_cut;          // drawn where the game's own choice drew none (past the original farthest)
+    uint32_t hidden_near;             // none where the game's own choice drew one (a far stand-in, now nearer than its nearest)
+    uint32_t reach_finest;            // the farthest (squared culling distance) a finest level was drawn at (host clears)
+    uint32_t reach_drawn;             // the farthest any level was drawn at (host clears)
+} te_gfx_lod_policy;
+#define TE_GFX_LOD_POLICY_VERSION 1u
+
 typedef struct te_gfx_sky {           // Sky, 0x50
     uint32_t headerBits, id;
     uint32_t count;

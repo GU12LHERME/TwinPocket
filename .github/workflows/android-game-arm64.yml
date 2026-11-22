@@ -139,6 +139,13 @@ jobs:
           "$RUNNER_TEMP/test_settings_android" "$RUNNER_TEMP/settings-a.ini" 2>&1 | tee "$LOG_DIR/settings-defaults.log"
           "$RUNNER_TEMP/test_settings_desktop" "$RUNNER_TEMP/settings-d.ini" 2>&1 | tee -a "$LOG_DIR/settings-defaults.log"
 
+      - name: Level of detail choice (the draw distance; the game's own choice at original)
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -O1 -Wall -Wextra -I. -Iplatform/nativeee tools/android/test_lod_choice.cpp -o "$RUNNER_TEMP/test_lod_choice"
+          "$RUNNER_TEMP/test_lod_choice" 2>&1 | tee "$LOG_DIR/lod-choice.log"
+
       - name: The engine's shaders as GLSL ES 3.20 (gl_glsl_es.cpp) through glslangValidator
         shell: bash
         run: |

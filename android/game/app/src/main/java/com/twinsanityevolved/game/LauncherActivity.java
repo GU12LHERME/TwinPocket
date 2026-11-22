@@ -114,10 +114,10 @@ public final class LauncherActivity extends Activity {
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
         new Choice(Settings.FPS_COUNTER, "Contador de FPS", "Mostra o FPS no canto da tela durante o jogo",
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
-        new Choice(Settings.DRAW_DISTANCE, "Distância de renderização (experimental)",
-            "Modelos detalhados e objetos distantes aparecem mais longe; só o que o jogo já carregou. Exige mais da GPU",
-            "100", new String[] {"100", "150", "200", "300"},
-            new String[] {"Original (100%)", "Alta (150%)", "Muito alta (200%)", "Experimental (300%)"}),
+        new Choice(Settings.DRAW_DISTANCE, "Distância de detalhe (LOD, experimental)",
+            "Mantém os modelos detalhados por mais distância, só entre os que o jogo já carregou. Exige mais da GPU",
+            "original", new String[] {"original", "medium", "long", "max"},
+            new String[] {"Original", "Média (2x)", "Longa (3x)", "Máxima (4x)"}),
     };
     static final Choice[] AUDIO = {
         new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",
@@ -819,7 +819,7 @@ public final class LauncherActivity extends Activity {
                 b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
                 StringBuilder pf = new StringBuilder();
                 for (String line : game.split("\n"))
-                    if (line.contains("[te.gfx] pace") || line.contains("[te.android] perf") || line.contains("android settings:")
+                    if (line.contains("[te.gfx] pace") || line.contains("[te.gfx] lod") || line.contains("[te.android] perf") || line.contains("android settings:")
                             || line.contains("] display: aspect"))
                         pf.append(line).append('\n');
                 b.append("\n===== DESEMPENHO (fps, tempo de quadro, CPU, memória, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");

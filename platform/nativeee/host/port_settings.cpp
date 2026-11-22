@@ -9,6 +9,7 @@
 #include "te_display.h"
 #include "te_host.h"
 #include "te_input.h"
+#include "te_lod_policy.h"
 
 namespace te::port_settings {
 
@@ -26,8 +27,9 @@ constexpr uint32_t kDeadzoneCount = 5, kDefaultDeadzone = 2;    // 0.15: the eng
 const char* const kSensitivityKeys[] = {"1.00", "1.33", "1.66", "2.00"};
 const float kSensitivities[] = {1.00f, 1.33f, 1.66f, 2.00f};
 constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: the engine's own
-const char* const kDistanceKeys[] = {"100", "150", "200", "300"};
-const uint32_t kDistancePercents[] = {100, 150, 200, 300};
+// the draw distance's levels (te_lod_policy.h): ps2r.ini words, and their percents of the game's distances
+const char* const kDistanceKeys[] = {"original", "medium", "long", "max"};
+const uint32_t kDistancePercents[] = {100, 200, 300, 400};
 constexpr uint32_t kDistanceCount = 4, kDefaultDistance = 0;   // the game's own
 
 struct State {
@@ -90,7 +92,14 @@ void Configure(const std::string& ini_text) {
     g.buffer = g.running_buffer = Read(ini_text, "android.audio_buffer", kBufferKeys, kBuffers, kDefaultBuffer);
     g.deadzone = Read(ini_text, "android.stick_deadzone", kDeadzoneKeys, kDeadzoneCount, kDefaultDeadzone);
     g.sensitivity = Read(ini_text, "android.stick_sensitivity", kSensitivityKeys, kSensitivityCount, kDefaultSensitivity);
-    g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
+    {
+        // 0.5.0 - 0.6.0 wrote percents (100 / 150 / 200 / 300): read as the nearest level (the launcher rewrites the key once)
+        std::string v;
+        if (ps2r::SettingsFile::GetFromText(ini_text, "android.draw_distance", &v) && (v == "100" || v == "150" || v == "200" || v == "300"))
+            g.distance = v == "100" ? 0u : v == "300" ? 2u : 1u;
+        else g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
+        te::lod::SetPercent(kDistancePercents[g.distance]);
+    }
     ApplySticks();
     std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
 #else
@@ -207,7 +216,7 @@ void Set(uint32_t row, uint32_t choice) {
 std::string Describe() {
     char buf[320];
     std::snprintf(buf, sizeof buf, "android settings: audio driver %s%s, audio buffer %s%s, stick deadzone %s, stick sensitivity %s, "
-                  "draw distance %s %%", kDriverKeys[g.driver], g.driver != g.running_driver ? " (next start)" : "", kBufferKeys[g.buffer],
+                  "draw distance %s", kDriverKeys[g.driver], g.driver != g.running_driver ? " (next start)" : "", kBufferKeys[g.buffer],
                   g.buffer != g.running_buffer ? " (next start)" : "", kDeadzoneKeys[g.deadzone], kSensitivityKeys[g.sensitivity],
                   kDistanceKeys[g.distance]);
     return buf;
@@ -217,7 +226,7 @@ uint32_t DrawDistanceChoices() { return Count() ? kDistanceCount : 0; }
 uint32_t DrawDistanceChoice() { return g.distance; }
 
 std::string DrawDistanceLabel(uint32_t choice) {
-    static const char* const kNames[] = {"100 (original)", "150 (high)", "200 (very high)", "300 (experimental)"};
+    static const char* const kNames[] = {"original", "medium (2x)", "long (3x)", "max (4x)"};
     return choice < kDistanceCount ? kNames[choice] : "";
 }
 
@@ -225,10 +234,9 @@ void SetDrawDistance(uint32_t choice) {
     if (choice >= kDistanceCount) return;
     g.distance = choice;
     Persist("android.draw_distance", kDistanceKeys[choice]);
-    std::fprintf(stderr, "[twinsanityevolved] android settings: draw distance %s %% (the levels of detail; experimental)\n",
-                 kDistanceKeys[choice]);
+    te::lod::SetPercent(kDistancePercents[choice]);
+    std::fprintf(stderr, "[twinsanityevolved] android settings: draw distance %s (the levels of detail at %u %% of the game's "
+                 "distances; experimental)\n", kDistanceKeys[choice], kDistancePercents[choice]);
 }
-
-uint32_t DrawDistancePercent() { return Count() ? kDistancePercents[g.distance] : 100u; }
 
 }  // namespace te::port_settings

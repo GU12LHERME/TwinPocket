@@ -198,8 +198,6 @@ void ps2e_graphics_clip_box(ps2e_u32 view, ps2e_u32 box, ps2e_u32 flags);
 void ps2e_graphics_clip_box_at(ps2e_u32 view, ps2e_u32 box, ps2e_u32 flags, ps2e_u32 model);
 // Platform::Graphics::void DrawPlacedModel(RigidModel* model, ChunkView* view, const Matrix4x4* world);
 void ps2e_graphics_draw_placed_model(ps2e_u32 model, ps2e_u32 view, ps2e_u32 world);
-// Platform::Graphics::u32 DrawDistancePercent();
-ps2e_s32 ps2e_graphics_draw_distance_percent(void);
 // Platform::Graphics::s32 LoadParticleView(const Matrix4x4* matrices, s32 index);
 ps2e_s32 ps2e_graphics_load_particle_view(ps2e_u32 matrices, ps2e_s32 index);
 // Platform::Graphics::void DrawSprite(Material* material, u32 colour, const Rectangle& place, const Rectangle& texture);
@@ -541,6 +539,8 @@ ps2e_s32 ps2e_text_diag(void);
 void ps2e_text_shaped(ps2e_u32 record);
 // graphics: the module's resource code is about to change a material, a shader, a texture or a model (the seam epoch moves: platform/nativeee/host/te_seam_epoch.h)
 void ps2e_gfx2_resources_changed(void);
+// graphics: LodModelAt (wasm side) registers its te_gfx_lod_policy once: the host writes the draw distance into it and reads its census (platform/nativeee/host/lod_policy.cpp)
+void ps2e_gfx2_lod_policy(ps2e_u32 policy);
 #ifdef __cplusplus
 }
 #endif

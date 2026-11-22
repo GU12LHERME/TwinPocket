@@ -50,8 +50,6 @@ EPOCH_TRANSPARENT = {
     "ps2e_graphics_cull_load_link", "ps2e_graphics_cull_load_model", "ps2e_graphics_cull_test_box",
     "ps2e_graphics_cull_test_box_at", "ps2e_graphics_cull_result", "ps2e_graphics_cull_matrices",
     "ps2e_graphics_clip_box", "ps2e_graphics_clip_box_at", "ps2e_graphics_draw_placed_model",
-    # the draw distance (a setting read; scenery.cpp asks it once per cell between the cells' placements)
-    "ps2e_graphics_draw_distance_percent",
 }
 
 PRIMS_I32 = {"u32", "s32", "u16", "s16", "u8", "s8", "int", "unsigned", "char", "short", "bool", "size_t"}

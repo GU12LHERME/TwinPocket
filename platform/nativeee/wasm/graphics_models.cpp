@@ -32,6 +32,7 @@
 // (platform/nativeee/host/te_seam_epoch.h), so no answer the host verified against their old bytes is taken again unchecked
 inline void ResourcesChanging() { ps2e_gfx2_resources_changed(); }
 #include "te_gfx_layout.h"
+#include "te_lod_choice.h"
 
 static_assert(sizeof(te_gfx_model) == 0x1C, "RigidModelData is 0x1C bytes (shadows.cpp ModelSize)");
 static_assert(sizeof(te_gfx_rigid_model) == 0x20, "RigidModel is 0x20 bytes (shadows.cpp MeshSize)");
@@ -961,30 +962,88 @@ Sky* NewSky(u32 id) { return SkyConstruct(MemoryAllocate(sizeof(te_gfx_sky)), id
 void DeleteSky(Sky* sky) { SkyDestroy(SY(sky), DestroyAndFree); }
 void ReadSky(Sky* sky, Stream* stream) { SkyRead(SY(sky), stream); }
 
-// A level of detail's mesh for a squared distance (resources.cpp LodMeshAt)
+// TwinsanityEvolved: the draw distance's policy and census (te_gfx_layout.h te_gfx_lod_policy), registered with the host at
+// the first choice
+static te_gfx_lod_policy g_LodPolicy = {TE_GFX_LOD_POLICY_VERSION, 100, 0, 0, 0, {0, 0, 0, 0}, 0, 0, 0, 0, 0, 0, 0};
+static bool g_LodPolicyRegistered = false;
+
+// A level of detail's mesh for a squared distance (resources.cpp LodMeshAt). At the draw distance's 100 % the game's own
+// choice; above, the level for the distance taken as percent / 100 times nearer (squared: divided by its square), so the
+// switches, the nearest and the farthest all move out together. Every choice is counted (the census above)
 RigidModel* LodModelAt(Lod* lodHandle, u32 distance)
 {
     te_gfx_lod* lod = LD(lodHandle);
-    if (lod->meshes == 0 || lod->count == 0 || distance < lod->nearest || lod->farthest < distance)
+    if (lod->meshes == 0 || lod->count == 0)
     {
         return nullptr;
     }
 
-    auto** meshes = P<RigidModel*>(lod->meshes);
-    RigidModel* mesh = meshes[0];
-    s32 last = lod->count - 1;
-    if (last <= 0 || distance < lod->switchDistances[0])
+    if (!g_LodPolicyRegistered)
     {
-        return mesh;
+        g_LodPolicyRegistered = true;
+        ps2e_gfx2_lod_policy(A(&g_LodPolicy));
     }
 
-    mesh = meshes[1];
-    for (s32 index = 1; index < last && distance >= lod->switchDistances[index]; index++)
+    te_gfx_lod_policy& census = g_LodPolicy;
+    const s32 original = te_lod_level_at(lod, distance);
+    s32 level = original;
+    const u32 percent = census.percent;
+    if (percent > 100)
     {
-        mesh = meshes[index + 1];
+        level = te_lod_level_at(lod, te_lod_distance(distance, percent));
     }
 
-    return mesh;
+    census.lookups++;
+    if (lod->count > 1)
+    {
+        census.multi_level++;
+    }
+
+    if (lod->nearest > 0)
+    {
+        census.near_limited++;
+    }
+
+    if (level < 0)
+    {
+        if (distance < lod->nearest)
+        {
+            census.cut_near++;
+        }
+        else
+        {
+            census.cut_far++;
+        }
+
+        if (original >= 0)
+        {
+            census.hidden_near++;
+        }
+
+        return nullptr;
+    }
+
+    census.chosen[level < 3 ? level : 3]++;
+    if (original < 0)
+    {
+        census.drawn_past_cut++;
+    }
+    else if (level < original)
+    {
+        census.finer++;
+    }
+
+    if (level == 0 && distance > census.reach_finest)
+    {
+        census.reach_finest = distance;
+    }
+
+    if (distance > census.reach_drawn)
+    {
+        census.reach_drawn = distance;
+    }
+
+    return P<RigidModel*>(lod->meshes)[level];
 }
 
 MaterialResource* FirstMaterial(const RigidModel* modelHandle)

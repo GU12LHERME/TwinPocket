@@ -348,7 +348,7 @@ void Set(uint32_t row, uint32_t choice) {
         std::fprintf(stderr, "[twinsanityevolved] display: game rate %d Hz from the next start (this run: %d Hz)\n",
                      g_settings.game_hz, g_settings.running_hz);
         return;
-    case RowDrawDistance:   // the scenery asks it once per cell (Platform::Graphics::DrawDistancePercent): nothing to apply
+    case RowDrawDistance:   // written into the module's level-of-detail block at once (te_lod_policy.h)
         te::port_settings::SetDrawDistance(choice);
         return;
     default: return;
@@ -418,9 +418,6 @@ void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice) {
 ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) { return IsPortRow(setting) ? 1 : 0; }
 
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size) { CopyLabel(te::port_settings::Title(), out, size); }
-
-// Platform::Graphics::DrawDistancePercent: the levels of detail's distance (te_port_settings.h: 100 but on Android's row)
-ps2e_s32 ps2e_graphics_draw_distance_percent(void) { return static_cast<ps2e_s32>(te::port_settings::DrawDistancePercent()); }
 
 // Platform::Graphics::WidescreenAspect: the shape the game's widescreen option draws for (te_display.h)
 ps2e_f32 ps2e_graphics_widescreen_aspect(void) { return te::display::WidescreenAspect(); }

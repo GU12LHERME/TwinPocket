@@ -74,6 +74,7 @@ extern "C" size_t vglMemFree(int type);
 #endif
 #include "../../../runner/te_android_diag.h"   // TE_ANDROID_STAGE (the Android lane; nothing elsewhere)
 #include "engine/render/backends/gl/gl_es_diagnostics.h"   // ps2r::render::SetDrawCapture (the on-demand capture)
+#include "te_lod_policy.h"
 #include <cfenv>
 #include <chrono>
 #include <cmath>
@@ -4635,6 +4636,17 @@ void NotePace(uint64_t presents) {
             last_wall = wall;
         }
 #endif
+        {
+            // the levels of detail's census (te_lod_policy.h): which level each model with levels was drawn at, what the draw
+            // distance changed, how far the finest meshes reached -- on Android (its draw distance row), elsewhere with
+            // TE_GFX_LOD_CENSUS=1
+#if defined(__ANDROID__)
+            static const bool lod_census = !(std::getenv("TE_GFX_LOD_CENSUS") && std::getenv("TE_GFX_LOD_CENSUS")[0] == '0');
+#else
+            static const bool lod_census = std::getenv("TE_GFX_LOD_CENSUS") && std::getenv("TE_GFX_LOD_CENSUS")[0] == '1';
+#endif
+            if (lod_census) std::fputs(te::lod::CensusLine(presents - g_pace.frames + 1, presents, gaps).c_str(), stderr);
+        }
         if (g.dev && ps2e_draw_gpu_timers_on(g.dev)) {
             // the GPU phase timer's window (TE_GFX_GPU_TIMERS): read on the drawing thread, as its queries are
             static char lines[2048];
