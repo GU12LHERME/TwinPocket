@@ -195,15 +195,6 @@ final class Lang {
         e("Zerar conquistas?", "Reset the achievements?");
         e("Todas as conquistas voltam a bloqueadas. Os saves continuam.", "Every achievement is locked again. The saves stay.");
         e("Zerar", "Reset");
-        e("ABRIR", "OPEN");
-        e("BLOQUEADA", "LOCKED");
-        e("Confirmar", "Confirm");
-        e("Mover", "Move");
-        e("Seções", "Sections");
-        e("Jogar", "Play");
-        e("Perfil", "Profile");
-        e("▶  JOGAR", "▶  PLAY");
-        e("⏻  SAIR", "⏻  EXIT");
         e("Restaurar apenas gráficos", "Restore graphics only");
         e("Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
           "For a black screen or a failed start: only the graphic options go back to their defaults (audio, controls, language, saves and achievements stay)");
