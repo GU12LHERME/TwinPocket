@@ -100,6 +100,9 @@ void Configure(const Settings& settings) {
 #endif
     g_settings.texture_filter = std::clamp(g_settings.texture_filter, 0, 3);
     g_settings.fullscreen = std::clamp(g_settings.fullscreen, 0, 2);
+#if defined(__ANDROID__)
+    if (g_settings.fullscreen == 2) g_settings.fullscreen = 1;   // a desktop's borderless (a copied ps2r.ini): fullscreen here
+#endif
     g_settings.offset_x = std::clamp(g_settings.offset_x, -256, 256);
     g_settings.offset_y = std::clamp(g_settings.offset_y, -256, 256);
     g_settings.frame_rate = std::clamp(g_settings.frame_rate, 0, 5);
@@ -197,7 +200,11 @@ uint32_t Choices(uint32_t row) {
 #else
     case RowFrameRate: return 6;
 #endif
+#if defined(__ANDROID__)
+    case RowDisplayMode: return 2;   // windowed (the system bars shown), fullscreen (immersive); borderless is a desktop's
+#else
     case RowDisplayMode: return 3;
+#endif
     case RowFpsCounter: return 2;
     case RowGameRate: return 2;
     case RowDrawDistance: return te::port_settings::DrawDistanceChoices();
