@@ -114,6 +114,17 @@ void Configure(const std::string& ini_text) {
         te::lod::SetPercent(kDistancePercents[g.distance]);
     }
     ApplySticks();
+    {
+        // the gamepad-button remap (the launcher's Controles page writes android.pad.<ps2 button> = <SDL control>): the
+        // engine's [pad] section, parsed and applied by the input module at its Install
+        static const char* const kPadButtons[] = {"cross", "circle", "square", "triangle", "select", "start", "l1", "r1",
+                                                  "l2", "r2", "l3", "r3", "up", "down", "left", "right"};
+        std::string section, v;
+        for (const char* b : kPadButtons)
+            if (ps2r::SettingsFile::GetFromText(ini_text, std::string("android.pad.") + b, &v) && !v.empty())
+                section += std::string(b) + " = " + v + "\n";
+        if (!section.empty()) te::input::SetPadMap("[pad]\n" + section);
+    }
     std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
 #else
     (void)ini_text;

@@ -39,6 +39,10 @@ bool RequestWindowClose();
 // The sticks' response (the engine's GamepadBackend: the radial deadzone, 0..0.9, and the per-axis sensitivity, 0.5..2):
 // applied at once when the InputSystem exists, else kept for Install. A negative value keeps the engine's own (0.15, 1.33).
 void SetStickResponse(float deadzone, float sensitivity);
+// The gamepad-button remap as the engine's bindings grammar's [pad] section ("[pad]\ncross = a\n..."; the rows not named
+// keep SDL's standard layout, the DualShock 2's): parsed by the engine's InputMapper (a bad name: the whole section refused,
+// the standard layout kept, one log line) and handed to the GamepadBackend at Install. "" = the standard layout.
+void SetPadMap(const std::string& pad_section);
 void Shutdown();
 
 }  // namespace input

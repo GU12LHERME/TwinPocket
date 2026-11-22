@@ -366,8 +366,11 @@ public final class LauncherActivity extends Activity {
                 break;
             case 2:
                 for (Choice c : CONTROLS) page.addView(choiceRow(st, c));
-                note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings). "
-                        + "O remapeamento de botões ainda não está disponível no Android.");
+                note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
+                note("BOTÕES — escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
+                        + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
+                for (int i = 0; i < PAD_BUTTONS.length; i++) page.addView(padRow(st, i));
+                page.addView(actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", v -> confirmPadRestore()));
                 break;
             case 3:
                 page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
@@ -486,6 +489,119 @@ public final class LauncherActivity extends Activity {
             }
         }
         finishAndRemoveTask();
+    }
+
+    // ---- the gamepad-button remap (ps2r.ini android.pad.<ps2 button> = <SDL control>; the game applies it at its start) ----
+    // The PS2 buttons (the engine's [pad] names), their labels, and SDL's standard layout (the DualShock 2's)
+    static final String[] PAD_BUTTONS = {"cross", "circle", "square", "triangle", "l1", "r1", "l2", "r2", "l3", "r3",
+                                         "select", "start", "up", "down", "left", "right"};
+    static final String[] PAD_LABELS = {"Xis (✕)", "Círculo (○)", "Quadrado (□)", "Triângulo (△)", "L1", "R1", "L2", "R2",
+                                        "L3 (analógico esquerdo)", "R3 (analógico direito)", "Select", "Start",
+                                        "Direcional ↑", "Direcional ↓", "Direcional ←", "Direcional →"};
+    static final String[] PAD_DEFAULTS = {"a", "b", "x", "y", "leftshoulder", "rightshoulder", "lefttrigger", "righttrigger",
+                                          "leftstick", "rightstick", "back", "start", "dpup", "dpdown", "dpleft", "dpright"};
+
+    // An Android gamepad key as SDL's game-controller control name (SDL's Android joystick maps the same keys)
+    static String sdlControl(int keyCode) {
+        switch (keyCode) {
+            case KeyEvent.KEYCODE_BUTTON_A: return "a";
+            case KeyEvent.KEYCODE_BUTTON_B: return "b";
+            case KeyEvent.KEYCODE_BUTTON_X: return "x";
+            case KeyEvent.KEYCODE_BUTTON_Y: return "y";
+            case KeyEvent.KEYCODE_BUTTON_L1: return "leftshoulder";
+            case KeyEvent.KEYCODE_BUTTON_R1: return "rightshoulder";
+            case KeyEvent.KEYCODE_BUTTON_L2: return "lefttrigger";
+            case KeyEvent.KEYCODE_BUTTON_R2: return "righttrigger";
+            case KeyEvent.KEYCODE_BUTTON_THUMBL: return "leftstick";
+            case KeyEvent.KEYCODE_BUTTON_THUMBR: return "rightstick";
+            case KeyEvent.KEYCODE_BUTTON_SELECT: return "back";
+            case KeyEvent.KEYCODE_BUTTON_START: return "start";
+            case KeyEvent.KEYCODE_DPAD_UP: return "dpup";
+            case KeyEvent.KEYCODE_DPAD_DOWN: return "dpdown";
+            case KeyEvent.KEYCODE_DPAD_LEFT: return "dpleft";
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return "dpright";
+            default: return null;
+        }
+    }
+
+    static String controlLabel(String c) {
+        switch (c) {
+            case "a": return "A";
+            case "b": return "B";
+            case "x": return "X";
+            case "y": return "Y";
+            case "leftshoulder": return "L1";
+            case "rightshoulder": return "R1";
+            case "lefttrigger": return "L2";
+            case "righttrigger": return "R2";
+            case "leftstick": return "L3";
+            case "rightstick": return "R3";
+            case "back": return "Select";
+            case "start": return "Start";
+            case "dpup": return "↑";
+            case "dpdown": return "↓";
+            case "dpleft": return "←";
+            case "dpright": return "→";
+            default: return c;
+        }
+    }
+
+    private String padControl(Settings st, int i) {
+        return st.get("android.pad." + PAD_BUTTONS[i], PAD_DEFAULTS[i]);
+    }
+
+    private View padRow(final Settings st, final int i) {
+        final TextView value = text("", 14, ACCENT, true);
+        value.setPadding(dp(12), 0, 0, 0);
+        value.setText(controlLabel(padControl(st, i)));
+        View row = rowFrame(PAD_LABELS[i], null, value);
+        row.setOnClickListener(v -> capturePad(st, i));
+        return row;
+    }
+
+    // Press-to-bind: the next gamepad key is the PS2 button's control; a control already bound to another PS2 button
+    // swaps with this one's (no button is ever left without a control). Cancel: the dialog's button (touch) or 6 s.
+    private void capturePad(final Settings st, final int i) {
+        final AlertDialog dialog = new AlertDialog.Builder(this)
+            .setTitle(PAD_LABELS[i])
+            .setMessage("Aperte agora o botão do controle para " + PAD_LABELS[i] + ".\n(Atual: " + controlLabel(padControl(st, i))
+                    + ". Cancela sozinho em 6 segundos.)")
+            .setNegativeButton("Cancelar", null)
+            .create();
+        final android.os.Handler h = new android.os.Handler(getMainLooper());
+        final Runnable timeout = () -> { if (dialog.isShowing()) dialog.dismiss(); };
+        dialog.setOnKeyListener((d, keyCode, e) -> {
+            String control = sdlControl(keyCode);
+            if (control == null) return false;
+            if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+            String old = padControl(st, i);
+            boolean ok = true;
+            for (int k = 0; k < PAD_BUTTONS.length; k++)
+                if (k != i && padControl(st, k).equals(control)) ok &= st.set("android.pad." + PAD_BUTTONS[k], old);
+            ok &= st.set("android.pad." + PAD_BUTTONS[i], control);
+            Diag.log(this, "main", "pad remap: " + PAD_BUTTONS[i] + " = " + control + (ok ? "" : " (NOT written)"));
+            h.removeCallbacks(timeout);
+            dialog.dismiss();
+            showTab(2);
+            return true;
+        });
+        dialog.setOnDismissListener(d -> h.removeCallbacks(timeout));
+        dialog.show();
+        h.postDelayed(timeout, 6000);
+    }
+
+    private void confirmPadRestore() {
+        new AlertDialog.Builder(this)
+            .setTitle("Restaurar botões padrão?")
+            .setMessage("Todos os botões voltam ao layout do DualShock 2 (A = ✕, B = ○, X = □, Y = △...).")
+            .setPositiveButton("Restaurar", (d, w) -> {
+                Settings st = new Settings(this);
+                for (int k = 0; k < PAD_BUTTONS.length; k++) st.set("android.pad." + PAD_BUTTONS[k], PAD_DEFAULTS[k]);
+                Diag.log(this, "main", "pad remap restored to the standard layout");
+                showTab(2);
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
     }
 
     private void confirmRestore() {

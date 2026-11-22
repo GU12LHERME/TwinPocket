@@ -28,6 +28,7 @@
 #include "engine/platform/sdl/input/gamepad_backend.h"
 #include "engine/platform/sdl/input/gamepad_convert.h"
 #include "engine/platform/sdl/input/input_system.h"
+#include "engine/platform/sdl/input/input_mapper.h"
 #include "engine/platform/sdl/input/keyboard_mouse_backend.h"
 #if defined(__vita__)
 #include <psp2/ctrl.h>
@@ -44,6 +45,7 @@ ps2r::platform::sdl::InputSystem* g_input = nullptr;
 bool g_events_inited = false;
 #endif
 float g_stick_deadzone = -1.f, g_stick_sensitivity = -1.f;   // SetStickResponse: negative = the engine's own
+std::string g_pad_map;   // SetPadMap: the [pad] section ("" = the standard layout)
 #if TE_HAVE_SDL_INPUT && defined(__vita__)
 // ---- THE VITA CONTROLLER READ STRAIGHT FROM sceCtrl ------------------------------------------------------------
 // SDL's path per boundary was SDL_JoystickUpdate (its Vita driver's sceCtrlPeekBufferPositive2 -- port 1, then port 0 on a
@@ -272,6 +274,7 @@ bool Install(Pads& pads, const Settings& settings) {
 #endif
     g_input->Init(in);
     if (g_stick_deadzone >= 0.f || g_stick_sensitivity >= 0.f) SetStickResponse(g_stick_deadzone, g_stick_sensitivity);
+    if (!g_pad_map.empty()) SetPadMap(g_pad_map);
 #if defined(__vita__)
     te::vita::Step("input: ready");
     {
@@ -479,6 +482,20 @@ void SetStickResponse(float deadzone, float sensitivity) {
     if (deadzone >= 0.f) gp->SetDeadzone(deadzone);
     if (sensitivity >= 0.f) gp->SetSensitivity(sensitivity);
     std::fprintf(stderr, "[twinsanityevolved] input: stick deadzone %.2f, sensitivity %.2f\n", gp->Deadzone(), gp->Sensitivity());
+#endif
+}
+
+void SetPadMap(const std::string& pad_section) {
+    g_pad_map = pad_section;
+#if TE_HAVE_SDL_INPUT
+    if (!g_input || !g_input->Gamepad() || pad_section.empty()) return;
+    ps2r::platform::sdl::InputMapper parser;
+    if (!parser.LoadConfigText(pad_section, "ps2r.ini android.pad.*")) {
+        std::fprintf(stderr, "[twinsanityevolved] input: the button remap was refused: the standard layout is kept\n");
+        return;
+    }
+    g_input->Gamepad()->SetButtonMap(parser.Config().pad_map);
+    std::fprintf(stderr, "[twinsanityevolved] input: button remap applied (%zu bytes of [pad])\n", pad_section.size());
 #endif
 }
 
