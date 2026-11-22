@@ -8,13 +8,23 @@
 
 namespace te::display {
 
+// The texture filter a run starts with when ps2r.ini does not name one (video.texture_filter): the title's own sampler
+// choice on every lane but Android, where it is BILINEAR -- on the Retroid Pocket 6 (Adreno 740) the title's choice draws
+// the additive glows (Aku Aku's mask, the glowing mushrooms, the waterfall's mist) as square blocks, and bilinear draws them
+// as on the console (the player's test, APK 0.1.7). The row keeps all its choices; the file's value wins once written.
+#if defined(__ANDROID__) || defined(TE_DEFAULTS_ANDROID)   // (TE_DEFAULTS_ANDROID: the host test of the Android defaults)
+constexpr int kDefaultTextureFilter = 2;   // bilinear
+#else
+constexpr int kDefaultTextureFilter = 0;   // title
+#endif
+
 // What the runner read from ps2r.ini (the engine's VideoConfig, the keys the port honours) before the device exists.
 struct Settings {
     int aspect = 0;          // video.aspect: 0 auto (the TV's 4:3 in a window; the frame's own pixels headless -- the frozen
                              // judges' captures), 1 4:3, 2 16:9, 3 16:10, 4 21:9, 5 32:9
     int fit = 1;             // video.fit_mode: 0 stretch, 1 fit (letterbox), 2 fill, 3 integer, 4 custom (= fit here)
     int scale = 1;           // video.scale: the frame target's internal scale 1..4 (0 = 1; the PS Vita 1..2: display.cpp)
-    int texture_filter = 0;  // video.texture_filter: 0 title, 1 point, 2 bilinear, 3 trilinear (bilinear here: ps2e_draw has no mip chain)
+    int texture_filter = kDefaultTextureFilter;  // video.texture_filter: 0 title, 1 point, 2 bilinear, 3 trilinear (bilinear here: ps2e_draw has no mip chain)
     bool vsync = false;      // video.vsync (the port's default: off -- its pacer times the presents; a windowed run may turn it on)
     int fullscreen = 0;      // video.fullscreen: 0 windowed, 1 fullscreen, 2 borderless
     int offset_x = 0;        // video.custom_offset_x/y: the title's MoveDisplay, in FRAME pixels (the PS2's +-64 across, +-32 down)

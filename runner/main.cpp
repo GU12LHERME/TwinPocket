@@ -346,6 +346,8 @@ int main(int argc, char** argv) {
         if (!config_path.empty()) {
             ps2r::Config cfg;
             cfg.video.vsync = false;   // the port's default (its pacer times the presents); the file's video.vsync overrides
+            // the platform's texture filter when the file names none (te_display.h kDefaultTextureFilter: bilinear on Android)
+            cfg.video.texture_filter = static_cast<ps2r::TextureFilterSel>(te::display::kDefaultTextureFilter);
             // game.hz: 0 = "not in the file" -- the engine's default 60 must not read as the player's choice (the
             // Vita's default is 50: kSettingsDefaultHz)
             cfg.game.hz = 0;

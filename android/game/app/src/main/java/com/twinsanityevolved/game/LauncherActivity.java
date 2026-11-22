@@ -67,7 +67,7 @@ public final class LauncherActivity extends Activity {
         addButton(row2, "Compartilhar relatório", v -> buildReport(true));
         addButton(row2, "Copiar relatório", v -> buildReport(false));
         addButton(row2, "Áudio…", v -> audioOptions());
-        addButton(row2, "Gráficos (teste)…", v -> graphicsTests());
+        addButton(row2, "Modo diagnóstico…", v -> diagnosticMode());
         addButton(row2, "Atualizar", v -> refresh());
         root.addView(row1);
         root.addView(row2);
@@ -156,10 +156,8 @@ public final class LauncherActivity extends Activity {
                  .append("  imagem pelo seletor do Android para o seu armazenamento privado, sem pedir permissões de armazenamento.\n");
         }
         b.append("\nÁUDIO: buffer ").append(prefs().getInt("audio_buffer", 2048)).append(" frames, driver ")
-         .append(prefs().getString("audio_driver", "auto")).append(" (botão \"Áudio…\")\n");
-        StringBuilder gt = new StringBuilder();
-        for (String[] t : GRAPHICS_TESTS) if (prefs().getBoolean(t[0], false)) gt.append(' ').append(t[1]);
-        b.append("GRÁFICOS (testes A/B): ").append(gt.length() > 0 ? gt.toString().trim() : "nenhum (padrão)").append('\n');
+         .append(prefs().getString("audio_driver", DEFAULT_AUDIO_DRIVER)).append(" (botão \"Áudio…\")\n");
+        b.append("MODO DIAGNÓSTICO: ").append(prefs().getBoolean("diagnostic_mode", false) ? "ligado" : "desligado").append('\n');
         b.append('\n').append("ÚLTIMAS EXECUÇÕES\n");
         b.append(describeStage("game", "  jogo / teste SDL"));
         b.append(describeStage("probe", "  diagnóstico"));
@@ -225,9 +223,9 @@ public final class LauncherActivity extends Activity {
         final String[] drivers = {"auto", "aaudio", "openslES", "android"};
         final String[] labels = {
             "Buffer 1024 frames (21 ms)", "Buffer 2048 frames (43 ms) — padrão", "Buffer 4096 frames (85 ms)",
-            "Driver: automático (AAudio)", "Driver: AAudio", "Driver: OpenSL ES", "Driver: Java AudioTrack"};
+            "Driver: automático (ordem do SDL: AAudio primeiro)", "Driver: AAudio", "Driver: OpenSL ES — padrão", "Driver: Java AudioTrack"};
         final int curBuffer = prefs().getInt("audio_buffer", 2048);
-        final String curDriver = prefs().getString("audio_driver", "auto");
+        final String curDriver = prefs().getString("audio_driver", DEFAULT_AUDIO_DRIVER);
         new AlertDialog.Builder(this)
             .setTitle("Áudio — atual: " + curBuffer + " frames, " + curDriver)
             .setItems(labels, (d, which) -> {
@@ -241,31 +239,27 @@ public final class LauncherActivity extends Activity {
             .show();
     }
 
-    // The graphics A/B switches for the visual-defect investigation (Etapa 1): each one is an engine switch the desktop
-    // port already has (README "TE_GFX_*"), off by default; turned on here it goes to the next game start as the
-    // environment (MainActivity.getArguments -> --te-env). Comparing screenshots with each on tells which path the defect
-    // is in before any shader is changed.
-    static final String[][] GRAPHICS_TESTS = {
-        {"gfx_particle_title", "TE_GFX_PARTICLE_SCALE=title", "Partículas/brilhos na resolução do PS2 (como no PS2)"},
-        {"gfx_ps2_full", "TE_GFX_PS2_FAST=0", "Programa PS2 completo (sem o programa rápido)"},
-        {"gfx_emitter_clamped", "TE_GFX_PARTICLE_UNCLAMPED=0", "Emissor de partículas com os clamps da VU"},
-        {"gfx_mip_tint", "TE_GFX_DIAG_MIP_TINT=1", "Diagnóstico: níveis de mipmap em magenta"},
-    };
+    // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
+    // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). The "Áudio…" list keeps every driver.
+    static final String DEFAULT_AUDIO_DRIVER = "openslES";
 
-    private void graphicsTests() {
-        final String[] labels = new String[GRAPHICS_TESTS.length];
-        final boolean[] on = new boolean[GRAPHICS_TESTS.length];
-        for (int i = 0; i < GRAPHICS_TESTS.length; i++) {
-            labels[i] = GRAPHICS_TESTS[i][2];
-            on[i] = prefs().getBoolean(GRAPHICS_TESTS[i][0], false);
-        }
+    // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
+    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), for a report about a graphics problem. Off, neither costs anything.
+    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1"};
+
+    private void diagnosticMode() {
+        final boolean on = prefs().getBoolean("diagnostic_mode", false);
         new AlertDialog.Builder(this)
-            .setTitle("Gráficos — testes A/B (próximo início do jogo)")
-            .setMultiChoiceItems(labels, on, (d, which, checked) -> {
-                prefs().edit().putBoolean(GRAPHICS_TESTS[which][0], checked).apply();
-                Diag.log(this, "main", "graphics test " + GRAPHICS_TESTS[which][1] + " " + (checked ? "on" : "off"));
+            .setTitle("Modo diagnóstico — " + (on ? "LIGADO" : "desligado"))
+            .setMessage("Para investigar um problema gráfico: registra as mensagens do driver da GPU e permite capturar os desenhos "
+                    + "de um quadro apertando L3 + R3 juntos durante o jogo. Depois use \"Compartilhar relatório\".\n\n"
+                    + "Deixe desligado para jogar normalmente.")
+            .setPositiveButton(on ? "Desligar" : "Ligar", (d, w) -> {
+                prefs().edit().putBoolean("diagnostic_mode", !on).apply();
+                Diag.log(this, "main", "diagnostic mode " + (!on ? "on" : "off"));
+                refresh();
             })
-            .setPositiveButton("OK", (d, w) -> refresh())
+            .setNegativeButton("Fechar", null)
             .show();
     }
 

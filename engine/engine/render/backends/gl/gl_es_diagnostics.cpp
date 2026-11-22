@@ -9,6 +9,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <mutex>
 #include <unordered_map>
@@ -124,6 +125,15 @@ void InstallEsDiagnostics() {
     if (!cb) {
         std::fprintf(stderr, "[gl.es] driver debug messages: not available (no glDebugMessageCallback)\n");
         return;
+    }
+    // the driver's messages cost a call per message and may slow a driver down: on only in the launcher's diagnostic mode
+    // (TE_DIAG_GL=1); the context summary above is always logged (once)
+    {
+        const char* v = std::getenv("TE_DIAG_GL");
+        if (!(v && v[0] == '1')) {
+            std::fprintf(stderr, "[gl.es] driver debug messages: off (TE_DIAG_GL=1 turns them on: the launcher's diagnostic mode)\n");
+            return;
+        }
     }
     glEnable(GL_DEBUG_OUTPUT);
     if (ctl) ctl(GL_DONT_CARE, GL_DONT_CARE, GL_DONT_CARE, 0, nullptr, GL_TRUE);

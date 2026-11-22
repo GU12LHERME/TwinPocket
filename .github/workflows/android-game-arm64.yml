@@ -127,6 +127,18 @@ jobs:
             engine/engine/platform/sdl/audio_pull_ring.cpp -o "$RUNNER_TEMP/test_audio_ring_lead"
           "$RUNNER_TEMP/test_audio_ring_lead" 2>&1 | tee "$LOG_DIR/audio-ring-lead.log"
 
+      - name: Settings defaults (bilinear on Android) and the texture filter row's write read back
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="engine/engine/core/config/config.cpp engine/engine/core/config/config_loader.cpp engine/engine/core/config/config_validator.cpp
+               engine/engine/core/config/deterministic_profile.cpp engine/engine/core/config/settings_file.cpp
+               engine/engine/core/config/mods_config.cpp engine/engine/core/hash/hash.cpp"
+          clang++ -std=c++20 -O1 -Iengine -I. -DTE_DEFAULTS_ANDROID tools/android/test_settings_defaults.cpp $src -o "$RUNNER_TEMP/test_settings_android"
+          clang++ -std=c++20 -O1 -Iengine -I. tools/android/test_settings_defaults.cpp $src -o "$RUNNER_TEMP/test_settings_desktop"
+          "$RUNNER_TEMP/test_settings_android" "$RUNNER_TEMP/settings-a.ini" 2>&1 | tee "$LOG_DIR/settings-defaults.log"
+          "$RUNNER_TEMP/test_settings_desktop" "$RUNNER_TEMP/settings-d.ini" 2>&1 | tee -a "$LOG_DIR/settings-defaults.log"
+
       - name: The engine's shaders as GLSL ES 3.20 (gl_glsl_es.cpp) through glslangValidator
         shell: bash
         run: |

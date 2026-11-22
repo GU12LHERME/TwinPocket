@@ -372,11 +372,16 @@ bool Install(Pads& pads, const Settings& settings) {
         s.lx = p.lx; s.ly = p.ly; s.rx = p.rx; s.ry = p.ry;
         {
             // L3 + R3 pressed together: one picture's draws logged for a graphics diagnosis (graphics.cpp
-            // te_graphics_request_capture); the game still sees the buttons
+            // te_graphics_request_capture) -- only with TE_DIAG_CAPTURE=1 (the Android launcher's diagnostic mode); the game
+            // still sees the buttons
+            static const bool capture_armed = [] {
+                const char* v = std::getenv("TE_DIAG_CAPTURE");
+                return v && v[0] == '1';
+            }();
             static bool both_was = false;
             const uint32_t both = ps2r::platform::sdl::kBtnL3 | ps2r::platform::sdl::kBtnR3;
             const bool both_now = (p.buttons & both) == both;
-            if (both_now && !both_was) te_graphics_request_capture();
+            if (capture_armed && both_now && !both_was) te_graphics_request_capture();
             both_was = both_now;
         }
 #if defined(__vita__)

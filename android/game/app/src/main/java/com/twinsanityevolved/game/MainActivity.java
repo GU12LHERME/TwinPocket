@@ -55,16 +55,13 @@ public final class MainActivity extends SDLActivity {
         // the launcher's audio options (LauncherActivity "Áudio"), as the environment the engine and SDL read
         android.content.SharedPreferences prefs = getSharedPreferences("twinsanity", MODE_PRIVATE);
         int buffer = prefs.getInt("audio_buffer", 2048);
-        String driver = prefs.getString("audio_driver", "auto");
+        String driver = prefs.getString("audio_driver", LauncherActivity.DEFAULT_AUDIO_DRIVER);
         args.add("--te-env"); args.add("TE_AUDIO_BUFFER_FRAMES=" + buffer);
         if (!"auto".equals(driver)) { args.add("--te-env"); args.add("SDL_AUDIODRIVER=" + driver); }
         Diag.log(this, "game", "audio options: buffer " + buffer + " frames, driver " + driver);
-        for (String[] t : LauncherActivity.GRAPHICS_TESTS) {
-            if (prefs.getBoolean(t[0], false)) {
-                args.add("--te-env");
-                args.add(t[1]);
-                Diag.log(this, "game", "graphics test on: " + t[1]);
-            }
+        if (prefs.getBoolean("diagnostic_mode", false)) {
+            for (String e : LauncherActivity.DIAGNOSTIC_ENV) { args.add("--te-env"); args.add(e); }
+            Diag.log(this, "game", "diagnostic mode on");
         }
         return args.toArray(new String[0]);
     }
