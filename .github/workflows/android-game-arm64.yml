@@ -146,6 +146,20 @@ jobs:
           clang++ -std=c++17 -O1 -Wall -Wextra -I. -Iplatform/nativeee tools/android/test_lod_choice.cpp -o "$RUNNER_TEMP/test_lod_choice"
           "$RUNNER_TEMP/test_lod_choice" 2>&1 | tee "$LOG_DIR/lod-choice.log"
 
+      - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
+        shell: bash
+        run: |
+          set -euo pipefail
+          src="$RUNNER_TEMP/libchdr"
+          git clone -q https://github.com/rtissera/libchdr.git "$src"
+          git -C "$src" checkout -q 47d794151b2b64f6aba60304e6480f4f5a2bc24b
+          cmake -S "$src" -B "$src/build" -DBUILD_SHARED_LIBS=OFF -DCHDR_WANT_TESTS=OFF -DCMAKE_BUILD_TYPE=Release > /dev/null
+          cmake --build "$src/build" --target chdr-static -j 4 > /dev/null
+          libs="$(find "$src/build" -name '*.a' | sort -r | tr '\n' ' ')"
+          clang++ -std=c++20 -O1 -Wall -DTE_HAVE_CHDR=1 -I. -Iengine -I"$src/include" tools/android/test_disc_chd.cpp \
+            platform/nativeee/host/disc_image.cpp engine/engine/cdvd/iso_fs.cpp $libs -lpthread -o "$RUNNER_TEMP/test_disc_chd"
+          "$RUNNER_TEMP/test_disc_chd" "$RUNNER_TEMP" 2>&1 | tee "$LOG_DIR/disc-chd.log"
+
       - name: The engine's shaders as GLSL ES 3.20 (gl_glsl_es.cpp) through glslangValidator
         shell: bash
         run: |

@@ -53,9 +53,16 @@ std::string StripPrefix(const std::string& path) {
 
 IsoFs::~IsoFs() { Close(); }
 
+namespace {
+IsoFs::ImageSourceFactory g_image_source_factory = nullptr;
+}  // namespace
+
+void IsoFs::SetImageSourceFactory(ImageSourceFactory factory) { g_image_source_factory = factory; }
+
 void IsoFs::Close() {
     if (fd_ >= 0) ps2r::host::FdClose(fd_);
     fd_ = -1;
+    source_.reset();
     image_bytes_ = 0;
     file_bytes_ = 0;
     sector_stride_ = kSectorSize;
@@ -67,6 +74,17 @@ void IsoFs::Close() {
 
 bool IsoFs::Open(const std::string& path, std::string* error) {
     Close();
+    bool handled = false;
+    if (g_image_source_factory) {
+        // a container the port reads (the Android port's CHD): its logical sectors, no file descriptor of ours
+        std::shared_ptr<ImageSource> source = g_image_source_factory(path, error, &handled);
+        if (handled && !source) return false;
+        if (handled) {
+            source_ = std::move(source);
+            file_bytes_ = image_bytes_ = source_->Size();
+        }
+    }
+    if (!handled) {
     fd_ = ps2r::host::FdOpen(path.c_str(), ps2r::host::kOpenRead);
     if (fd_ < 0) {
         if (error) *error = "cannot open " + path;
@@ -86,6 +104,7 @@ bool IsoFs::Open(const std::string& path, std::string* error) {
             image_bytes_ = (file_bytes_ / kRawSectorSize) * kSectorSize;
         }
     }
+    }   // (a sector file)
     uint8_t pvd[kSectorSize];
     if (ReadSectors(kPvdSector, 1, pvd) != 1 || pvd[0] != 1 || std::memcmp(pvd + 1, "CD001", 5) != 0) {
         if (error) *error = path + ": no ISO9660 primary volume descriptor at sector 16";
@@ -107,10 +126,11 @@ bool IsoFs::Open(const std::string& path, std::string* error) {
 }
 
 size_t IsoFs::ReadBytes(uint64_t offset, size_t size, uint8_t* dst) const {
-    if (fd_ < 0 || size == 0) return 0;
+    if ((fd_ < 0 && !source_) || size == 0) return 0;
     if (offset >= image_bytes_) return 0;
     const uint64_t avail = image_bytes_ - offset;
     const size_t n = avail < size ? static_cast<size_t>(avail) : size;
+    if (source_) return source_->Read(offset, n, dst);
     if (!RawSectors()) {
         return PreadAll(fd_, dst, n, offset);
     }
@@ -151,7 +171,7 @@ bool IsoFs::IdentifierMatches(const std::string& recorded, const std::string& wa
 }
 
 bool IsoFs::FindInDirectory(const Entry& dir, const std::string& component, Entry& out) const {
-    if (fd_ < 0 || dir.size == 0) return false;
+    if (!IsOpen() || dir.size == 0) return false;
     const uint32_t sectors = (dir.size + kSectorSize - 1) / kSectorSize;
     std::vector<uint8_t> buf(static_cast<size_t>(sectors) * kSectorSize);
     if (ReadSectors(dir.lba, sectors, buf.data()) != sectors) return false;
@@ -181,7 +201,7 @@ bool IsoFs::FindInDirectory(const Entry& dir, const std::string& component, Entr
 
 bool IsoFs::List(const Entry& dir, std::vector<Entry>& out) const {
     out.clear();
-    if (fd_ < 0 || dir.size == 0 || !dir.directory) return false;
+    if (!IsOpen() || dir.size == 0 || !dir.directory) return false;
     const uint32_t sectors = (dir.size + kSectorSize - 1) / kSectorSize;
     std::vector<uint8_t> buf(static_cast<size_t>(sectors) * kSectorSize);
     if (ReadSectors(dir.lba, sectors, buf.data()) != sectors) return false;
@@ -206,7 +226,7 @@ bool IsoFs::List(const Entry& dir, std::vector<Entry>& out) const {
 }
 
 bool IsoFs::Find(const std::string& path, Entry& out) const {
-    if (fd_ < 0) return false;
+    if (!IsOpen()) return false;
     const std::string s = StripPrefix(path);
     Entry cur = root_;
     size_t i = 0;

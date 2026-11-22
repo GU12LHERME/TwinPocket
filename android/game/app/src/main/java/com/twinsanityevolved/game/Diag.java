@@ -116,6 +116,23 @@ final class Diag {
         return new File(new File(c.getFilesDir(), "disc"), "twinsanity.iso");
     }
 
+    /** The same copy when the chosen file was a CHD (chdman createdvd): files/disc/twinsanity.chd. */
+    static File importedChd(Context c) {
+        return new File(new File(c.getFilesDir(), "disc"), "twinsanity.chd");
+    }
+
+    /** Whether the file starts with the CHD signature ("MComprHD"). */
+    static boolean isChd(File f) {
+        try (RandomAccessFile r = new RandomAccessFile(f, "r")) {
+            byte[] m = new byte[8];
+            if (r.length() < 8) return false;
+            r.readFully(m);
+            return new String(m, StandardCharsets.US_ASCII).equals("MComprHD");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
     /**
      * The disc image the game will use: the copy the picker made (files/disc/twinsanity.iso) first, else the lookup in the
      * app's external folder (runner/te_android_diag.cpp FindDiscImage). [path, how] (path null when none).
@@ -123,6 +140,8 @@ final class Diag {
     static String[] findDiscImage(Context c) {
         File imported = importedDisc(c);
         if (imported.isFile()) return new String[] {imported.getAbsolutePath(), "copiada pelo seletor de ISO (armazenamento privado do app)"};
+        File chd = importedChd(c);
+        if (chd.isFile()) return new String[] {chd.getAbsolutePath(), "CHD copiado pelo seletor de ISO (armazenamento privado do app)"};
         return findDiscImage(c.getExternalFilesDir(null));
     }
 
@@ -156,6 +175,24 @@ final class Diag {
 
     /** A one-line check of a disc image: ISO 9660 "CD001" at sector 16 (2048- or 2352-byte sectors). Null when usable. */
     static String checkDiscImage(String path, StringBuilder report) {
+        if (isChd(new File(path))) {
+            // a CHD: its sectors are compressed hunks -- the game's native side reads it (libchdr) and checks its volume at
+            // the start (runner/te_android_diag.cpp CheckDiscImage); here only its header
+            try (RandomAccessFile f = new RandomAccessFile(path, "r")) {
+                byte[] h = new byte[64];
+                f.readFully(h);
+                long version = ((h[12] & 0xFFL) << 24) | ((h[13] & 0xFFL) << 16) | ((h[14] & 0xFFL) << 8) | (h[15] & 0xFFL);
+                long logical = 0;
+                for (int i = 32; i < 40; i++) logical = (logical << 8) | (h[i] & 0xFFL);
+                long unit = ((h[60] & 0xFFL) << 24) | ((h[61] & 0xFFL) << 16) | ((h[62] & 0xFFL) << 8) | (h[63] & 0xFFL);
+                report.append(String.format(Locale.US, "%.1f MB, CHD v%d, %.1f MB de setores", f.length() / 1048576.0, version, logical / 1048576.0));
+                if (version != 5) return "CHD versão " + version + " (só a versão 5, a do chdman atual, é lida)";
+                if (unit != 0 && unit != 2048) return "CHD de CD (" + unit + " bytes por unidade): refaça com chdman createdvd";
+                return null;
+            } catch (Exception e) {
+                return "cannot read it: " + e.getMessage();
+            }
+        }
         try (RandomAccessFile f = new RandomAccessFile(path, "r")) {
             long len = f.length();
             long[][] layouts = {{2048, 0}, {2352, 16}, {2352, 24}};

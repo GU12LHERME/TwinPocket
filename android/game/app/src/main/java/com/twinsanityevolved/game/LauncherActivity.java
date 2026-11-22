@@ -972,8 +972,11 @@ public final class LauncherActivity extends Activity {
                 if (bad != null) error = "o arquivo copiado não é uma imagem de DVD de PS2: " + bad;
             }
             if (error == null) {
+                // the copy's name by what it is: a CHD (chdman createdvd) keeps its own name, and the other one goes
+                File dest = Diag.isChd(tmp) ? Diag.importedChd(this) : target;
                 target.delete();
-                if (!tmp.renameTo(target)) error = "não foi possível renomear a cópia";
+                Diag.importedChd(this).delete();
+                if (!tmp.renameTo(dest)) error = "não foi possível renomear a cópia";
             }
             if (error != null) tmp.delete();
             final String err = error;

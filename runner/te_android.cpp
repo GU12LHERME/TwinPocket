@@ -36,6 +36,7 @@
 #include <jni.h>
 
 #include "te_android_diag.h"
+#include "disc_image.h"
 
 int te_runner_main(int argc, char** argv);   // runner/main.cpp, renamed for this lane
 
@@ -251,11 +252,16 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
                        std::getenv("SDL_AUDIODRIVER") ? std::getenv("SDL_AUDIODRIVER") : "(SDL's order)",
                        std::getenv("TE_AUDIO_BUFFER_FRAMES"));
     }
+    // a CHD (chdman createdvd) read through libchdr by every disc volume from here on (disc_image.h); an ISO as before
+    te::io::InstallChdSupport();
     if (iso.empty() && internal && *internal) {
-        const std::string imported = std::string(internal) + "/disc/twinsanity.iso";
-        if (std::filesystem::is_regular_file(imported, ec)) {
-            iso = imported;
-            how = "the copy made by the launcher's ISO picker (files/disc)";
+        for (const char* name : {"/disc/twinsanity.iso", "/disc/twinsanity.chd"}) {
+            const std::string imported = std::string(internal) + name;
+            if (std::filesystem::is_regular_file(imported, ec)) {
+                iso = imported;
+                how = "the copy made by the launcher's ISO picker (files/disc)";
+                break;
+            }
         }
     }
     if (iso.empty()) iso = te::android::FindDiscImage(files, &how);

@@ -19,6 +19,11 @@
 // then remapped per sector, so callers see one 2048-byte-per-sector volume
 // whichever layout the file has (RawSectors() tells which).
 //
+// An IMAGE SOURCE (optional, installed by a port: SetImageSourceFactory) reads a container format that is not a sector file --
+// the Android port's CHD (platform/nativeee/host/disc_image.cpp, libchdr). Open asks the factory first: when it takes the
+// path, the volume's logical 2048-byte sectors come from the source (every reader above -- DiscOverlay's base included --
+// reads through ReadBytes as before); when it does not (no factory: every other lane), this file's own code runs unchanged.
+//
 // The volume interface (Open / Close / Find / List / ReadBytes / ImageBytes) is
 // virtual: DiscOverlay (disc_overlay.h) is an IsoFs that composes mods' files
 // over the image, and every reader holding a `const IsoFs&` reads the composed
@@ -26,12 +31,25 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <vector>
 
 class IsoFs {
 public:
     static constexpr uint32_t kSectorSize = 2048;
+
+    // A container's logical sectors (thread-safe: the disc reader thread and the game thread both read)
+    class ImageSource {
+    public:
+        virtual ~ImageSource() = default;
+        virtual uint64_t Size() const = 0;                                         // logical bytes (sectors * 2048)
+        virtual size_t Read(uint64_t offset, size_t size, uint8_t* dst) const = 0;  // bytes read
+    };
+    // Takes the path (*handled = true) and returns its source, or nullptr with *error; leaves it (*handled = false) to the
+    // sector-file reader. Installed once, before any volume opens; none by default.
+    using ImageSourceFactory = std::shared_ptr<ImageSource> (*)(const std::string& path, std::string* error, bool* handled);
+    static void SetImageSourceFactory(ImageSourceFactory factory);
 
     struct Entry {
         uint32_t lba = 0;
@@ -49,7 +67,7 @@ public:
     // Opens the image and parses the PVD. False (with *error) when the file is
     // missing or is not an ISO9660 volume.
     virtual bool Open(const std::string& path, std::string* error = nullptr);
-    bool IsOpen() const { return fd_ >= 0; }
+    bool IsOpen() const { return fd_ >= 0 || source_ != nullptr; }
     virtual void Close();
 
     // Path lookup from the root, in any of the shapes a title uses:
@@ -85,6 +103,7 @@ private:
     static bool IdentifierMatches(const std::string& recorded, const std::string& wanted);
 
     int fd_ = -1;   // the host descriptor (engine/platform/host: positioned 64-bit reads on every target)
+    std::shared_ptr<ImageSource> source_;   // a container's (SetImageSourceFactory); null for a sector file
     uint64_t image_bytes_ = 0;
     uint64_t file_bytes_ = 0;
     uint32_t sector_stride_ = kSectorSize;   // 2048 (plain) or 2352 (raw)

@@ -2,6 +2,9 @@
 // diagnostic mode runs without the game (TeDiag.nativeProbe), and the stdout / stderr pump into logcat and the log file.
 #include "te_android_diag.h"
 
+#include "disc_image.h"
+#include "engine/cdvd/iso_fs.h"
+
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <GLES3/gl32.h>
@@ -377,6 +380,17 @@ std::string FindDiscImage(const std::string& dir, std::string* how) {
 }
 
 bool CheckDiscImage(const std::string& path, std::string* report) {
+    if (te::io::IsChdFile(path)) {
+        // a CHD: opened as the game will open it (the engine's IsoFs over the CHD source: disc_image.h)
+        IsoFs volume;
+        std::string err;
+        const bool ok = volume.Open(path, &err);
+        char size[96];
+        std::snprintf(size, sizeof size, "%.1f MB of sectors", static_cast<double>(volume.ImageBytes()) / 1048576.0);
+        if (report) *report = path + ": " + (ok ? std::string("CHD, ISO 9660 volume \"") + volume.VolumeId() + "\", " + size
+                                                : std::string("CHD not usable: ") + err);
+        return ok;
+    }
     const int fd = ::open(path.c_str(), O_RDONLY | O_CLOEXEC);
     if (fd < 0) {
         if (report) *report = "cannot open " + path + ": " + std::strerror(errno);
