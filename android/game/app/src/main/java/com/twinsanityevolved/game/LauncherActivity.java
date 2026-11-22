@@ -41,6 +41,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static com.twinsanityevolved.game.Lang.T;
+
 /**
  * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A landscape screen for a
  * handheld: on the left the game (the chosen disc image, its state, a large JOGAR button, the ISO picker and what the
@@ -137,6 +139,8 @@ public final class LauncherActivity extends Activity {
         new Choice(Settings.STICK_SENSITIVITY, "Sensibilidade dos analógicos", "Maior: o personagem chega à velocidade máxima com menos inclinação",
             "1.33", new String[] {"1.00", "1.33", "1.66", "2.00"}, new String[] {"100%", "133% — padrão", "166%", "200%"}),
     };
+    static final Choice LANGUAGE = new Choice(Lang.KEY, "Idioma / Language", null, "auto", new String[] {"auto", "pt-BR", "en"},
+        new String[] {"Automático (idioma do sistema)", "Português (Brasil)", "English"});
     static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Diagnóstico"};
 
     private int dp(float v) {
@@ -162,7 +166,7 @@ public final class LauncherActivity extends Activity {
 
     private TextView text(String s, float sp, int color, boolean bold) {
         TextView t = new TextView(this);
-        t.setText(s);
+        t.setText(T(s));   // (a text not in the table -- a file name, a status line -- stays as it is)
         t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
         t.setTextColor(color);
         if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
@@ -171,7 +175,7 @@ public final class LauncherActivity extends Activity {
 
     private Button button(String label, int normal, int focusedColor, View.OnClickListener l) {
         Button b = new Button(this);
-        b.setText(label);
+        b.setText(T(label));
         b.setAllCaps(false);
         b.setTextColor(TEXT);
         b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
@@ -194,6 +198,7 @@ public final class LauncherActivity extends Activity {
         super.onCreate(savedInstanceState);
         Diag.installCrashHandler(this, "main");
         new Settings(this).migrate(prefs());
+        Lang.init(this);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
@@ -236,7 +241,7 @@ public final class LauncherActivity extends Activity {
         View spacer = new View(this);
         left.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
         left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar · no jogo: Opções → android settings → return to launcher", 11, SUBTLE, false));
-        left.addView(text("versão " + versionName(), 11, SUBTLE, false));
+        left.addView(text(T("versão ") + versionName(), 11, SUBTLE, false));
 
         ScrollView leftScroll = new ScrollView(this);
         leftScroll.setFillViewport(true);
@@ -303,7 +308,7 @@ public final class LauncherActivity extends Activity {
         super.onResume();
         starting = false;
         playButton.setEnabled(true);
-        playButton.setText("JOGAR");
+        playButton.setText(T("JOGAR"));
         refresh();
     }
 
@@ -361,8 +366,8 @@ public final class LauncherActivity extends Activity {
                 break;
             case 1:
                 for (Choice c : AUDIO) page.addView(choiceRow(st, c));
-                note("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). "
-                        + "Driver e buffer também estão no jogo: Opções → android settings.");
+                note(T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
+                        + T("Driver e buffer também estão no jogo: Opções → android settings."));
                 break;
             case 2:
                 for (Choice c : CONTROLS) page.addView(choiceRow(st, c));
@@ -373,16 +378,18 @@ public final class LauncherActivity extends Activity {
                 page.addView(actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", v -> confirmPadRestore()));
                 break;
             case 3:
+                page.addView(choiceRow(st, LANGUAGE));
+                note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
                 page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
-                note("Arquivo de configurações (compartilhado com o jogo):\n" + st.file().getAbsolutePath());
-                note("Versão " + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
+                note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
                         + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
                 break;
             default:
                 page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
                 page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
                 final boolean diag = prefs().getBoolean("diagnostic_mode", false);
-                page.addView(actionRow("Modo diagnóstico: " + (diag ? "LIGADO" : "desligado"),
+                page.addView(actionRow(T("Modo diagnóstico: ") + T(diag ? "LIGADO" : "desligado"),
                         "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
                             prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
                             Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
@@ -438,7 +445,7 @@ public final class LauncherActivity extends Activity {
         final TextView value = text("", 14, ACCENT, true);
         value.setPadding(dp(12), 0, 0, 0);
         final int[] at = {c.index(st.get(c.key, c.def))};
-        final Runnable show = () -> value.setText("◀  " + c.names[at[0]] + "  ▶");
+        final Runnable show = () -> value.setText("◀  " + T(c.names[at[0]]) + "  ▶");
         show.run();
         final View row = rowFrame(c.label, c.help, value);
         final java.util.function.IntConsumer step = d -> {
@@ -446,9 +453,13 @@ public final class LauncherActivity extends Activity {
             if (st.set(c.key, c.values[at[0]])) {
                 Diag.log(this, "main", "setting " + c.key + " = " + c.values[at[0]]);
             } else {
-                Toast.makeText(this, "Não foi possível salvar em " + st.file(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, T("Não foi possível salvar em ") + st.file(), Toast.LENGTH_LONG).show();
             }
             show.run();
+            if (Lang.KEY.equals(c.key)) {   // the launcher's language: the screen is built again in it
+                Lang.init(this);
+                recreate();
+            }
         };
         row.setOnClickListener(v -> step.accept(1));
         row.setOnKeyListener((v, keyCode, e) -> {
@@ -467,13 +478,13 @@ public final class LauncherActivity extends Activity {
     private void confirmExit() {
         final boolean gameAlive = Diag.processAlive(this, "game");
         new AlertDialog.Builder(this)
-            .setTitle("Sair do aplicativo?")
-            .setMessage(gameAlive
+            .setTitle(T("Sair do aplicativo?"))
+            .setMessage(T(gameAlive
                     ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
                       + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
-                    : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados.")
-            .setPositiveButton("Sair", (d, w) -> exitApp())
-            .setNegativeButton("Cancelar", null)
+                    : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados."))
+            .setPositiveButton(T("Sair"), (d, w) -> exitApp())
+            .setNegativeButton(T("Cancelar"), null)
             .show();
     }
 
@@ -553,7 +564,7 @@ public final class LauncherActivity extends Activity {
     private View padRow(final Settings st, final int i) {
         final TextView value = text("", 14, ACCENT, true);
         value.setPadding(dp(12), 0, 0, 0);
-        value.setText(controlLabel(padControl(st, i)));
+        value.setText(controlLabel(padControl(st, i)));   // (A, B, L1, ...: the same in both languages)
         View row = rowFrame(PAD_LABELS[i], null, value);
         row.setOnClickListener(v -> capturePad(st, i));
         return row;
@@ -563,10 +574,10 @@ public final class LauncherActivity extends Activity {
     // swaps with this one's (no button is ever left without a control). Cancel: the dialog's button (touch) or 6 s.
     private void capturePad(final Settings st, final int i) {
         final AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(PAD_LABELS[i])
-            .setMessage("Aperte agora o botão do controle para " + PAD_LABELS[i] + ".\n(Atual: " + controlLabel(padControl(st, i))
-                    + ". Cancela sozinho em 6 segundos.)")
-            .setNegativeButton("Cancelar", null)
+            .setTitle(T(PAD_LABELS[i]))
+            .setMessage(T("Aperte agora o botão do controle para ") + T(PAD_LABELS[i]) + T(".\n(Atual: ") + controlLabel(padControl(st, i))
+                    + T(". Cancela sozinho em 6 segundos.)"))
+            .setNegativeButton(T("Cancelar"), null)
             .create();
         final android.os.Handler h = new android.os.Handler(getMainLooper());
         final Runnable timeout = () -> { if (dialog.isShowing()) dialog.dismiss(); };
@@ -592,33 +603,33 @@ public final class LauncherActivity extends Activity {
 
     private void confirmPadRestore() {
         new AlertDialog.Builder(this)
-            .setTitle("Restaurar botões padrão?")
-            .setMessage("Todos os botões voltam ao layout do DualShock 2 (A = ✕, B = ○, X = □, Y = △...).")
-            .setPositiveButton("Restaurar", (d, w) -> {
+            .setTitle(T("Restaurar botões padrão?"))
+            .setMessage(T("Todos os botões voltam ao layout do DualShock 2 (A = ✕, B = ○, X = □, Y = △...)."))
+            .setPositiveButton(T("Restaurar"), (d, w) -> {
                 Settings st = new Settings(this);
                 for (int k = 0; k < PAD_BUTTONS.length; k++) st.set("android.pad." + PAD_BUTTONS[k], PAD_DEFAULTS[k]);
                 Diag.log(this, "main", "pad remap restored to the standard layout");
                 showTab(2);
             })
-            .setNegativeButton("Cancelar", null)
+            .setNegativeButton(T("Cancelar"), null)
             .show();
     }
 
     private void confirmRestore() {
         new AlertDialog.Builder(this)
-            .setTitle("Restaurar configurações padrão?")
-            .setMessage("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica desligada, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com "
-                    + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas).")
-            .setPositiveButton("Restaurar", (d, w) -> {
+            .setTitle(T("Restaurar configurações padrão?"))
+            .setMessage(T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica desligada, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
+                    + T("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas)."))
+            .setPositiveButton(T("Restaurar"), (d, w) -> {
                 Settings st = new Settings(this);
                 boolean ok = true;
                 for (Choice[] group : new Choice[][] {GRAPHICS, AUDIO, CONTROLS})
                     for (Choice c : group) ok &= st.set(c.key, c.def);
                 Diag.log(this, "main", "settings restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
-                Toast.makeText(this, ok ? "Configurações padrão restauradas" : "Falha ao salvar em " + st.file(), Toast.LENGTH_LONG).show();
+                Toast.makeText(this, ok ? T("Configurações padrão restauradas") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
                 showTab(currentTab);
             })
-            .setNegativeButton("Cancelar", null)
+            .setNegativeButton(T("Cancelar"), null)
             .show();
     }
 
@@ -627,17 +638,17 @@ public final class LauncherActivity extends Activity {
         String source = prefs().getString("iso_source", null);
         String[] disc = Diag.findDiscImage(this);
         if (disc[0] == null) {
-            isoName.setText("Nenhuma ISO selecionada");
-            isoState.setText("Toque em \"Selecionar ISO…\" e escolha a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).");
+            isoName.setText(T("Nenhuma ISO selecionada"));
+            isoState.setText(T("Toque em \"Selecionar ISO…\" e escolha a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
             isoState.setTextColor(BAD);
         } else {
             StringBuilder r = new StringBuilder();
             String err = Diag.checkDiscImage(disc[0], r);
             isoName.setText(source != null ? source : new File(disc[0]).getName());
-            isoState.setText(err == null ? "Pronta — " + r : "Não utilizável: " + err);
+            isoState.setText(err == null ? T("Pronta — ") + r : T("Não utilizável: ") + err);
             isoState.setTextColor(err == null ? GOOD : BAD);
         }
-        lastRun.setText(lastRunLine());
+        lastRun.setText(T(lastRunLine()));
         if (status != null) status.setText(statusText());
     }
 
@@ -666,7 +677,7 @@ public final class LauncherActivity extends Activity {
 
     private void startGame(boolean force) {
         if (copying) {
-            Toast.makeText(this, "Aguarde a cópia da ISO terminar.", Toast.LENGTH_SHORT).show();
+            Toast.makeText(this, T("Aguarde a cópia da ISO terminar."), Toast.LENGTH_SHORT).show();
             return;
         }
         if (starting) return;
@@ -675,18 +686,18 @@ public final class LauncherActivity extends Activity {
         String err = disc[0] == null ? disc[1] : Diag.checkDiscImage(disc[0], r);
         if (err != null && !force) {
             new AlertDialog.Builder(this)
-                .setTitle("Imagem do disco não disponível")
-                .setMessage("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n"
-                        + "Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n"
-                        + "Detalhe: " + err)
-                .setPositiveButton("Selecionar ISO", (d, w) -> pickIso())
-                .setNeutralButton("Cancelar", null)
-                .setNegativeButton("Iniciar mesmo assim", (d, w) -> startGame(true))
+                .setTitle(T("Imagem do disco não disponível"))
+                .setMessage(T("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n")
+                        + T("Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n")
+                        + T("Detalhe: ") + err)
+                .setPositiveButton(T("Selecionar ISO"), (d, w) -> pickIso())
+                .setNeutralButton(T("Cancelar"), null)
+                .setNegativeButton(T("Iniciar mesmo assim"), (d, w) -> startGame(true))
                 .show();
             return;
         }
         starting = true;
-        playButton.setText("Iniciando…");
+        playButton.setText(T("Iniciando…"));
         playButton.setEnabled(false);
         Diag.log(this, "main", "starting the game (disc: " + disc[0] + ", " + r + ")");
         Intent i = new Intent(this, MainActivity.class);
@@ -797,7 +808,7 @@ public final class LauncherActivity extends Activity {
             startActivityForResult(i, REQUEST_PICK_ISO);
         } catch (Exception e) {
             Diag.log(this, "main", "ACTION_OPEN_DOCUMENT failed: " + e);
-            Toast.makeText(this, "O seletor de arquivos do Android não abriu: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            Toast.makeText(this, T("O seletor de arquivos do Android não abriu: ") + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -842,9 +853,9 @@ public final class LauncherActivity extends Activity {
         long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
         long existing = target.isFile() ? target.length() : 0;
         if (size > 0 && size + 64L * 1048576 > free + existing) {
-            new AlertDialog.Builder(this).setTitle("Espaço insuficiente")
-                .setMessage("A ISO tem " + mb(size) + " e o armazenamento interno tem " + mb(free + existing) + " livres. Libere espaço e tente de novo.")
-                .setPositiveButton("OK", null).show();
+            new AlertDialog.Builder(this).setTitle(T("Espaço insuficiente"))
+                .setMessage(T("A ISO tem ") + mb(size) + T(" e o armazenamento interno tem ") + mb(free + existing) + T(" livres. Libere espaço e tente de novo."))
+                .setPositiveButton(T("OK"), null).show();
             Diag.log(this, "main", "ISO copy refused: " + mb(size) + " needed, " + mb(free + existing) + " free");
             return;
         }
@@ -856,7 +867,7 @@ public final class LauncherActivity extends Activity {
         int pad = (int) (20 * getResources().getDisplayMetrics().density);
         box.setPadding(pad, pad, pad, pad);
         final TextView label = new TextView(this);
-        label.setText("Copiando " + displayName + "…");
+        label.setText(T("Copiando ") + displayName + "…");
         final ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(1000);
         bar.setIndeterminate(total <= 0);
@@ -864,10 +875,10 @@ public final class LauncherActivity extends Activity {
         box.addView(bar);
         copyCancel.set(false);
         final AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle("Copiando a ISO para o app")
+            .setTitle(T("Copiando a ISO para o app"))
             .setView(box)
             .setCancelable(false)
-            .setNegativeButton("Cancelar", (d, w) -> copyCancel.set(true))
+            .setNegativeButton(T("Cancelar"), (d, w) -> copyCancel.set(true))
             .show();
         copying = true;
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -893,7 +904,7 @@ public final class LauncherActivity extends Activity {
                         final double secs = (now - start) / 1e9;
                         runOnUiThread(() -> {
                             if (total > 0) bar.setProgress((int) (c * 1000 / total));
-                            label.setText(displayName + "\n" + mb(c) + (total > 0 ? " de " + mb(total) : "")
+                            label.setText(displayName + "\n" + mb(c) + (total > 0 ? T(" de ") + mb(total) : "")
                                     + String.format(Locale.US, " — %.1f MB/s", c / 1048576.0 / Math.max(secs, 0.001)));
                         });
                     }
@@ -926,13 +937,13 @@ public final class LauncherActivity extends Activity {
                 dialog.dismiss();
                 if (err == null) {
                     prefs().edit().putString("iso_source", displayName + " (" + mb(finalCopied) + ")").apply();
-                    new AlertDialog.Builder(this).setTitle("ISO pronta")
-                        .setMessage(displayName + " foi copiada e verificada:\n" + report + "\n\nVocê pode apagar o arquivo original se quiser liberar espaço.")
-                        .setPositiveButton("Iniciar jogo", (d, w) -> startGame(false))
-                        .setNegativeButton("OK", null).show();
+                    new AlertDialog.Builder(this).setTitle(T("ISO pronta"))
+                        .setMessage(displayName + T(" foi copiada e verificada:\n") + report + T("\n\nVocê pode apagar o arquivo original se quiser liberar espaço."))
+                        .setPositiveButton(T("Iniciar jogo"), (d, w) -> startGame(false))
+                        .setNegativeButton(T("OK"), null).show();
                 } else {
-                    new AlertDialog.Builder(this).setTitle("A cópia da ISO falhou")
-                        .setMessage(err).setPositiveButton("OK", null).show();
+                    new AlertDialog.Builder(this).setTitle(T("A cópia da ISO falhou"))
+                        .setMessage(err).setPositiveButton(T("OK"), null).show();
                 }
                 refresh();
             });
@@ -940,7 +951,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void buildReport(final boolean share) {
-        Toast.makeText(this, "Gerando relatório…", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, T("Gerando relatório…"), Toast.LENGTH_SHORT).show();
         final Context c = this;
         new Thread(() -> {
             File dir = Diag.logsDir(c);
@@ -996,7 +1007,7 @@ public final class LauncherActivity extends Activity {
                     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     String clip = report.length() > 250000 ? report.substring(report.length() - 250000) : report;
                     if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("TwinsanityEvolved report", clip));
-                    Toast.makeText(c, "Relatório copiado (" + clip.length() + " caracteres)", Toast.LENGTH_LONG).show();
+                    Toast.makeText(c, T("Relatório copiado (") + clip.length() + T(" caracteres)"), Toast.LENGTH_LONG).show();
                 }
             });
         }, "te-report").start();
