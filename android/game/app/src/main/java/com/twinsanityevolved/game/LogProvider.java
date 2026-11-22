@@ -12,14 +12,13 @@ import java.io.File;
 import java.io.FileNotFoundException;
 
 /**
- * Read-only access to the files of files/logs for the share sheet (content://com.twinsanityevolved.game.logs/&lt;name&gt;),
+ * Read-only access to the files of files/logs for the share sheet (content://&lt;app id&gt;.logs/&lt;name&gt;),
  * granted per share through FLAG_GRANT_READ_URI_PERMISSION. Not exported: nothing else can open it unasked.
  */
 public final class LogProvider extends ContentProvider {
-    static final String AUTHORITY = "com.crashtwinsanity.android.logs";   // = the manifest's ${applicationId}.logs
-
-    static Uri uriFor(String name) {
-        return Uri.parse("content://" + AUTHORITY + "/" + name);
+    // the manifest's ${applicationId}.logs: the app id of this build (the main one or the migration build)
+    static Uri uriFor(android.content.Context c, String name) {
+        return Uri.parse("content://" + c.getPackageName() + ".logs/" + name);
     }
 
     private File fileFor(Uri uri) throws FileNotFoundException {

@@ -62,6 +62,15 @@ final class Lang {
         e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
         e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
         e("RESTAURAR", "RESTORE");
+        e("Ícone personalizado", "Custom icon");
+        e("Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", "Pick a picture from the gallery: a shortcut with it is placed on the home screen");
+        e("Precisa do Android 8 ou mais novo.", "Needs Android 8 or newer.");
+        e("A tela inicial deste aparelho não aceita atalhos fixados. Troque de launcher (ex.: o padrão do Android) e tente de novo.",
+          "This device's home screen does not accept pinned shortcuts. Switch launcher (e.g. Android's default) and try again.");
+        e("não é uma imagem que o Android consiga abrir", "not a picture Android can open");
+        e("Não foi possível usar a imagem: ", "Could not use the picture: ");
+        e("Ícone do atalho atualizado", "Shortcut icon updated");
+        e("Não foi possível criar o atalho: ", "Could not create the shortcut: ");
         e("Licenças de código aberto", "Open source licenses");
         e("Os projetos em que este port se baseia e as suas licenças", "The projects this port is built on and their licenses");
         e("Este port usa código de projetos de código aberto, cujas licenças pedem que o aviso de copyright acompanhe as cópias:\n\n",

@@ -404,13 +404,29 @@ jobs:
           fi
           sha256sum "$apk" | tee "$LOG_DIR/apk-sha256.txt"
 
+      - name: Package the migration APK (the old app id, to export the old app's saves)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p android-game-out
+          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/CrashTwinsanity.apk
+          jni="$RUNNER_TEMP/jniLibs"   # the native libraries the main APK was packaged from
+          test -s "$jni/arm64-v8a/libmain.so"
+          gradle --no-daemon -p android/game assembleDebug \
+            -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" \
+            -PappId=com.twinsanityevolved.game -PappLabel="Crash Twinsanity (antigo)" 2>&1 | tail -5 | tee "$LOG_DIR/gradle-migration.log"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging android/game/app/build/outputs/apk/debug/app-debug.apk | grep -E "^package:|application-label:" | tee -a "$LOG_DIR/gradle-migration.log"
+          grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/gradle-migration.log"
+          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/CrashTwinsanity-migracao-id-antigo.apk
+          ls -la android-game-out
+
       - name: Upload APK, libmain.so and evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
           name: android-game-arm64-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
-            android/game/app/build/outputs/apk/debug/app-debug.apk
+            android-game-out/
             build-android-arm64-game/libmain.so
             android-game-logs/
           if-no-files-found: warn

@@ -65,6 +65,7 @@ public final class LauncherActivity extends Activity {
     private static final int REQUEST_PICK_ISO = 41;
     private static final int REQUEST_EXPORT_SAVES = 42;
     private static final int REQUEST_IMPORT_SAVES = 43;
+    private static final int REQUEST_ICON_IMAGE = 44;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
     private boolean starting;
@@ -88,6 +89,12 @@ public final class LauncherActivity extends Activity {
     private TextView status;                    // Sistema's diagnostic text (null on the other tabs)
     private TextView isoName, isoState, lastRun, playLabel;   // the Jogar tab's (null on the other tabs)
     private OledDialog openDialog;
+    // the disc's check, the last run's line and Sistema's diagnostics read files: off the screen's thread, one at a time
+    private final java.util.concurrent.ExecutorService io = java.util.concurrent.Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "launcher-io");
+        t.setPriority(Thread.MIN_PRIORITY + 1);
+        return t;
+    });
     private Item presetItem;                    // Gráficos' preset row (null on the other tabs)
 
     // the controller
@@ -352,6 +359,12 @@ public final class LauncherActivity extends Activity {
         starting = false;
         pickerOpen = false;
         refresh();
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        io.shutdown();   // a read in flight finishes; its result finds no tab and is dropped
     }
 
     @Override
@@ -687,6 +700,7 @@ public final class LauncherActivity extends Activity {
         actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", () -> startActivity(new Intent(this, ProbeActivity.class)));
         actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", this::startSdlTest);
         section("APLICATIVO");
+        actionRow("Ícone personalizado", "Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", this::chooseIconImage);
         actionRow("Licenças de código aberto", "Os projetos em que este port se baseia e as suas licenças", () -> dialog(T("Licenças de código aberto"),
             T("Este port usa código de projetos de código aberto, cujas licenças pedem que o aviso de copyright acompanhe as cópias:\n\n")
                 + "• TwinsanityEvolved — MIT License, Copyright (c) 2026 the TwinsanityEvolved contributors\n"
@@ -705,7 +719,8 @@ public final class LauncherActivity extends Activity {
         status.setTypeface(Typeface.MONOSPACE);
         status.setPadding(dp(4), dp(14), dp(4), dp(6));
         page.addView(status);
-        status.setText(statusText());
+        status.setText("…");
+        updateStatus();
     }
 
     // A settings tab's name and what it holds, above its rows
@@ -728,8 +743,12 @@ public final class LauncherActivity extends Activity {
     }
 
     // ---- the saves (SaveManager.java) ------------------------------------------------------------------------------------
+    // The memory cards' folder: beside the settings file the game reads (runner: --config files/game[/userdata]/ps2r.ini;
+    // the engine's GameFolder puts memcards[-<serial>] in the settings file's folder) -- Settings.file() follows the same rule.
+    // (0.23.0 looked one folder up, in files/game, and found no card.)
     private File gameDir() {
-        return new File(getFilesDir(), "game");
+        File dir = new Settings(this).file().getParentFile();
+        return dir != null ? dir : new File(getFilesDir(), "game");
     }
 
     private File backupDir() {
@@ -769,6 +788,80 @@ public final class LauncherActivity extends Activity {
             it.onA = () -> confirmDeleteSave(sv);
         }
         note(T("Backups automáticos (antes de importar ou apagar): ") + backupDir().getAbsolutePath());
+    }
+
+    // ---- the custom icon: a pinned home-screen shortcut with the player's picture (ShortcutManager). Android gives an app
+    // no way to change its own icon in the app list to an arbitrary picture; a pinned shortcut is the supported way, and
+    // picking again updates the shortcut already pinned. The picture is cropped to a square and handed to the launcher.
+    private static final String ICON_SHORTCUT = "custom_icon";
+
+    private void chooseIconImage() {
+        if (Build.VERSION.SDK_INT < 26) {
+            dialog(T("Ícone personalizado"), T("Precisa do Android 8 ou mais novo."), null, new String[] {T("OK")}, 0, 0, null);
+            return;
+        }
+        android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
+        if (sm == null || !sm.isRequestPinShortcutSupported()) {
+            dialog(T("Ícone personalizado"), T("A tela inicial deste aparelho não aceita atalhos fixados. Troque de launcher (ex.: o padrão do Android) e tente de novo."),
+                null, new String[] {T("OK")}, 0, 0, null);
+            return;
+        }
+        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*");
+        launchPicker(i, REQUEST_ICON_IMAGE);
+    }
+
+    private void makeIconShortcut(final Uri uri) {
+        io.execute(() -> {
+            android.graphics.Bitmap icon = null;
+            String err = null;
+            try {
+                android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
+                o.inJustDecodeBounds = true;
+                try (InputStream in = getContentResolver().openInputStream(uri)) { android.graphics.BitmapFactory.decodeStream(in, null, o); }
+                int sample = 1;
+                while (Math.min(o.outWidth, o.outHeight) / (sample * 2) >= 432) sample *= 2;
+                o = new android.graphics.BitmapFactory.Options();
+                o.inSampleSize = sample;
+                android.graphics.Bitmap b;
+                try (InputStream in = getContentResolver().openInputStream(uri)) { b = android.graphics.BitmapFactory.decodeStream(in, null, o); }
+                if (b == null) throw new java.io.IOException(T("não é uma imagem que o Android consiga abrir"));
+                int side = Math.min(b.getWidth(), b.getHeight());
+                android.graphics.Bitmap square = android.graphics.Bitmap.createBitmap(b, (b.getWidth() - side) / 2, (b.getHeight() - side) / 2, side, side);
+                icon = android.graphics.Bitmap.createScaledBitmap(square, 432, 432, true);
+            } catch (Exception e) {
+                err = e.getMessage();
+            }
+            final android.graphics.Bitmap made = icon;
+            final String why = err;
+            runOnUiThread(() -> pinIconShortcut(made, why));
+        });
+    }
+
+    private void pinIconShortcut(android.graphics.Bitmap bitmap, String err) {
+        if (bitmap == null || Build.VERSION.SDK_INT < 26) {
+            Toast.makeText(this, T("Não foi possível usar a imagem: ") + err, Toast.LENGTH_LONG).show();
+            return;
+        }
+        try {
+            android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
+            Intent open = new Intent(this, LauncherActivity.class).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            android.content.pm.ShortcutInfo info = new android.content.pm.ShortcutInfo.Builder(this, ICON_SHORTCUT)
+                .setShortLabel(getApplicationInfo().loadLabel(getPackageManager()).toString())
+                .setIcon(android.graphics.drawable.Icon.createWithAdaptiveBitmap(bitmap))
+                .setIntent(open)
+                .build();
+            boolean pinned = false;
+            for (android.content.pm.ShortcutInfo s : sm.getPinnedShortcuts()) pinned |= ICON_SHORTCUT.equals(s.getId());
+            if (pinned) {
+                sm.updateShortcuts(java.util.Collections.singletonList(info));
+                Toast.makeText(this, T("Ícone do atalho atualizado"), Toast.LENGTH_LONG).show();
+            } else {
+                sm.requestPinShortcut(info, null);   // the home screen asks the player to place it
+            }
+            Diag.log(this, "main", "custom icon: shortcut " + (pinned ? "updated" : "requested"));
+        } catch (Exception e) {
+            Toast.makeText(this, T("Não foi possível criar o atalho: ") + e.getMessage(), Toast.LENGTH_LONG).show();
+        }
     }
 
     private void launchPicker(Intent i, int request) {
@@ -1172,31 +1265,49 @@ public final class LauncherActivity extends Activity {
     // ---- the game's state on the Jogar tab -------------------------------------------------------------------------------
     private void refresh() {
         updatePlayState();
-        if (status != null) status.setText(statusText());
+        updateStatus();
         paintItems();
     }
 
+    // The Jogar tab's disc and last-run lines: read on the io thread (the disc's header, the stage file, the process list),
+    // shown when they arrive -- if the tab is still the one they were read for (its views not rebuilt since)
     private void updatePlayState() {
         if (playLabel != null) playLabel.setText(T(starting ? "Iniciando…" : "JOGAR"));
         if (isoName == null) return;
-        String source = prefs().getString("iso_source", null);
-        String[] disc = Diag.findDiscImage(this);
-        if (disc[0] == null) {
-            isoName.setText(T("Nenhuma ISO selecionada"));
-            isoState.setText(T("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
-            isoState.setTextColor(FG);
-        } else {
-            StringBuilder r = new StringBuilder();
-            String err = Diag.checkDiscImage(disc[0], r);
-            isoName.setText(source != null ? source : new File(disc[0]).getName());
-            isoState.setText(err == null ? "✓  " + T("Pronta — ") + r : "✕  " + T("Não utilizável: ") + err);
-            isoState.setTextColor(err == null ? SUBTLE : FG);
-        }
-        if (lastRun != null) {
-            String[] line = lastRunLine();
-            lastRun.setText(T(line[0]));
-            lastRun.setTextColor(line[1] != null ? FG : SUBTLE);
-        }
+        final TextView name = isoName, state = isoState, run = lastRun;
+        final String source = prefs().getString("iso_source", null);
+        io.execute(() -> {
+            final String[] disc = Diag.findDiscImage(this);
+            final StringBuilder r = new StringBuilder();
+            final String err = disc[0] == null ? null : Diag.checkDiscImage(disc[0], r);
+            final String[] line = lastRunLine();
+            runOnUiThread(() -> {
+                if (isoName != name) return;   // the tab changed meanwhile
+                if (disc[0] == null) {
+                    name.setText(T("Nenhuma ISO selecionada"));
+                    state.setText(T("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
+                    state.setTextColor(FG);
+                } else {
+                    name.setText(source != null ? source : new File(disc[0]).getName());
+                    state.setText(err == null ? "✓  " + T("Pronta — ") + r : "✕  " + T("Não utilizável: ") + err);
+                    state.setTextColor(err == null ? SUBTLE : FG);
+                }
+                if (run != null) {
+                    run.setText(T(line[0]));
+                    run.setTextColor(line[1] != null ? FG : SUBTLE);
+                }
+            });
+        });
+    }
+
+    // Sistema's diagnostic text (several log files): read on the io thread
+    private void updateStatus() {
+        final TextView st = status;
+        if (st == null) return;
+        io.execute(() -> {
+            final String text = statusText();
+            runOnUiThread(() -> { if (status == st) st.setText(text); });
+        });
     }
 
     // what the last start did, in one line (Sistema's diagnostics have the detail); [1] non-null when it went wrong
@@ -1359,6 +1470,11 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_ICON_IMAGE) {
+            pickerOpen = false;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) makeIconShortcut(data.getData());
+            return;
+        }
         if (requestCode == REQUEST_EXPORT_SAVES || requestCode == REQUEST_IMPORT_SAVES) {
             pickerOpen = false;
             if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
@@ -1552,7 +1668,7 @@ public final class LauncherActivity extends Activity {
                     Intent send = new Intent(Intent.ACTION_SEND);
                     send.setType("text/plain");
                     send.putExtra(Intent.EXTRA_SUBJECT, "Crash Twinsanity Android — relatório");
-                    send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor("report.txt"));
+                    send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor(this, "report.txt"));
                     send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Crash Twinsanity (anexo report.txt).");
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivity(Intent.createChooser(send, "Compartilhar relatório"));

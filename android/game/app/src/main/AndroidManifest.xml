@@ -12,9 +12,7 @@
         android:extractNativeLibs="true"
         android:hasCode="true"
         android:isGame="true"
-        android:icon="@mipmap/ic_crash_launcher"
-        android:roundIcon="@mipmap/ic_crash_launcher_round"
-        android:label="Crash Twinsanity"
+        android:label="${appLabel}"
         android:supportsRtl="true">
 
         <!-- The entry: Java only, the app's main process. The landscape launcher: the game, the settings (ps2r.ini), the diagnostics. -->
