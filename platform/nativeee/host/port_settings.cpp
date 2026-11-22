@@ -135,6 +135,12 @@ void Configure(const std::string& ini_text) {
                 section += std::string(b) + " = " + v + "\n";
         if (!section.empty()) te::input::SetPadMap("[pad]\n" + section);
     }
+    {
+        // the game's own vibration (rumble.cpp): auto (the controller's motors, else the device's vibrator) | controller | off
+        std::string v;
+        if (ps2r::SettingsFile::GetFromText(ini_text, "android.rumble", &v) && (v == "auto" || v == "controller" || v == "off"))
+            te::input::SetRumbleMode(v);
+    }
     std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
 #else
     (void)ini_text;

@@ -153,6 +153,13 @@ jobs:
           clang++ -std=c++17 -O1 -Wall -Wextra -Iplatform/nativeee/host tools/android/test_glyph_texels.cpp -o "$RUNNER_TEMP/test_glyph_texels"
           "$RUNNER_TEMP/test_glyph_texels" 2>&1 | tee "$LOG_DIR/glyph-texels.log"
 
+      - name: Game vibration player (bounded effects, no duplicates, stop on suspend)
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -O1 -Wall -Wextra -Iplatform/nativeee/host tools/android/test_rumble_core.cpp -o "$RUNNER_TEMP/test_rumble_core"
+          "$RUNNER_TEMP/test_rumble_core" 2>&1 | tee "$LOG_DIR/rumble-core.log"
+
       - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
         shell: bash
         run: |

@@ -81,7 +81,7 @@ public final class LauncherActivity extends Activity {
     // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
     // L3 + R3 draw capture (TE_DIAG_CAPTURE=1) and logs the sticks (TE_INPUT_LOG=1), for a report about a graphics or a
     // controls problem. Off, none of them costs anything.
-    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1", "TE_INPUT_LOG=1"};
+    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1", "TE_INPUT_LOG=1", "TE_RUMBLE_LOG=1"};
 
     // ---- the settings this screen shows: the game's keys and words (Settings.java) ---------------------------------------
     static final class Choice {
@@ -144,6 +144,9 @@ public final class LauncherActivity extends Activity {
             "0.15", new String[] {"0.05", "0.10", "0.15", "0.20", "0.25"}, new String[] {"5%", "10%", "15% — padrão", "20%", "25%"}),
         new Choice(Settings.STICK_SENSITIVITY, "Sensibilidade dos analógicos", "Maior: o personagem chega à velocidade máxima com menos inclinação",
             "1.33", new String[] {"1.00", "1.33", "1.66", "2.00"}, new String[] {"100%", "133% — padrão", "166%", "200%"}),
+        new Choice("android.rumble", "Vibração no jogo",
+            "A vibração original do jogo (precisa da opção Vibração do jogo ligada). Automática: motor do controle, ou o do aparelho",
+            "auto", new String[] {"auto", "controller", "off"}, new String[] {"Automática — padrão", "Só o motor do controle", "Desligada"}),
         new Choice(Haptics.KEY, "Vibração no launcher", "Um toque curto ao confirmar e ao trocar de aba (o motor do aparelho)",
             "on", new String[] {"on", "off"}, new String[] {"Ligada — padrão", "Desligada"}),
     };

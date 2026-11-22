@@ -24,6 +24,10 @@ void HandleSdlEvent(const SDL_Event& event);
 #endif
 // "kbm=on|off,gamepad=connected|absent,active=..." (the engine's census string), "none" without SDL input.
 std::string Sources();
+// The SDL_GameController* of every controller the input system has open (rumble.cpp: the game's motors); empty without SDL input
+void OpenControllers(void** out, int* count, int max);
+// The game's vibration on Android (ps2r.ini android.rumble: auto | controller | off), before Install
+void SetRumbleMode(const std::string& mode);
 // The keyboard harness ("menus navigable with the keyboard" check without an OS event injector): the SDL
 // key NAME ("Y", "Down", "Space"...) reads as HELD through the engine's KeyboardMouseBackend::InjectKey -- its bindings
 // table and InputMapper, the path a real key takes after SDL_GetKeyboardState -- at every boundary in [from, to].

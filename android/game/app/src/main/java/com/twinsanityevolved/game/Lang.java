@@ -125,6 +125,11 @@ final class Lang {
         // controls
         e("Zona morta dos analógicos", "Stick deadzone");
         e("Vibração no launcher", "Launcher vibration");
+        e("Vibração no jogo", "In-game vibration");
+        e("A vibração original do jogo (precisa da opção Vibração do jogo ligada). Automática: motor do controle, ou o do aparelho",
+          "The game's original vibration (needs the game's own Vibration option on). Automatic: the controller's motor, else the device's");
+        e("Automática — padrão", "Automatic — default");
+        e("Só o motor do controle", "Controller motor only");
         e("Um toque curto ao confirmar e ao trocar de aba (o motor do aparelho)", "A short tap on confirm and on tab change (the device's motor)");
         e("Ligada — padrão", "On — default");
         e("Desligada", "Off");

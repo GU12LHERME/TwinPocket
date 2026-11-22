@@ -15,6 +15,7 @@
 
 #include "te_host.h"
 #include "te_input.h"
+#include "te_rumble.h"
 #if defined(__vita__)
 #include <psp2/kernel/processmgr.h>   // sceKernelPowerTick
 #include "../../../runner/te_vita.h"
@@ -226,6 +227,7 @@ void CheckVitaPad(VitaPad& p) {
 }
 #endif
 bool g_pump_owned = true;
+std::string g_rumble_mode = "auto";   // ps2r.ini android.rumble (port_settings.cpp): auto | controller | off
 bool g_installed = false;
 struct Injection {
     int scancode;
@@ -348,6 +350,7 @@ bool Install(Pads& pads, const Settings& settings) {
                         std::fprintf(stderr, "[te.gfx] window closed: exit\n");
                         te::RequestExit(0);
                     }
+                    te::rumble::OnEvent(&e);
                     g_input->HandleEvent(e);
                 }
             }
@@ -361,6 +364,7 @@ bool Install(Pads& pads, const Settings& settings) {
                     std::fprintf(stderr, "[te.gfx] window closed: exit\n");
                     te::RequestExit(0);
                 }
+                te::rumble::OnEvent(&e);
                 g_input->HandleEvent(e);
             }
 #endif
@@ -370,6 +374,7 @@ bool Install(Pads& pads, const Settings& settings) {
             for (Injection& k : g_injections)
                 if (Live(k, boundary)) g_input->Kbm()->InjectKey(k.scancode);
         }
+        te::rumble::Tick();   // the game's running vibration renewed (bounded effects: rumble.cpp)
         te::prof::Scope readScope(profRead, te::prof::kGame);
         const ps2r::platform::sdl::PadSample p = g_input->Frame(dt);
         s.connected = g_input->Connected() || te::GetSettings().pad_connected;
@@ -401,6 +406,7 @@ bool Install(Pads& pads, const Settings& settings) {
         return s;
     });
     g_installed = true;
+    te::rumble::Install(pads, g_rumble_mode.c_str());
     if (settings.verbose) std::fprintf(stderr, "[twinsanityevolved] input: SDL InputSystem on pad 0 (%s)\n", g_input->Sources().c_str());
     return true;
 #else
@@ -462,8 +468,24 @@ bool Pumping() { return g_installed && g_pump_owned; }
 
 
 #if TE_HAVE_SDL_INPUT
-void HandleSdlEvent(const SDL_Event& event) { if (g_input) g_input->HandleEvent(event); }
+void HandleSdlEvent(const SDL_Event& event) {
+    te::rumble::OnEvent(&event);
+    if (g_input) g_input->HandleEvent(event);
+}
 #endif
+
+void OpenControllers(void** out, int* count, int max) {
+    *count = 0;
+#if TE_HAVE_SDL_INPUT
+    ps2r::platform::sdl::GamepadBackend* gp = g_input ? g_input->Gamepad() : nullptr;
+    if (!gp) return;
+    for (size_t i = 0; i < gp->OpenPads() && *count < max; ++i)
+        if (void* c = gp->PadController(i)) out[(*count)++] = c;
+#else
+    (void)out;
+    (void)max;
+#endif
+}
 
 std::string Sources() {
 #if TE_HAVE_SDL_INPUT
@@ -499,7 +521,10 @@ void SetPadMap(const std::string& pad_section) {
 #endif
 }
 
+void SetRumbleMode(const std::string& mode) { g_rumble_mode = mode; }
+
 void Shutdown() {
+    te::rumble::Shutdown();
 #if TE_HAVE_SDL_INPUT
     if (g_input) { g_input->Shutdown(); delete g_input; g_input = nullptr; }
     if (g_events_inited) { SDL_QuitSubSystem(SDL_INIT_EVENTS); g_events_inited = false; }
