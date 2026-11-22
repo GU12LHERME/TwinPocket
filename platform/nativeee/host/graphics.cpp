@@ -107,6 +107,7 @@ extern "C" size_t vglMemFree(int type);
 #include "savestate.h"
 #include "te_gfx_layout.h"
 #include "te_display.h"
+#include "te_glyph_texels.h"
 #include "te_graphics_hooks.h"
 #include "te_harness.h"
 #include "te_host.h"
@@ -6554,6 +6555,10 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
         th = float(1 << m.texture->texture.heightPower);
     }
     const float ox = GsOriginX(), oy = GsOriginY();
+    // the sampler the text is drawn with: the player's filter over owned textures (gl_draw_executor EnhanceFilters), else the
+    // material's own magnification
+    const int filter = te::display::Current().texture_filter;
+    const bool filtered = filter >= 2 || (filter == 0 && st.linear != 0);
     g.text_quads += uint64_t(count);
     static const bool textDiag = std::getenv("TE_GFX_DIAG_TEXT") != nullptr;
 #if defined(__vita__)
@@ -6591,7 +6596,8 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
     open.verts.reserve(open.verts.size() + size_t(count) * 6);
     for (int i = 0; i < count; ++i) {
         const float x0 = q[i].x0 / 16.f - ox, y0 = q[i].y0 / 16.f - oy, x1 = q[i].x1 / 16.f - ox, y1 = q[i].y1 / 16.f - oy;
-        const float u0 = q[i].u0 / 16.f / tw, v0 = q[i].v0 / 16.f / th, u1 = q[i].u1 / 16.f / tw, v1 = q[i].v1 / 16.f / th;
+        float u0, v0, u1, v1;
+        te::text::GlyphTexels(q[i].u0, q[i].v0, q[i].u1, q[i].v1, filtered, tw, th, &u0, &v0, &u1, &v1);
         const uint32_t colour = q[i].colour;
         open.verts.push_back(Vertex(x0, y0, u0, v0, colour));
         open.verts.push_back(Vertex(x1, y0, u1, v0, colour));
@@ -6607,7 +6613,8 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
     d.verts.reserve(size_t(count) * 6);
     for (int i = 0; i < count; ++i) {
         const float x0 = q[i].x0 / 16.f - ox, y0 = q[i].y0 / 16.f - oy, x1 = q[i].x1 / 16.f - ox, y1 = q[i].y1 / 16.f - oy;
-        const float u0 = q[i].u0 / 16.f / tw, v0 = q[i].v0 / 16.f / th, u1 = q[i].u1 / 16.f / tw, v1 = q[i].v1 / 16.f / th;
+        float u0, v0, u1, v1;
+        te::text::GlyphTexels(q[i].u0, q[i].v0, q[i].u1, q[i].v1, filtered, tw, th, &u0, &v0, &u1, &v1);
         const uint32_t colour = q[i].colour;
         d.verts.push_back(Vertex(x0, y0, u0, v0, colour));
         d.verts.push_back(Vertex(x1, y0, u1, v0, colour));

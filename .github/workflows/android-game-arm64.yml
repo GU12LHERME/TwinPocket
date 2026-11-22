@@ -146,6 +146,13 @@ jobs:
           clang++ -std=c++17 -O1 -Wall -Wextra -I. -Iplatform/nativeee tools/android/test_lod_choice.cpp -o "$RUNNER_TEMP/test_lod_choice"
           "$RUNNER_TEMP/test_lod_choice" 2>&1 | tee "$LOG_DIR/lod-choice.log"
 
+      - name: Glyph texels (the menus' text under bilinear: no neighbouring column between words)
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -O1 -Wall -Wextra -Iplatform/nativeee/host tools/android/test_glyph_texels.cpp -o "$RUNNER_TEMP/test_glyph_texels"
+          "$RUNNER_TEMP/test_glyph_texels" 2>&1 | tee "$LOG_DIR/glyph-texels.log"
+
       - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
         shell: bash
         run: |
