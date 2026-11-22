@@ -54,6 +54,10 @@
 // the swap interval forced off. The pictures' hashes and dumps are the same at every rate: a picture the cadence does not
 // show is RESOLVED (ps2e_draw_capture_frame) when a judge's capture is armed. Deterministic and synchronous runs present
 // every picture whatever the setting (there is no pacer clock to interpolate on).
+#if defined(__ANDROID__)
+#include <sys/resource.h>   // getrusage: the [te.android] perf line
+#include <unistd.h>
+#endif
 #include <algorithm>
 #include <atomic>
 #include <type_traits>
@@ -4606,6 +4610,31 @@ void NotePace(uint64_t presents) {
                      s > 0 ? gaps / s : 0.0, g_pace.longest_ms, (unsigned long long)g_pace.slow,
                      (unsigned long long)(g_pace.frames - 1), frame_ms, g_pace.submit_ms / gaps, g_pace.present_ms / gaps,
                      std::max(0.0, frame_ms - (g_pace.submit_ms + g_pace.present_ms) / gaps), built, waited);
+#if defined(__ANDROID__)
+        {
+            // the process's CPU time over the window (user + system, every thread: the game, the drawing, the builders, the
+            // audio) as a share of ONE core and of the device's online cores, and the most memory it has held (the peak
+            // resident set) -- the before / after of a change measured on the device, beside the pace line above
+            static double last_cpu_s = -1.0;
+            static Steady::time_point last_wall;
+            struct rusage ru {};
+            getrusage(RUSAGE_SELF, &ru);
+            const double cpu_s = double(ru.ru_utime.tv_sec + ru.ru_stime.tv_sec) + double(ru.ru_utime.tv_usec + ru.ru_stime.tv_usec) / 1e6;
+            const auto wall = Steady::now();
+            if (last_cpu_s >= 0.0) {
+                const double wall_s = std::chrono::duration<double>(wall - last_wall).count();
+                const long cores = std::max(1L, sysconf(_SC_NPROCESSORS_ONLN));
+                const double one_core = wall_s > 0 ? 100.0 * (cpu_s - last_cpu_s) / wall_s : 0.0;
+                std::fprintf(stderr, "[te.android] perf: presents %llu-%llu: CPU %.0f%% of one core (%.1f%% of %ld cores), "
+                             "%.2f ms of CPU a present; peak memory %.0f MB\n",
+                             (unsigned long long)(presents - g_pace.frames + 1), (unsigned long long)presents, one_core,
+                             one_core / double(cores), cores, gaps > 0 ? (cpu_s - last_cpu_s) * 1000.0 / gaps : 0.0,
+                             double(ru.ru_maxrss) / 1024.0);
+            }
+            last_cpu_s = cpu_s;
+            last_wall = wall;
+        }
+#endif
         if (g.dev && ps2e_draw_gpu_timers_on(g.dev)) {
             // the GPU phase timer's window (TE_GFX_GPU_TIMERS): read on the drawing thread, as its queries are
             static char lines[2048];

@@ -418,6 +418,15 @@ if(TE_VITA)
     if(TE_VITA_W2C_LTO)
         target_compile_options(tegame PRIVATE -flto -fno-fat-lto-objects)
     endif()
+elseif(TE_ANDROID)
+    # Android (Etapa 5): the game's code -- the whole module -- at -O2 as on the Vita, not -O1: the handheld's CPU runs the
+    # game thread every tick and its time is battery and heat. -fno-math-errno: wasm's f32.sqrt / f64.sqrt as one FSQRT
+    # instead of FSQRT + a compare + an errno-setting libcall for a negative input (the same NaN either way; nothing reads
+    # errno). IEEE arithmetic is unchanged (no fast-math): the game computes the same values. Measured in CI: the build's
+    # time and libmain.so's .text (the workflow's "Measurements" lines); on the device: the [te.gfx] pace and
+    # [te.android] perf lines (the launcher's report, DESEMPENHO). TE_ANDROID_W2C_FLAGS="-O1" restores the previous build.
+    set(TE_ANDROID_W2C_FLAGS "-O2;-fno-math-errno" CACHE STRING "Android: the w2c parts' optimisation flags (a ;-list)")
+    set_source_files_properties(${TE_W2C_SOURCES} PROPERTIES COMPILE_OPTIONS "${TE_ANDROID_W2C_FLAGS}")
 else()
     set_source_files_properties(${TE_W2C_SOURCES} PROPERTIES COMPILE_OPTIONS "-O1")   # 39 MB of C: -O1 keeps the build minutes, not hours
 endif()

@@ -188,12 +188,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          t0=$(date +%s)
           if ! cmake --build --preset android-arm64-game -- -k 0 > "$LOG_DIR/build-game.log" 2>&1; then
             grep -E 'error:|undefined (reference|symbol)|FAILED:' "$LOG_DIR/build-game.log" | sort -u | head -200
             tail -n 30 "$LOG_DIR/build-game.log"; exit 1
           fi
           tail -n 5 "$LOG_DIR/build-game.log"
           test -s "$BUILD_DIR/libmain.so"
+          echo "MEASURE  game build (module + runner + libmain.so): $(( $(date +%s) - t0 )) s, w2c flags: $(grep -E '^TE_ANDROID_W2C_FLAGS' "$BUILD_DIR/CMakeCache.txt" | cut -d= -f2)" | tee "$LOG_DIR/measurements.txt"
 
       - name: Verify libmain.so (ELF, dependencies, the components' symbols)
         shell: bash
@@ -283,7 +285,20 @@ jobs:
           set -euo pipefail
           jni="$RUNNER_TEMP/jniLibs"
           mkdir -p "$jni/arm64-v8a"
-          cp "$BUILD_DIR/libmain.so" "$DEPS_DIR/sdl2/lib/libSDL2.so" "$jni/arm64-v8a/"
+          # Etapa 5: the APK's libmain.so without its DWARF debug sections (llvm-strip --strip-debug): the symbol table
+          # (.symtab) and the dynamic symbols stay, so the launcher's crash symbolizer (Diag.symbolizeFrames) and dladdr
+          # still name the functions; the full libmain.so (with DWARF) is in the artifact for offline debugging
+          "$NDK_LLVM/llvm-strip" --strip-debug -o "$jni/arm64-v8a/libmain.so" "$BUILD_DIR/libmain.so"
+          cp "$DEPS_DIR/sdl2/lib/libSDL2.so" "$jni/arm64-v8a/"
+          "$NDK_LLVM/llvm-readelf" -S "$jni/arm64-v8a/libmain.so" > "$LOG_DIR/libmain-apk-sections.txt"
+          grep -q ' \.symtab ' "$LOG_DIR/libmain-apk-sections.txt" || { echo "FAIL  the APK's libmain.so lost .symtab"; exit 1; }
+          if grep -q ' \.debug_' "$LOG_DIR/libmain-apk-sections.txt"; then echo "FAIL  DWARF left in the APK's libmain.so"; exit 1; fi
+          echo "PASS  the APK's libmain.so: .symtab kept (crash symbolizer), DWARF removed" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          {
+            echo "MEASURE  libmain.so built: $(stat -c %s "$BUILD_DIR/libmain.so") bytes; in the APK (debug sections stripped): $(stat -c %s "$jni/arm64-v8a/libmain.so") bytes"
+            echo "MEASURE  libmain.so sections (built):"
+            "$NDK_LLVM/llvm-size" -A "$BUILD_DIR/libmain.so" | awk 'NR>2 && $2>1000000 {printf "           %-22s %12d\n", $1, $2}'
+          } | tee -a "$LOG_DIR/measurements.txt"
           gradle --no-daemon --stacktrace -p android/game assembleDebug \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
 
@@ -309,9 +324,18 @@ jobs:
           unzip -l "$apk" | tee "$LOG_DIR/apk-contents.log"
           x="$RUNNER_TEMP/apk-x"
           rm -rf "$x"; mkdir -p "$x"; unzip -q "$apk" -d "$x"
-          cmp "$x/lib/arm64-v8a/libmain.so" "$BUILD_DIR/libmain.so"
+          cmp "$x/lib/arm64-v8a/libmain.so" "$RUNNER_TEMP/jniLibs/arm64-v8a/libmain.so"
           cmp "$x/lib/arm64-v8a/libSDL2.so" "$DEPS_DIR/sdl2/lib/libSDL2.so"
-          echo "PASS  the APK carries the verified libmain.so and libSDL2.so byte for byte" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          # the stripped copy is the verified libmain.so less its DWARF: the same code and data bytes (llvm-objcopy's
+          # -O binary of the loadable segments compared)
+          "$NDK_LLVM/llvm-objcopy" -O binary "$BUILD_DIR/libmain.so" "$RUNNER_TEMP/built.bin"
+          "$NDK_LLVM/llvm-objcopy" -O binary "$x/lib/arm64-v8a/libmain.so" "$RUNNER_TEMP/apk.bin"
+          cmp "$RUNNER_TEMP/built.bin" "$RUNNER_TEMP/apk.bin"
+          echo "PASS  the APK carries the verified libmain.so (its loadable bytes identical, DWARF removed) and libSDL2.so byte for byte" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          {
+            echo "MEASURE  APK: $(stat -c %s "$apk") bytes"
+            unzip -lv "$apk" | awk '/lib\/arm64-v8a\/|classes.*\.dex/ {printf "MEASURE  in the APK: %-28s %11d bytes, %11d stored\n", $8, $1, $3}'
+          } | tee -a "$LOG_DIR/measurements.txt"
           python3 tools/ci/asset_scan.py "$x/lib" 2>&1 | tee "$LOG_DIR/asset-scan-apk.log"
           disc_files="$(find "$x" -type f \( -iname '*.iso' -o -iname '*.bin' -o -iname '*.elf' -o -iname '*.irx' \))"
           if [ -n "$disc_files" ]; then

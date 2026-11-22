@@ -817,6 +817,12 @@ public final class LauncherActivity extends Activity {
                             || line.contains("te.gfx.capture") || line.contains("te.gfx.submit"))
                         gx.append(line).append('\n');
                 b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
+                StringBuilder pf = new StringBuilder();
+                for (String line : game.split("\n"))
+                    if (line.contains("[te.gfx] pace") || line.contains("[te.android] perf") || line.contains("android settings:")
+                            || line.contains("] display: aspect"))
+                        pf.append(line).append('\n');
+                b.append("\n===== DESEMPENHO (fps, tempo de quadro, CPU, memória, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");
             }
             String frames = Diag.symbolizeFrames(c, b.toString());
             if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);
