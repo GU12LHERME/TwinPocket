@@ -21,7 +21,11 @@ namespace te::port_settings {
 //                            100 / 150 / 200 / 300 read as original / medium / medium / long)
 
 // The rows of the page, in order
-enum Row : uint32_t { RowAudioDriver = 0, RowAudioBuffer, RowStickDeadzone, RowStickSensitivity, RowRestoreDefaults, RowCount };
+// RowReturnToLauncher: an action -- after a second press the session ends the way a desktop window's close button ends it
+// (an SDL_QUIT: the window pump's quit -> te::RequestExit(0)); SDL_main returns, the :game activity finishes and the
+// launcher is back. Saves are written only where the game saves; nothing is killed.
+enum Row : uint32_t { RowAudioDriver = 0, RowAudioBuffer, RowStickDeadzone, RowStickSensitivity, RowRestoreDefaults, RowReturnToLauncher,
+                      RowCount };
 
 // The settings file's text (ps2r.ini as the runner read it; "" without one): the rows' values, and the sticks' response
 // handed to the input module (te::input::SetStickResponse) for its Install.
@@ -31,7 +35,8 @@ uint32_t Count();
 // The page's title on the options page ("android settings")
 std::string Title();
 uint32_t Choices(uint32_t row);
-// 0 a choice row, 1 an action (restore defaults: one entry, a second press within ~5 s confirms; its label says so)
+// 0 a choice row, 1 an action (restore defaults, return to launcher: one entry, a second press within ~5 s confirms; its label
+// says so)
 uint32_t Kind(uint32_t row);
 std::string RowLabel(uint32_t row);
 std::string ChoiceLabel(uint32_t row, uint32_t choice);

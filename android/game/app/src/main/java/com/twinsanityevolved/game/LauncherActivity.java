@@ -225,12 +225,14 @@ public final class LauncherActivity extends Activity {
         left.addView(playButton, fill(dp(64), dp(14)));
         Button pick = button("Selecionar ISO…", ROW, ROW_FOCUS, v -> pickIso());
         left.addView(pick, fill(dp(48), dp(10)));
+        Button exit = button("Sair do aplicativo", ROW, ROW_FOCUS, v -> confirmExit());
+        left.addView(exit, fill(dp(44), dp(8)));
 
         lastRun = text("", 12, SUBTLE, false);
         left.addView(lastRun, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)));
         View spacer = new View(this);
         left.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar", 11, SUBTLE, false));
+        left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar · no jogo: Opções → android settings → return to launcher", 11, SUBTLE, false));
         left.addView(text("versão " + versionName(), 11, SUBTLE, false));
 
         ScrollView leftScroll = new ScrollView(this);
@@ -450,6 +452,37 @@ public final class LauncherActivity extends Activity {
             return false;
         });
         return row;
+    }
+
+    // Leaving the app (not the same as the game's "return to launcher", which ends a game session and comes back here): the
+    // launcher's task is finished and removed from the recent apps. A game or diagnostic process still running (normally
+    // none while this screen is shown: the game's process ends when its activity finishes) is ended first, so nothing of
+    // the app keeps running. The settings, the saves, the ISO and the logs are files: nothing is lost.
+    private void confirmExit() {
+        final boolean gameAlive = Diag.processAlive(this, "game");
+        new AlertDialog.Builder(this)
+            .setTitle("Sair do aplicativo?")
+            .setMessage(gameAlive
+                    ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
+                      + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
+                    : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados.")
+            .setPositiveButton("Sair", (d, w) -> exitApp())
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
+    private void exitApp() {
+        Diag.log(this, "main", "exit requested from the launcher");
+        android.app.ActivityManager am = (android.app.ActivityManager) getSystemService(Context.ACTIVITY_SERVICE);
+        if (am != null && am.getRunningAppProcesses() != null) {
+            for (android.app.ActivityManager.RunningAppProcessInfo p : am.getRunningAppProcesses()) {
+                if (p.processName != null && (p.processName.endsWith(":game") || p.processName.endsWith(":probe"))) {
+                    Diag.log(this, "main", "ending " + p.processName + " (pid " + p.pid + ") before leaving");
+                    android.os.Process.killProcess(p.pid);
+                }
+            }
+        }
+        finishAndRemoveTask();
     }
 
     private void confirmRestore() {

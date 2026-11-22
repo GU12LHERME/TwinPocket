@@ -137,11 +137,12 @@ uint32_t Choices(uint32_t row) {
     case RowStickDeadzone: return kDeadzoneCount;
     case RowStickSensitivity: return kSensitivityCount;
     case RowRestoreDefaults: return 1;   // an action (Kind 1): one entry
+    case RowReturnToLauncher: return 1;
     default: return 0;
     }
 }
 
-uint32_t Kind(uint32_t row) { return row == RowRestoreDefaults ? 1u : 0u; }
+uint32_t Kind(uint32_t row) { return row == RowRestoreDefaults || row == RowReturnToLauncher ? 1u : 0u; }
 
 std::string RowLabel(uint32_t row) {
     switch (row) {
@@ -150,6 +151,7 @@ std::string RowLabel(uint32_t row) {
     case RowStickDeadzone: return "stick deadzone";
     case RowStickSensitivity: return "stick sensitivity";
     case RowRestoreDefaults: return Armed(row) ? "restore defaults? press again" : g.done == row ? "defaults restored" : "restore defaults";
+    case RowReturnToLauncher: return Armed(row) ? "return to launcher? press again" : g.done == row ? "returning to launcher" : "return to launcher";
     default: return "";
     }
 }
@@ -235,6 +237,19 @@ void Set(uint32_t row, uint32_t choice) {
         te::display::Set(te::display::RowFpsCounter, 0);
         std::fprintf(stderr, "[twinsanityevolved] android settings: the defaults restored\n");
         break;
+    case RowReturnToLauncher:
+        if (!Armed(row)) {
+            g.armed = row;
+            g.armed_at = Now();
+            g.done = RowCount;
+            return;
+        }
+        g.armed = RowCount;
+        g.done = row;
+        // the desktop window's close path: the next window pump sees the quit and the runner leaves through te::RequestExit(0)
+        std::fprintf(stderr, "[twinsanityevolved] android settings: return to launcher (the session ends as a window close: %s)\n",
+                     te::input::RequestWindowClose() ? "quit posted" : "SDL refused the quit event");
+        return;
     default: return;
     }
     std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
