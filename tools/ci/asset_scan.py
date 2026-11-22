@@ -30,6 +30,9 @@ SCREENSHOT_RE = re.compile(r"^docs/launcher/screenshots/launcher-[a-z0-9-]+\.png
 # The PS Vita LiveArea's pictures: the bubble's icon, the start picture, the page's background and gate -- the game's cover
 # and promotional art, not disc content -- in the tree (tools/vita/livearea/) and as the package carries them (sce_sys/...,
 # where release.yml scans the .vpk's entries). Under 256 KB each; any other picture there is still a finding.
+# The Android app's own icon: an original "CT" monogram on plain green (no game or promotional art), every density
+# (legacy, round, the adaptive layers). Under 64 KB each; any other picture under res/ is still a finding.
+ANDROID_ICON_RE = re.compile(r"^android/game/app/src/main/res/mipmap-[a-z0-9-]+/ic_crash_launcher(_round|_background|_foreground)?\.png$")
 LIVEAREA_RE = re.compile(r"^(tools/vita/livearea/(icon0|pic0|bg|startup)\.png|sce_sys/(icon0|pic0)\.png|"
                          r"sce_sys/livearea/contents/(bg|startup)\.png)$")
 
@@ -156,6 +159,8 @@ def main():
             if SCREENSHOT_RE.match(lower) and size_of(path) <= 2097152:
                 continue
             if LIVEAREA_RE.match(lower) and size_of(path) <= 262144:
+                continue
+            if ANDROID_ICON_RE.match(lower) and size_of(path) <= 65536:
                 continue
             if EXT_RE.search(lower):
                 report(rel, "forbidden extension")
