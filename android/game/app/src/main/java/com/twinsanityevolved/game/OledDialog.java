@@ -21,7 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * The launcher's dialogs: black (#000000), white text, the selected button white with black text. Controller first:
+ * The launcher's dialogs: black (#000000), white text, the selected button framed in white. Controller first:
  * left / right (d-pad or stick) move between the buttons, A chooses the selected one, B is the cancel button (when the
  * dialog has one). A destructive question starts on its cancel button. Touch chooses a button directly. Every key is
  * the dialog's while it is shown (the launcher behind sees none: START cannot start the game under a dialog).
@@ -150,8 +150,16 @@ final class OledDialog extends Dialog {
         for (int i = 0; i < buttons.size(); i++) {
             TextView b = buttons.get(i);
             boolean on = i == selected;
-            b.setBackgroundColor(on ? FG : BG);
-            b.setTextColor(on ? BG : FG);
+            if (on) {
+                GradientDrawable g = new GradientDrawable();
+                g.setColor(BG);
+                g.setStroke(dp(2), FG);
+                g.setCornerRadius(dp(6));
+                b.setBackground(g);
+            } else {
+                b.setBackgroundColor(BG);
+            }
+            b.setTextColor(on ? FG : SUBTLE);
         }
     }
 

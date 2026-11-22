@@ -47,7 +47,7 @@ import static com.twinsanityevolved.game.Lang.T;
 
 /**
  * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A console-style menu for a
- * handheld's OLED screen: pure black, white text, the selected row white with black text, no gradient, glow or
+ * handheld's OLED screen: pure black, white text, the selected row framed in white, no gradient, glow or
  * animation. Five tabs: Jogar (the disc image, its state, JOGAR), Gráficos, Áudio, Controles, Sistema (language,
  * restoring, the diagnostics, leaving the app).
  *
@@ -69,8 +69,7 @@ public final class LauncherActivity extends Activity {
     private boolean pickerOpen;
 
     // the palette: OLED black, white, a neutral grey
-    static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A,
-            SEL_SUB = 0xFF404040;
+    static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A;
 
     static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SYSTEM = 4;
     static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Sistema"};
@@ -87,6 +86,7 @@ public final class LauncherActivity extends Activity {
     private TextView status;                    // Sistema's diagnostic text (null on the other tabs)
     private TextView isoName, isoState, lastRun, playLabel;   // the Jogar tab's (null on the other tabs)
     private OledDialog openDialog;
+    private Item presetItem;                    // Gráficos' preset row (null on the other tabs)
 
     // the controller
     private final Handler ui = new Handler(Looper.getMainLooper());
@@ -208,6 +208,31 @@ public final class LauncherActivity extends Activity {
         }
     }
 
+    /**
+     * A tab's underline: as wide as its label. (A plain View asked for its width under "wrap content" answers the whole
+     * width it is offered -- the first tab then took the full row and pushed the other tabs off the screen.)
+     */
+    static final class UnderlineView extends View {
+        UnderlineView(Context c) {
+            super(c);
+        }
+
+        @Override
+        protected void onMeasure(int widthSpec, int heightSpec) {
+            int w = MeasureSpec.getMode(widthSpec) == MeasureSpec.EXACTLY ? MeasureSpec.getSize(widthSpec) : 0;
+            setMeasuredDimension(w, MeasureSpec.getSize(heightSpec));
+        }
+    }
+
+    // the selected row: a white frame round it (the row itself stays black, its text white)
+    private android.graphics.drawable.Drawable frame() {
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(BG);
+        g.setStroke(dp(2), FG);
+        g.setCornerRadius(dp(6));
+        return g;
+    }
+
     private int dp(float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
     }
@@ -264,7 +289,7 @@ public final class LauncherActivity extends Activity {
             label.setSingleLine(true);
             label.setPadding(0, dp(6), 0, dp(6));
             tab.addView(label);
-            View under = new View(this);
+            View under = new UnderlineView(this);
             tab.addView(under, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(2)));
             tab.setClickable(true);
             tab.setOnClickListener(v -> {
@@ -513,9 +538,10 @@ public final class LauncherActivity extends Activity {
             Item it = items.get(i);
             boolean on = i == selected;
             boolean en = it.isEnabled();
-            it.view.setBackgroundColor(on ? FG : BG);
-            for (TextView t : it.main) t.setTextColor(on ? BG : en ? FG : DIM);
-            for (TextView t : it.sub) t.setTextColor(on ? SEL_SUB : en ? SUBTLE : DIM);
+            if (on) it.view.setBackground(frame());
+            else it.view.setBackgroundColor(BG);
+            for (TextView t : it.main) t.setTextColor(en ? FG : DIM);
+            for (TextView t : it.sub) t.setTextColor(en ? SUBTLE : DIM);
         }
     }
 
@@ -550,24 +576,32 @@ public final class LauncherActivity extends Activity {
         items.clear();
         status = null;
         isoName = isoState = lastRun = playLabel = null;
+        presetItem = null;
         Settings st = new Settings(this);
         switch (index) {
             case TAB_PLAY:
                 playPage();
                 break;
             case TAB_GRAPHICS:
-                presetRow(st);
-                for (Choice c : GRAPHICS) choiceRow(st, c);
-                note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
+                pageTitle("Gráficos", "As mesmas opções ficam no jogo: Opções → Opções gráficas.");
+                section("IMAGEM");
+                choiceRows(st, GRAPHICS, Settings.SCALE, Settings.ASPECT, Settings.FRAME_RATE, Settings.VSYNC, Settings.FPS_COUNTER);
+                section("QUALIDADE");
+                presetItem = presetRow(st);
+                choiceRows(st, GRAPHICS, Settings.TEXTURE_FILTER, Settings.ANISOTROPY, Settings.FXAA, Settings.DITHERING, Settings.DRAW_DISTANCE);
                 break;
             case TAB_AUDIO:
-                for (Choice c : AUDIO) choiceRow(st, c);
-                note(T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
+                pageTitle("Áudio", T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
                         + T("Driver e buffer também estão no jogo: Opções → android settings."));
+                section("SAÍDA DE ÁUDIO");
+                for (Choice c : AUDIO) choiceRow(st, c);
                 break;
             case TAB_CONTROLS:
-                for (Choice c : CONTROLS) choiceRow(st, c);
-                note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
+                pageTitle("Controles", "Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
+                section("ANALÓGICOS");
+                choiceRows(st, CONTROLS, Settings.STICK_DEADZONE, Settings.STICK_SENSITIVITY);
+                section("VIBRAÇÃO");
+                choiceRows(st, CONTROLS, "android.rumble", Haptics.KEY);
                 section("BOTÕES");
                 note("Escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
                         + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
@@ -575,6 +609,7 @@ public final class LauncherActivity extends Activity {
                 actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", this::confirmPadRestore);
                 break;
             default:
+                pageTitle("Sistema", "Idioma, restauração, diagnóstico e informações do aplicativo.");
                 systemPage(st);
                 break;
         }
@@ -625,6 +660,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void systemPage(Settings st) {
+        section("IDIOMA");
         choiceRow(st, LANGUAGE);
         note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
         section("RESTAURAR");
@@ -655,6 +691,25 @@ public final class LauncherActivity extends Activity {
         status.setPadding(dp(4), dp(14), dp(4), dp(6));
         page.addView(status);
         status.setText(statusText());
+    }
+
+    // A settings tab's name and what it holds, above its rows
+    private void pageTitle(String name, String about) {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        head.setPadding(dp(4), dp(10), dp(4), dp(2));
+        head.addView(text(name, 28, FG, true));
+        TextView a = text(about, 13, SUBTLE, false);
+        a.setPadding(0, dp(4), 0, 0);
+        head.addView(a);
+        page.addView(head);
+    }
+
+    /** The rows of `group` with these keys, in this order */
+    private void choiceRows(Settings st, Choice[] group, String... keys) {
+        for (String k : keys)
+            for (Choice c : group)
+                if (c.key.equals(k)) choiceRow(st, c);
     }
 
     private void note(String s) {
@@ -742,10 +797,9 @@ public final class LauncherActivity extends Activity {
                 recreate();
                 return;
             }
-            if (currentTab == TAB_GRAPHICS) {
+            if (presetItem != null && presetItem != it) {
                 // the preset row names what the rows now make (Personalizado once they differ from all three)
-                Item preset = items.isEmpty() ? null : items.get(0);
-                if (preset != null && preset != it) preset.main.get(preset.main.size() - 1).setText(chooser(T(PRESET_NAMES[presetNow(st)])));
+                presetItem.main.get(presetItem.main.size() - 1).setText(chooser(T(PRESET_NAMES[presetNow(st)])));
             }
         };
         return it;

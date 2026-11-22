@@ -62,6 +62,13 @@ final class Lang {
         e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
         e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
         e("RESTAURAR", "RESTORE");
+        e("IMAGEM", "PICTURE");
+        e("QUALIDADE", "QUALITY");
+        e("SAÍDA DE ÁUDIO", "AUDIO OUTPUT");
+        e("ANALÓGICOS", "STICKS");
+        e("VIBRAÇÃO", "VIBRATION");
+        e("IDIOMA", "LANGUAGE");
+        e("Idioma, restauração, diagnóstico e informações do aplicativo.", "Language, restoring, diagnostics and the app's information.");
         e("DIAGNÓSTICO", "DIAGNOSTICS");
         e("APLICATIVO", "APPLICATION");
         e("BOTÕES", "BUTTONS");
