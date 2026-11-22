@@ -14,6 +14,7 @@
 // /storage/emulated/0/Android/data/<package>/files) is HOME and the working directory, so the runner's own lookups
 // (te_startup.cpp: <home>/.twinsanityevolved for ps2r.ini and the memory cards) land inside the app's storage. The disc
 // image is the user's own file, never part of the package (te::android::FindDiscImage).
+#include "engine/core/config/settings_file.h"
 #include <SDL.h>
 #include <SDL_system.h>
 
@@ -27,6 +28,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <filesystem>
+#include <iterator>
+#include <fstream>
 #include <string>
 #include <vector>
 
@@ -214,6 +217,39 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
         } else {
             runner_args.emplace_back(argv[i] ? argv[i] : "");
         }
+    }
+    // THE SETTINGS FILE: ps2r.ini, the one the game's menus and the launcher's settings both read and write -- the game
+    // folder's own when there is one (portable), else <game>/userdata/ps2r.ini (where the runner's rules put it beside the
+    // memory cards); named to the runner with --config so the launcher (Settings.java: the same rule) and the game agree.
+    // Its android.* keys (te_port_settings.h) that SDL needs before it starts are set as the environment here: the audio
+    // driver (default OpenSL ES) and the device buffer. A --te-env from the launcher still wins (set above).
+    if (internal && *internal) {
+        bool named = false;
+        for (const std::string& a : runner_args) named |= a == "--config";
+        const std::string game_dir = std::string(internal) + "/game";
+        const std::string settings = std::filesystem::is_regular_file(game_dir + "/ps2r.ini", ec) ? game_dir + "/ps2r.ini"
+                                                                                                   : game_dir + "/userdata/ps2r.ini";
+        if (!named) {
+            runner_args.emplace_back("--config");
+            runner_args.push_back(settings);
+        }
+        std::string text;
+        {
+            std::ifstream in(settings, std::ios::binary);
+            if (in) text.assign(std::istreambuf_iterator<char>(in), {});
+        }
+        std::string driver = "openslES", buffer = "2048", v;
+        if (ps2r::SettingsFile::GetFromText(text, "android.audio_driver", &v) &&
+            (v == "openslES" || v == "aaudio" || v == "android" || v == "auto"))
+            driver = v;
+        if (ps2r::SettingsFile::GetFromText(text, "android.audio_buffer", &v) && (v == "1024" || v == "2048" || v == "4096"))
+            buffer = v;
+        if (driver != "auto") ::setenv("SDL_AUDIODRIVER", driver.c_str(), 0);
+        ::setenv("TE_AUDIO_BUFFER_FRAMES", buffer.c_str(), 0);
+        te_android_log("settings file: %s (%s); audio driver %s, buffer %s frames (SDL_AUDIODRIVER=%s, TE_AUDIO_BUFFER_FRAMES=%s)",
+                       settings.c_str(), text.empty() ? "not there yet: the defaults" : "read", driver.c_str(), buffer.c_str(),
+                       std::getenv("SDL_AUDIODRIVER") ? std::getenv("SDL_AUDIODRIVER") : "(SDL's order)",
+                       std::getenv("TE_AUDIO_BUFFER_FRAMES"));
     }
     if (iso.empty() && internal && *internal) {
         const std::string imported = std::string(internal) + "/disc/twinsanity.iso";

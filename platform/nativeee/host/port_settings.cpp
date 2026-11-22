@@ -1,0 +1,208 @@
+// platform/nativeee (host side) -- te_port_settings.h: the Android port's own settings page. See the header.
+#include "te_port_settings.h"
+
+#include <cstdio>
+#include <fstream>
+#include <iterator>
+
+#include "engine/core/config/settings_file.h"
+#include "te_display.h"
+#include "te_host.h"
+#include "te_input.h"
+
+namespace te::port_settings {
+
+namespace {
+
+// The choices, as ps2r.ini words and as the menu shows them (lower case: the game's menu font)
+const char* const kDriverKeys[] = {"openslES", "aaudio", "android", "auto"};
+const char* const kDriverNames[] = {"opensl es", "aaudio", "audiotrack", "auto"};
+constexpr uint32_t kDrivers = 4, kDefaultDriver = 0;   // OpenSL ES: the driver that played cleanly on the Retroid Pocket 6
+const char* const kBufferKeys[] = {"1024", "2048", "4096"};
+constexpr uint32_t kBuffers = 3, kDefaultBuffer = 1;
+const char* const kDeadzoneKeys[] = {"0.05", "0.10", "0.15", "0.20", "0.25"};
+const float kDeadzones[] = {0.05f, 0.10f, 0.15f, 0.20f, 0.25f};
+constexpr uint32_t kDeadzoneCount = 5, kDefaultDeadzone = 2;    // 0.15: the engine's own (InputSettings)
+const char* const kSensitivityKeys[] = {"1.00", "1.33", "1.66", "2.00"};
+const float kSensitivities[] = {1.00f, 1.33f, 1.66f, 2.00f};
+constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: the engine's own
+
+struct State {
+    uint32_t driver = kDefaultDriver, buffer = kDefaultBuffer;
+    uint32_t running_driver = kDefaultDriver, running_buffer = kDefaultBuffer;   // what this run started with
+    uint32_t deadzone = kDefaultDeadzone, sensitivity = kDefaultSensitivity;
+} g;
+
+uint32_t IndexOf(const char* const* keys, uint32_t count, const std::string& value, uint32_t fallback) {
+    for (uint32_t i = 0; i < count; ++i)
+        if (value == keys[i]) return i;
+    return fallback;
+}
+
+uint32_t Read(const std::string& text, const char* key, const char* const* keys, uint32_t count, uint32_t fallback) {
+    std::string v;
+    if (!ps2r::SettingsFile::GetFromText(text, key, &v)) return fallback;
+    const uint32_t i = IndexOf(keys, count, v, count);
+    if (i == count) {
+        std::fprintf(stderr, "[twinsanityevolved] android settings: %s = %s is not one of the page's values: the default\n", key, v.c_str());
+        return fallback;
+    }
+    return i;
+}
+
+// A port key into ps2r.ini (the engine's writer keeps every other line; its Set refuses keys outside the engine's schema, so the
+// text is edited with SetInText and written whole through a temporary, as SettingsFile writes it)
+void Persist(const char* key, const std::string& value) {
+    const std::string& path = GetSettings().settings_path;
+    if (path.empty()) return;
+    std::string text;
+    {
+        std::ifstream in(path, std::ios::binary);
+        if (in) text.assign(std::istreambuf_iterator<char>(in), {});
+    }
+    bool changed = false;
+    const std::string next = ps2r::SettingsFile::SetInText(text, key, value, &changed);
+    if (!changed) return;
+    const std::string tmp = path + ".tmp";
+    {
+        std::ofstream out(tmp, std::ios::binary | std::ios::trunc);
+        out << next;
+        if (!out) {
+            std::fprintf(stderr, "[twinsanityevolved] android settings: %s = %s not written (%s)\n", key, value.c_str(), tmp.c_str());
+            return;
+        }
+    }
+    if (std::rename(tmp.c_str(), path.c_str()) != 0)
+        std::fprintf(stderr, "[twinsanityevolved] android settings: %s = %s not written (rename to %s)\n", key, value.c_str(), path.c_str());
+}
+
+void ApplySticks() { te::input::SetStickResponse(kDeadzones[g.deadzone], kSensitivities[g.sensitivity]); }
+
+}  // namespace
+
+void Configure(const std::string& ini_text) {
+#if defined(__ANDROID__)
+    g.driver = g.running_driver = Read(ini_text, "android.audio_driver", kDriverKeys, kDrivers, kDefaultDriver);
+    g.buffer = g.running_buffer = Read(ini_text, "android.audio_buffer", kBufferKeys, kBuffers, kDefaultBuffer);
+    g.deadzone = Read(ini_text, "android.stick_deadzone", kDeadzoneKeys, kDeadzoneCount, kDefaultDeadzone);
+    g.sensitivity = Read(ini_text, "android.stick_sensitivity", kSensitivityKeys, kSensitivityCount, kDefaultSensitivity);
+    ApplySticks();
+    std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
+#else
+    (void)ini_text;
+#endif
+}
+
+uint32_t Count() {
+#if defined(__ANDROID__)
+    return RowCount;
+#else
+    return 0;
+#endif
+}
+
+std::string Title() { return Count() ? "android settings" : ""; }
+
+uint32_t Choices(uint32_t row) {
+    switch (row) {
+    case RowAudioDriver: return kDrivers;
+    case RowAudioBuffer: return kBuffers;
+    case RowStickDeadzone: return kDeadzoneCount;
+    case RowStickSensitivity: return kSensitivityCount;
+    case RowRestoreDefaults: return 2;
+    default: return 0;
+    }
+}
+
+std::string RowLabel(uint32_t row) {
+    switch (row) {
+    case RowAudioDriver: return "audio driver";
+    case RowAudioBuffer: return "audio buffer";
+    case RowStickDeadzone: return "stick deadzone";
+    case RowStickSensitivity: return "stick sensitivity";
+    case RowRestoreDefaults: return "restore defaults";
+    default: return "";
+    }
+}
+
+std::string ChoiceLabel(uint32_t row, uint32_t choice) {
+    // the audio rows apply at the next start: the chosen value says so while it differs from this run's
+    const auto next = [](bool pending, std::string s) { return pending ? s + " (next start)" : s; };
+    switch (row) {
+    case RowAudioDriver:
+        return choice < kDrivers ? next(choice == g.driver && g.driver != g.running_driver, kDriverNames[choice]) : "";
+    case RowAudioBuffer:
+        return choice < kBuffers ? next(choice == g.buffer && g.buffer != g.running_buffer, kBufferKeys[choice]) : "";
+    case RowStickDeadzone: return choice < kDeadzoneCount ? kDeadzoneKeys[choice] : "";
+    case RowStickSensitivity: return choice < kSensitivityCount ? std::string("x") + kSensitivityKeys[choice] : "";
+    case RowRestoreDefaults: return choice == 0 ? "no" : choice == 1 ? "yes" : "";
+    default: return "";
+    }
+}
+
+uint32_t Value(uint32_t row) {
+    switch (row) {
+    case RowAudioDriver: return g.driver;
+    case RowAudioBuffer: return g.buffer;
+    case RowStickDeadzone: return g.deadzone;
+    case RowStickSensitivity: return g.sensitivity;
+    default: return 0;   // restore defaults: always "no" (the row snaps back once it has acted)
+    }
+}
+
+void Set(uint32_t row, uint32_t choice) {
+    if (choice >= Choices(row)) return;
+    switch (row) {
+    case RowAudioDriver:
+        g.driver = choice;
+        Persist("android.audio_driver", kDriverKeys[choice]);
+        break;
+    case RowAudioBuffer:
+        g.buffer = choice;
+        Persist("android.audio_buffer", kBufferKeys[choice]);
+        break;
+    case RowStickDeadzone:
+        g.deadzone = choice;
+        Persist("android.stick_deadzone", kDeadzoneKeys[choice]);
+        ApplySticks();
+        break;
+    case RowStickSensitivity:
+        g.sensitivity = choice;
+        Persist("android.stick_sensitivity", kSensitivityKeys[choice]);
+        ApplySticks();
+        break;
+    case RowRestoreDefaults:
+        if (choice != 1) return;
+        // this page's rows, and the graphic options the Android port sets a default for (te_display.h): the texture filter
+        // (bilinear), the resolution (1x), the frame rate (60), vsync (off) and the fps counter (off); the aspect and the
+        // display mode stay the player's (the screen's shape)
+        g.driver = kDefaultDriver;
+        g.buffer = kDefaultBuffer;
+        g.deadzone = kDefaultDeadzone;
+        g.sensitivity = kDefaultSensitivity;
+        Persist("android.audio_driver", kDriverKeys[g.driver]);
+        Persist("android.audio_buffer", kBufferKeys[g.buffer]);
+        Persist("android.stick_deadzone", kDeadzoneKeys[g.deadzone]);
+        Persist("android.stick_sensitivity", kSensitivityKeys[g.sensitivity]);
+        ApplySticks();
+        te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
+        te::display::Set(te::display::RowVSync, 0);
+        te::display::Set(te::display::RowTextureFilter, uint32_t(te::display::kDefaultTextureFilter));
+        te::display::Set(te::display::RowScale, 0);
+        te::display::Set(te::display::RowFpsCounter, 0);
+        std::fprintf(stderr, "[twinsanityevolved] android settings: the defaults restored\n");
+        break;
+    default: return;
+    }
+    std::fprintf(stderr, "[twinsanityevolved] %s\n", Describe().c_str());
+}
+
+std::string Describe() {
+    char buf[256];
+    std::snprintf(buf, sizeof buf, "android settings: audio driver %s%s, audio buffer %s%s, stick deadzone %s, stick sensitivity %s",
+                  kDriverKeys[g.driver], g.driver != g.running_driver ? " (next start)" : "", kBufferKeys[g.buffer],
+                  g.buffer != g.running_buffer ? " (next start)" : "", kDeadzoneKeys[g.deadzone], kSensitivityKeys[g.sensitivity]);
+    return buf;
+}
+
+}  // namespace te::port_settings

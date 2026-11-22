@@ -777,6 +777,19 @@ void Platform::Graphics::SetDisplaySetting(u32, u32)
 {
 }
 
+u32 Platform::Graphics::DisplaySettingPage(u32)
+{
+    return 0;
+}
+
+void Platform::Graphics::DisplaySettingPageTitle(char* out, u32 size)
+{
+    if (size != 0)
+    {
+        out[0] = '\0';
+    }
+}
+
 // The PS2's widescreen option draws for a 16:9 TV
 f32 Platform::Graphics::WidescreenAspect()
 {

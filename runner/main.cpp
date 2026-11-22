@@ -49,6 +49,7 @@
 #include "te_harness.h"
 #include "te_host.h"
 #include "te_display.h"
+#include "te_port_settings.h"
 #include "te_input.h"
 #include "te_language.h"
 #include "te_link_ahead.h"
@@ -364,6 +365,8 @@ int main(int argc, char** argv) {
                 if (existed) text.assign(std::istreambuf_iterator<char>(in), {});
             }
             const bool applied = !existed || ps2r::ConfigLoader::ApplyIniText(te::startup::TakePortKeys(text, nullptr, nullptr), cfg, &err);
+            // the platform's own settings page (te_port_settings.h: the Android port's android.* keys; nothing elsewhere)
+            te::port_settings::Configure(existed ? text : std::string());
             if (!applied) {
                 err = config_path + ": " + err;
                 std::fprintf(stderr, "[twinsanityevolved] settings: %s not applied: %s\n", config_path.c_str(), err.c_str());

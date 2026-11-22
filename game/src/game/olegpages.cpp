@@ -115,7 +115,12 @@ u32 g_SpeechLanguageWordOf[LanguagesMax];
 // vsync, display mode on the PC), one ChoiceItem each with the platform's labels, IDs from 0x20 (none of the page's)
 constexpr u32 DisplaySettingFirstItem = 0x20;
 constexpr u32 DisplaySettingLabelSize = 32;
-constexpr u32 DisplaySettingsMax = 8;
+constexpr u32 DisplaySettingsMax = 16;   // IDs 0x20..0x2F
+// TwinsanityEvolved: the platform's own settings page (Platform::Graphics::DisplaySettingPage 1: the Android port's audio and
+// controls), a second graphic-options page in static storage holding only those rows, linked from the options page when the
+// platform names any; its link's ID none of the pages use
+constexpr u32 PortSettingsPageItem = 0x31;
+constexpr u32 PortSettingsTitleSize = 32;
 // TwinsanityEvolved: the Options menu's MODS page -- its link on the options page, one toggle row per mod (off / on) and,
 // for a mod with a page of its own, a link row shown while the mod is on; a mod WITHOUT a switch (always available) has one row
 // that opens its page at once and turns it on; a mod's page holds one action row per platform row. IDs none of the pages use
@@ -830,16 +835,26 @@ static void SyncDisplaySettingRows(MenuPage* page, u32 player)
 
 void GraphicsOptionsPage::Entered(u32 player, u32)
 {
-    Find(WidescreenItem)->SetFlag(player, g_WidescreenTv);
+    // TwinsanityEvolved: the platform's own page (the same class) has no widescreen row
+    if (MenuItem* widescreen = Find(WidescreenItem))
+    {
+        widescreen->SetFlag(player, g_WidescreenTv);
+    }
+
     // TwinsanityEvolved: the platform rows show the platform's choices
     SyncDisplaySettingRows(this, player);
 }
 
 void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
 {
-    u8 widescreen;
-    Find(WidescreenItem)->GetFlag(player, &widescreen);
-    g_WidescreenTv = widescreen;
+    // TwinsanityEvolved: the platform's own page (the same class) has no widescreen row
+    if (MenuItem* widescreenRow = Find(WidescreenItem))
+    {
+        u8 widescreen;
+        widescreenRow->GetFlag(player, &widescreen);
+        g_WidescreenTv = widescreen;
+    }
+
     // TwinsanityEvolved: a stepped platform row is applied at once (the platform keeps it)
     u32 settings = Platform::Graphics::DisplaySettingCount();
     for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
@@ -1121,6 +1136,88 @@ void DestroyModsPage()
 }
 }
 
+namespace
+{
+// TwinsanityEvolved: the platform's display settings shown on `page` (Platform::Graphics::DisplaySettingPage) as rows of
+// `owner`, labelled by the platform
+void AddDisplaySettingRows(MenuPage* owner, u32 page)
+{
+    u32 settings = Platform::Graphics::DisplaySettingCount();
+    for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
+    {
+        u32 choices = Platform::Graphics::DisplaySettingChoices(setting);
+        if (choices == 0 || Platform::Graphics::DisplaySettingPage(setting) != page)
+        {
+            continue;
+        }
+
+        ChoiceItem* row = ChoiceItem::Construct(Allocate<ChoiceItem>(), 0, DisplaySettingFirstItem + setting, choices, 1,
+                                                static_cast<s32>(Platform::Graphics::DisplaySettingValue(setting)), MenuPlayers);
+        auto* label = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
+        Platform::Graphics::DisplaySettingLabel(setting, label, DisplaySettingLabelSize);
+        row->text = label;
+        auto** labels = static_cast<const char**>(MemoryAllocate2(choices * sizeof(const char*)));
+        for (u32 choice = 0; choice < choices; choice++)
+        {
+            auto* name = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
+            Platform::Graphics::DisplaySettingChoiceLabel(setting, choice, name, DisplaySettingLabelSize);
+            labels[choice] = name;
+        }
+
+        row->strings = labels;
+        row->usesStrings = 1;
+        owner->Add(row);
+    }
+}
+
+// TwinsanityEvolved: the platform's own settings page -- a graphic options page (its Entered / Frame read and apply the
+// platform rows it holds) with the page-1 rows and back; built with the options page, destroyed with it
+GraphicsOptionsPage g_PortSettingsPage;
+BackItem g_PortSettingsBack;
+char g_PortSettingsTitle[PortSettingsTitleSize];
+bool g_PortSettingsPageBuilt = false;
+
+MenuPage* ConstructPortSettingsPage(MenuPage* options)
+{
+    u32 settings = Platform::Graphics::DisplaySettingCount();
+    bool any = false;
+    for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
+    {
+        any = any || (Platform::Graphics::DisplaySettingPage(setting) == 1 && Platform::Graphics::DisplaySettingChoices(setting) != 0);
+    }
+
+    if (!any || g_PortSettingsPageBuilt)
+    {
+        return nullptr;
+    }
+
+    Platform::Graphics::DisplaySettingPageTitle(g_PortSettingsTitle, PortSettingsTitleSize);
+    if (g_PortSettingsTitle[0] == '\0')
+    {
+        return nullptr;
+    }
+
+    g_PortSettingsPageBuilt = true;
+    OlegPage::Construct(&g_PortSettingsPage, g_PortSettingsTitle, options);
+    g_PortSettingsPage.vtable = g_GraphicsOptionsPageVTable;
+    AddDisplaySettingRows(&g_PortSettingsPage, 1);
+    g_PortSettingsPage.Add(BackItem::Construct(&g_PortSettingsBack, BackText, SubPageBackItem, options, MenuPlayers));
+    return &g_PortSettingsPage;
+}
+
+void DestroyPortSettingsPage()
+{
+    if (!g_PortSettingsPageBuilt)
+    {
+        return;
+    }
+
+    g_PortSettingsPage.vtable = g_OlegPageVTable;
+    g_PortSettingsPage.MenuPage::Destroy(DestroyOnly);
+    g_PortSettingsPageBuilt = false;
+}
+}  // namespace
+
 OptionsPage* OptionsPage::Construct(OptionsPage* page, MenuPage* parent)
 {
     MenuPage::ConstructTitled(page, OptionsText, MenuPlayers);
@@ -1243,34 +1340,8 @@ OptionsPage* OptionsPage::Construct(OptionsPage* page, MenuPage* parent)
     BackItem* graphicsBack = BackItem::Construct(Allocate<BackItem>(), BackText, SubPageBackItem, page, MenuPlayers);
     graphics.Add(centre);
     graphics.Add(widescreen);
-    // TwinsanityEvolved: the platform's display settings as rows, labelled by the platform
-    u32 settings = Platform::Graphics::DisplaySettingCount();
-    for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
-    {
-        u32 choices = Platform::Graphics::DisplaySettingChoices(setting);
-        if (choices == 0)
-        {
-            continue;
-        }
-
-        ChoiceItem* row = ChoiceItem::Construct(Allocate<ChoiceItem>(), 0, DisplaySettingFirstItem + setting, choices, 1,
-                                                static_cast<s32>(Platform::Graphics::DisplaySettingValue(setting)), MenuPlayers);
-        auto* label = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
-        Platform::Graphics::DisplaySettingLabel(setting, label, DisplaySettingLabelSize);
-        row->text = label;
-        auto** labels = static_cast<const char**>(MemoryAllocate2(choices * sizeof(const char*)));
-        for (u32 choice = 0; choice < choices; choice++)
-        {
-            auto* name = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
-            Platform::Graphics::DisplaySettingChoiceLabel(setting, choice, name, DisplaySettingLabelSize);
-            labels[choice] = name;
-        }
-
-        row->strings = labels;
-        row->usesStrings = 1;
-        graphics.Add(row);
-    }
-
+    // TwinsanityEvolved: the platform's display settings as rows, labelled by the platform (the graphic options' own: page 0)
+    AddDisplaySettingRows(&graphics, 0);
     graphics.Add(graphicsBack);
 
     SoundOptionsPage::Construct(&page->sound, page);
@@ -1282,6 +1353,12 @@ OptionsPage* OptionsPage::Construct(OptionsPage* page, MenuPage* parent)
     page->Add(graphicsLink);
     page->Add(soundLink);
     page->Add(gameLink);
+    // TwinsanityEvolved: the platform's own settings page, when it names rows for one
+    if (MenuPage* port = ConstructPortSettingsPage(page))
+    {
+        page->Add(LinkItem::ConstructNamed(Allocate<LinkItem>(), g_PortSettingsTitle, PortSettingsPageItem, port, MenuPlayers));
+    }
+
     // TwinsanityEvolved: the MODS page, when the platform ships mods
     if (OlegPage* mods = ConstructModsPage(page))
     {
@@ -1295,6 +1372,7 @@ OptionsPage* OptionsPage::Construct(OptionsPage* page, MenuPage* parent)
 void OptionsPage::Destroy(u32 flags)
 {
     DestroyModsPage();
+    DestroyPortSettingsPage();
     sound.vtable = g_OlegPageVTable;
     sound.MenuPage::Destroy(DestroyOnly);
     graphics.vtable = g_OlegPageVTable;

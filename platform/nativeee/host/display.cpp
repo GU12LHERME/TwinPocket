@@ -23,6 +23,7 @@
 #include "ps2e_seam.h"
 #include "te_host.h"
 #include "te_language.h"
+#include "te_port_settings.h"
 #include "te_services.h"
 #include "te_tick_lock.h"
 
@@ -353,14 +354,13 @@ void Set(uint32_t row, uint32_t choice) {
 
 extern "C" {
 
-// Platform::Graphics::DisplaySetting*: the graphic options page's platform rows
-ps2e_s32 ps2e_graphics_display_setting_count(void) { return static_cast<ps2e_s32>(te::display::RowCount); }
-
-ps2e_s32 ps2e_graphics_display_setting_choices(ps2e_s32 setting) {
-    return setting >= 0 ? static_cast<ps2e_s32>(te::display::Choices(static_cast<uint32_t>(setting))) : 0;
-}
-
+// Platform::Graphics::DisplaySetting*: the graphic options page's platform rows (te::display's, page 0), then the platform's
+// own page's (te_port_settings.h: the Android port's audio and controls, page 1; none on the other lanes)
 namespace {
+constexpr uint32_t kDisplayRows = te::display::RowCount;
+bool IsPortRow(ps2e_s32 setting) { return setting >= ps2e_s32(kDisplayRows); }
+uint32_t PortRow(ps2e_s32 setting) { return uint32_t(setting) - kDisplayRows; }
+
 void CopyLabel(const std::string& label, ps2e_u32 out, ps2e_s32 size) {
     if (size <= 0) return;
     uint8_t* p = te::GuestPointer(out, static_cast<size_t>(size));
@@ -371,21 +371,46 @@ void CopyLabel(const std::string& label, ps2e_u32 out, ps2e_s32 size) {
 }
 }  // namespace
 
+ps2e_s32 ps2e_graphics_display_setting_count(void) {
+    return static_cast<ps2e_s32>(kDisplayRows + te::port_settings::Count());
+}
+
+ps2e_s32 ps2e_graphics_display_setting_choices(ps2e_s32 setting) {
+    if (setting < 0) return 0;
+    if (IsPortRow(setting)) return static_cast<ps2e_s32>(te::port_settings::Choices(PortRow(setting)));
+    return static_cast<ps2e_s32>(te::display::Choices(static_cast<uint32_t>(setting)));
+}
+
 void ps2e_graphics_display_setting_label(ps2e_s32 setting, ps2e_u32 out, ps2e_s32 size) {
-    CopyLabel(setting >= 0 ? te::display::RowLabel(static_cast<uint32_t>(setting)) : "", out, size);
+    std::string label;
+    if (setting >= 0) label = IsPortRow(setting) ? te::port_settings::RowLabel(PortRow(setting)) : te::display::RowLabel(static_cast<uint32_t>(setting));
+    CopyLabel(label, out, size);
 }
 
 void ps2e_graphics_display_setting_choice_label(ps2e_s32 setting, ps2e_s32 choice, ps2e_u32 out, ps2e_s32 size) {
-    CopyLabel(setting >= 0 && choice >= 0 ? te::display::ChoiceLabel(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice)) : "", out, size);
+    std::string label;
+    if (setting >= 0 && choice >= 0)
+        label = IsPortRow(setting) ? te::port_settings::ChoiceLabel(PortRow(setting), static_cast<uint32_t>(choice))
+                                   : te::display::ChoiceLabel(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice));
+    CopyLabel(label, out, size);
 }
 
 ps2e_s32 ps2e_graphics_display_setting_value(ps2e_s32 setting) {
-    return setting >= 0 ? static_cast<ps2e_s32>(te::display::Value(static_cast<uint32_t>(setting))) : 0;
+    if (setting < 0) return 0;
+    if (IsPortRow(setting)) return static_cast<ps2e_s32>(te::port_settings::Value(PortRow(setting)));
+    return static_cast<ps2e_s32>(te::display::Value(static_cast<uint32_t>(setting)));
 }
 
 void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice) {
-    if (setting >= 0 && choice >= 0) te::display::Set(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice));
+    if (setting < 0 || choice < 0) return;
+    if (IsPortRow(setting)) te::port_settings::Set(PortRow(setting), static_cast<uint32_t>(choice));
+    else te::display::Set(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice));
 }
+
+// Platform::Graphics::DisplaySettingPage / DisplaySettingPageTitle: which page a row is on, and the platform page's title
+ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) { return IsPortRow(setting) ? 1 : 0; }
+
+void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size) { CopyLabel(te::port_settings::Title(), out, size); }
 
 // Platform::Graphics::WidescreenAspect: the shape the game's widescreen option draws for (te_display.h)
 ps2e_f32 ps2e_graphics_widescreen_aspect(void) { return te::display::WidescreenAspect(); }

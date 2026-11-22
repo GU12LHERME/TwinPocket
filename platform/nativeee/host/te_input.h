@@ -36,6 +36,9 @@ bool KeyHeld(const char* key_name);
 // The window-close harness: an SDL_QUIT in the event queue (what the window's close button posts); the window owner's
 // pump (ps2e_draw_pump) takes it at the next boundary and the runner exits 0 through te::RequestExit.
 bool RequestWindowClose();
+// The sticks' response (the engine's GamepadBackend: the radial deadzone, 0..0.9, and the per-axis sensitivity, 0.5..2):
+// applied at once when the InputSystem exists, else kept for Install. A negative value keeps the engine's own (0.15, 1.33).
+void SetStickResponse(float deadzone, float sensitivity);
 void Shutdown();
 
 }  // namespace input

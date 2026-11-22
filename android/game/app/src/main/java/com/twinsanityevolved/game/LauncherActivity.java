@@ -47,6 +47,7 @@ public final class LauncherActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Diag.installCrashHandler(this, "main");
+        new Settings(this).migrate(prefs());
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
@@ -155,8 +156,9 @@ public final class LauncherActivity extends Activity {
                 b.append("  O arquivo existe, mas o Android não deixa o app lê-lo (EACCES). Use \"Selecionar ISO\": o app copia a\n")
                  .append("  imagem pelo seletor do Android para o seu armazenamento privado, sem pedir permissões de armazenamento.\n");
         }
-        b.append("\nÁUDIO: buffer ").append(prefs().getInt("audio_buffer", 2048)).append(" frames, driver ")
-         .append(prefs().getString("audio_driver", DEFAULT_AUDIO_DRIVER)).append(" (botão \"Áudio…\")\n");
+        Settings st = new Settings(this);
+        b.append("\nÁUDIO: buffer ").append(st.get(Settings.AUDIO_BUFFER, "2048")).append(" frames, driver ")
+         .append(st.get(Settings.AUDIO_DRIVER, DEFAULT_AUDIO_DRIVER)).append(" (").append(st.file()).append(")\n");
         b.append("MODO DIAGNÓSTICO: ").append(prefs().getBoolean("diagnostic_mode", false) ? "ligado" : "desligado").append('\n');
         b.append('\n').append("ÚLTIMAS EXECUÇÕES\n");
         b.append(describeStage("game", "  jogo / teste SDL"));
@@ -224,13 +226,14 @@ public final class LauncherActivity extends Activity {
         final String[] labels = {
             "Buffer 1024 frames (21 ms)", "Buffer 2048 frames (43 ms) — padrão", "Buffer 4096 frames (85 ms)",
             "Driver: automático (ordem do SDL: AAudio primeiro)", "Driver: AAudio", "Driver: OpenSL ES — padrão", "Driver: Java AudioTrack"};
-        final int curBuffer = prefs().getInt("audio_buffer", 2048);
-        final String curDriver = prefs().getString("audio_driver", DEFAULT_AUDIO_DRIVER);
+        final Settings st = new Settings(this);
+        final String curBuffer = st.get(Settings.AUDIO_BUFFER, "2048");
+        final String curDriver = st.get(Settings.AUDIO_DRIVER, DEFAULT_AUDIO_DRIVER);
         new AlertDialog.Builder(this)
             .setTitle("Áudio — atual: " + curBuffer + " frames, " + curDriver)
             .setItems(labels, (d, which) -> {
-                if (which < 3) prefs().edit().putInt("audio_buffer", buffers[which]).apply();
-                else prefs().edit().putString("audio_driver", drivers[which - 3]).apply();
+                if (which < 3) st.set(Settings.AUDIO_BUFFER, Integer.toString(buffers[which]));
+                else st.set(Settings.AUDIO_DRIVER, drivers[which - 3]);
                 Diag.log(this, "main", "audio option: " + labels[which]);
                 Toast.makeText(this, labels[which], Toast.LENGTH_SHORT).show();
                 refresh();

@@ -69,6 +69,11 @@ u32 DisplaySettingChoices(u32 setting);
 void DisplaySettingChoiceLabel(u32 setting, u32 choice, char* out, u32 size);
 u32 DisplaySettingValue(u32 setting);
 void SetDisplaySetting(u32 setting, u32 choice);
+// TwinsanityEvolved: the page a display setting is shown on -- 0 the graphic options, 1 the platform's own page (its rows
+// apart from the game's: the Android port's audio and controls), linked from the options page under the title the platform
+// copies into `out` (the PS2: none, every setting on the graphic options)
+u32 DisplaySettingPage(u32 setting);
+void DisplaySettingPageTitle(char* out, u32 size);
 // TwinsanityEvolved: the shape, width over height, that the game's widescreen option draws for when the platform shows the
 // picture at a wide shape other than a 16:9 TV's: the projection and the culling frustum (more of the world at the sides), the
 // menus' and the HUD's squeeze and the movies' picture; wider than 16:9, the menus and the HUD keep the 16:9 layout in the

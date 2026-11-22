@@ -43,6 +43,7 @@ namespace {
 ps2r::platform::sdl::InputSystem* g_input = nullptr;
 bool g_events_inited = false;
 #endif
+float g_stick_deadzone = -1.f, g_stick_sensitivity = -1.f;   // SetStickResponse: negative = the engine's own
 #if TE_HAVE_SDL_INPUT && defined(__vita__)
 // ---- THE VITA CONTROLLER READ STRAIGHT FROM sceCtrl ------------------------------------------------------------
 // SDL's path per boundary was SDL_JoystickUpdate (its Vita driver's sceCtrlPeekBufferPositive2 -- port 1, then port 0 on a
@@ -270,6 +271,7 @@ bool Install(Pads& pads, const Settings& settings) {
     te::vita::Step("input: the engine's InputSystem (gamepad subsystem, the Vita controller)");
 #endif
     g_input->Init(in);
+    if (g_stick_deadzone >= 0.f || g_stick_sensitivity >= 0.f) SetStickResponse(g_stick_deadzone, g_stick_sensitivity);
 #if defined(__vita__)
     te::vita::Step("input: ready");
     {
@@ -465,6 +467,18 @@ std::string Sources() {
     return g_input ? g_input->Sources() : std::string("none");
 #else
     return "none";
+#endif
+}
+
+void SetStickResponse(float deadzone, float sensitivity) {
+    g_stick_deadzone = deadzone;
+    g_stick_sensitivity = sensitivity;
+#if TE_HAVE_SDL_INPUT
+    if (!g_input || !g_input->Gamepad()) return;
+    ps2r::platform::sdl::GamepadBackend* gp = g_input->Gamepad();
+    if (deadzone >= 0.f) gp->SetDeadzone(deadzone);
+    if (sensitivity >= 0.f) gp->SetSensitivity(sensitivity);
+    std::fprintf(stderr, "[twinsanityevolved] input: stick deadzone %.2f, sensitivity %.2f\n", gp->Deadzone(), gp->Sensitivity());
 #endif
 }
 

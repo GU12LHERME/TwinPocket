@@ -216,6 +216,7 @@ std::string TakePortKeys(const std::string& text, std::string* memcards, std::st
         const std::string key = IniLineKey(line, section);
         bool port = false;
         for (const char* k : kPortKeys) port |= key == k;
+        port |= key.compare(0, 8, "android.") == 0;   // the Android port's own page (te_port_settings.h) and launcher
         if (port && !ps2r::Config::IsKey(key)) {
             std::string l = line.substr(0, line.find_first_of("#;"));
             const std::string value = Trimmed(l.substr(l.find('=') + 1));

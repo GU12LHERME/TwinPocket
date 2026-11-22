@@ -52,13 +52,12 @@ public final class MainActivity extends SDLActivity {
         Diag.log(this, "game", "disc image for the game: " + (iso != null ? iso : "(none from the launcher: the native lookup decides)"));
         java.util.ArrayList<String> args = new java.util.ArrayList<>();
         if (iso != null) { args.add("--te-iso"); args.add(iso); }
-        // the launcher's audio options (LauncherActivity "Áudio"), as the environment the engine and SDL read
+        // the settings (audio driver and buffer, graphics, controls) live in ps2r.ini (Settings.java), which
+        // runner/te_android.cpp reads before SDL starts: nothing to pass here
         android.content.SharedPreferences prefs = getSharedPreferences("twinsanity", MODE_PRIVATE);
-        int buffer = prefs.getInt("audio_buffer", 2048);
-        String driver = prefs.getString("audio_driver", LauncherActivity.DEFAULT_AUDIO_DRIVER);
-        args.add("--te-env"); args.add("TE_AUDIO_BUFFER_FRAMES=" + buffer);
-        if (!"auto".equals(driver)) { args.add("--te-env"); args.add("SDL_AUDIODRIVER=" + driver); }
-        Diag.log(this, "game", "audio options: buffer " + buffer + " frames, driver " + driver);
+        Settings settings = new Settings(this);
+        Diag.log(this, "game", "settings file " + settings.file() + ": audio driver "
+                + settings.get(Settings.AUDIO_DRIVER, "openslES (default)") + ", buffer " + settings.get(Settings.AUDIO_BUFFER, "2048 (default)"));
         if (prefs.getBoolean("diagnostic_mode", false)) {
             for (String e : LauncherActivity.DIAGNOSTIC_ENV) { args.add("--te-env"); args.add(e); }
             Diag.log(this, "game", "diagnostic mode on");
