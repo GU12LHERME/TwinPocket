@@ -1,32 +1,32 @@
 package com.twinsanityevolved.game;
 
 import android.app.Activity;
-import android.app.AlertDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ActivityInfo;
+import android.content.res.ColorStateList;
 import android.database.Cursor;
-import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
-import android.graphics.drawable.StateListDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.SystemClock;
 import android.os.StatFs;
 import android.provider.OpenableColumns;
+import android.text.TextUtils;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.InputDevice;
 import android.view.KeyEvent;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
-import android.widget.Button;
-import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -40,47 +40,84 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
+import java.util.function.IntConsumer;
 
 import static com.twinsanityevolved.game.Lang.T;
 
 /**
- * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A landscape screen for a
- * handheld: on the left the game (the chosen disc image, its state, a large JOGAR button, the ISO picker and what the
- * last start did); on the right the settings by category (Gráficos, Áudio, Controles, Sistema) and the Diagnóstico
- * page (the report, the probe, the SDL test, the diagnostic mode).
+ * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A console-style menu for a
+ * handheld's OLED screen: pure black, white text, the selected row white with black text, no gradient, glow or
+ * animation. Five tabs: Jogar (the disc image, its state, JOGAR), Gráficos, Áudio, Controles, Sistema (language,
+ * restoring, the diagnostics, leaving the app).
  *
  * The settings are the game's own, in ps2r.ini (Settings.java): the game's menus (Options > graphic options, Options >
  * android settings) and this screen edit the same keys, and every change here is written at once.
  *
- * Controller: the D-pad moves between the rows (Android's focus search), left / right change a setting, A chooses (the
- * system's fallback of BUTTON_A to DPAD_CENTER), L1 / R1 change category, START plays, B comes back to JOGAR.
+ * Controller first (Nav.java holds the rules, tested on the CI): the d-pad, its hat and the left stick move between the
+ * rows -- one step at the press, then a steady repeat after a delay; the stick with a deadzone and hysteresis. Left /
+ * right change the selected setting in place, A chooses the selected row, B goes back (to Jogar, then asks to leave),
+ * LB / RB change tab (each tab keeps its selected row), START plays from the Jogar tab (never under a dialog, the file
+ * picker, a copy or a start). The rows are not Android-focusable: the selection is this screen's own, so touch and the
+ * controller always agree -- a tap selects the row and acts on it.
  */
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_PICK_ISO = 41;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
     private boolean starting;
+    private boolean pickerOpen;
+
+    // the palette: OLED black, white, a neutral grey
+    static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A,
+            SEL_SUB = 0xFF404040;
+
+    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SYSTEM = 4;
+    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Sistema"};
 
     // the screen
-    private Button playButton;
-    private TextView isoName, isoState, lastRun;
-    private LinearLayout tabBar, page;
+    private LinearLayout page;
     private ScrollView pageScroll;
-    private final List<Button> tabs = new ArrayList<>();
-    private int currentTab = 0;
-    private TextView status;   // the Diagnóstico page's text (null on the other pages)
+    private final List<TextView> tabLabels = new ArrayList<>();
+    private final List<View> tabLines = new ArrayList<>();
+    private int currentTab = TAB_PLAY;
+    private final int[] tabSelection = new int[TAB_NAMES.length];
+    private final List<Item> items = new ArrayList<>();
+    private int selected = -1;
+    private TextView status;                    // Sistema's diagnostic text (null on the other tabs)
+    private TextView isoName, isoState, lastRun, playLabel;   // the Jogar tab's (null on the other tabs)
+    private OledDialog openDialog;
 
-    // the palette
-    static final int BG = 0xFF101318, PANEL = 0xFF181C23, ROW = 0xFF1F242D, ROW_FOCUS = 0xFF2B3240, TEXT = 0xFFEDEFF3,
-            SUBTLE = 0xFF9AA3B2, ACCENT = 0xFFFF8A1F, ACCENT_DARK = 0xFFD86A00, GOOD = 0xFF4CC38A, BAD = 0xFFFF5D5D;
+    // the controller
+    private final Handler ui = new Handler(Looper.getMainLooper());
+    private final Nav.Repeater dpad = new Nav.Repeater();
+    private final Nav.Repeater stick = new Nav.Repeater();
+    private int stickDir = Nav.NONE;
+    private boolean repeatPosted;
+    private final Runnable repeatTick = new Runnable() {
+        @Override
+        public void run() {
+            repeatPosted = false;
+            if (dialogOpen() || !hasWindowFocus()) {
+                releaseHeld();
+                return;
+            }
+            long now = SystemClock.uptimeMillis();
+            int d = dpad.tick(now);
+            if (d != Nav.NONE) navigate(d);
+            int s = stick.tick(now);
+            if (s != Nav.NONE) navigate(s);
+            scheduleRepeat();
+        }
+    };
 
     // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
     // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). Every driver stays selectable.
     static final String DEFAULT_AUDIO_DRIVER = "openslES";
 
     // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
-    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1) and logs the sticks (TE_INPUT_LOG=1), for a report about a graphics or a
-    // controls problem. Off, none of them costs anything.
+    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), logs the sticks (TE_INPUT_LOG=1) and the game's vibration commands
+    // (TE_RUMBLE_LOG=1), for a report about a graphics, controls or vibration problem. Off, none of them costs anything.
     static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1", "TE_INPUT_LOG=1", "TE_RUMBLE_LOG=1"};
 
     // ---- the settings this screen shows: the game's keys and words (Settings.java) ---------------------------------------
@@ -152,27 +189,27 @@ public final class LauncherActivity extends Activity {
     };
     static final Choice LANGUAGE = new Choice(Lang.KEY, "Idioma / Language", null, "auto", new String[] {"auto", "pt-BR", "en"},
         new String[] {"Automático (idioma do sistema)", "Português (Brasil)", "English"});
-    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Diagnóstico"};
+
+    // ---- a row of a tab: what A, left / right and a tap do on it ---------------------------------------------------------
+    private final class Item {
+        final LinearLayout view;
+        final List<TextView> main = new ArrayList<>();
+        final List<TextView> sub = new ArrayList<>();
+        Runnable onA;
+        IntConsumer onStep;
+        BooleanSupplier enabled;
+
+        Item(LinearLayout view) {
+            this.view = view;
+        }
+
+        boolean isEnabled() {
+            return enabled == null || enabled.getAsBoolean();
+        }
+    }
 
     private int dp(float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
-    }
-
-    private static GradientDrawable rounded(int color, float radius, int strokeWidth, int strokeColor) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(radius);
-        if (strokeWidth > 0) g.setStroke(strokeWidth, strokeColor);
-        return g;
-    }
-
-    // a background that shows where the controller's focus is (an orange outline) and a press
-    private Drawable focusable(int normal, int focused) {
-        StateListDrawable s = new StateListDrawable();
-        s.addState(new int[] {android.R.attr.state_pressed}, rounded(focused, dp(10), dp(2), ACCENT));
-        s.addState(new int[] {android.R.attr.state_focused}, rounded(focused, dp(10), dp(2), ACCENT));
-        s.addState(new int[] {}, rounded(normal, dp(10), 0, 0));
-        return s;
     }
 
     private TextView text(String s, float sp, int color, boolean bold) {
@@ -184,24 +221,11 @@ public final class LauncherActivity extends Activity {
         return t;
     }
 
-    private Button button(String label, int normal, int focusedColor, View.OnClickListener l) {
-        Button b = new Button(this);
-        b.setText(T(label));
-        b.setAllCaps(false);
-        b.setTextColor(TEXT);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        b.setBackground(focusable(normal, focusedColor));
-        b.setPadding(dp(14), dp(8), dp(14), dp(8));
-        b.setFocusable(true);
-        b.setOnClickListener(l);
-        if (Build.VERSION.SDK_INT >= 21) b.setStateListAnimator(null);
-        return b;
-    }
-
-    private LinearLayout.LayoutParams fill(int height, int top) {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height);
-        p.topMargin = top;
-        return p;
+    private View line() {
+        View v = new View(this);
+        v.setBackgroundColor(LINE);
+        v.setLayoutParams(new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, Math.max(1, dp(1))));
+        return v;
     }
 
     @Override
@@ -210,100 +234,81 @@ public final class LauncherActivity extends Activity {
         Diag.installCrashHandler(this, "main");
         new Settings(this).migrate(prefs());
         Lang.init(this);
+        Haptics.refresh(this);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
+        getWindow().getDecorView().setBackgroundColor(BG);
+        if (savedInstanceState != null) {
+            int[] kept = savedInstanceState.getIntArray("tab_selection");
+            if (kept != null && kept.length == tabSelection.length) System.arraycopy(kept, 0, tabSelection, 0, kept.length);
+        }
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.HORIZONTAL);
+        root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        root.setPadding(dp(20), dp(16), dp(20), dp(16));
+        root.setPadding(dp(32), dp(14), dp(32), dp(10));
+        root.setFocusable(true);
+        root.setFocusableInTouchMode(true);
 
-        // ---- left: the game ----
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        left.setBackground(rounded(PANEL, dp(16), 0, 0));
-        left.setPadding(dp(20), dp(18), dp(20), dp(18));
-        left.addView(text("Crash Twinsanity", 26, ACCENT, true));
-        left.addView(text("TwinsanityEvolved · port nativo Android", 13, SUBTLE, false));
-
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(ROW, dp(12), 0, 0));
-        card.setPadding(dp(14), dp(10), dp(14), dp(10));
-        card.addView(text("JOGO SELECIONADO", 11, SUBTLE, true));
-        isoName = text("—", 15, TEXT, true);
-        isoState = text("", 13, SUBTLE, false);
-        card.addView(isoName);
-        card.addView(isoState);
-        left.addView(card, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(14)));
-
-        playButton = button("JOGAR", ACCENT_DARK, ACCENT, v -> startGame(false));
-        playButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        playButton.setTypeface(Typeface.DEFAULT_BOLD);
-        left.addView(playButton, fill(dp(64), dp(14)));
-        Button pick = button("Selecionar ISO…", ROW, ROW_FOCUS, v -> pickIso());
-        left.addView(pick, fill(dp(48), dp(10)));
-        Button exit = button("Sair do aplicativo", ROW, ROW_FOCUS, v -> confirmExit());
-        left.addView(exit, fill(dp(44), dp(8)));
-
-        lastRun = text("", 12, SUBTLE, false);
-        left.addView(lastRun, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)));
-        View spacer = new View(this);
-        left.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar · no jogo: Opções → android settings → return to launcher", 11, SUBTLE, false));
-        left.addView(text(T("versão ") + versionName(), 11, SUBTLE, false));
-
-        ScrollView leftScroll = new ScrollView(this);
-        leftScroll.setFillViewport(true);
-        leftScroll.addView(left);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.4f);
-        lp.rightMargin = dp(16);
-        root.addView(leftScroll, lp);
-
-        // ---- right: the settings by category, and the diagnostics ----
-        LinearLayout right = new LinearLayout(this);
-        right.setOrientation(LinearLayout.VERTICAL);
-        right.setBackground(rounded(PANEL, dp(16), 0, 0));
-        right.setPadding(dp(14), dp(12), dp(14), dp(12));
-        tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.HORIZONTAL);
+        // ---- the tabs, the version on the right ----
+        LinearLayout top = new LinearLayout(this);
+        top.setOrientation(LinearLayout.HORIZONTAL);
+        top.setGravity(Gravity.CENTER_VERTICAL);
         for (int i = 0; i < TAB_NAMES.length; i++) {
             final int index = i;
-            Button t = button(TAB_NAMES[i], PANEL, ROW_FOCUS, v -> showTab(index));
-            t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(44), 1f);
-            tp.rightMargin = dp(4);
-            tabBar.addView(t, tp);
-            tabs.add(t);
+            LinearLayout tab = new LinearLayout(this);
+            tab.setOrientation(LinearLayout.VERTICAL);
+            tab.setPadding(0, 0, dp(28), 0);
+            TextView label = text(TAB_NAMES[i], 17, SUBTLE, false);
+            label.setSingleLine(true);
+            label.setPadding(0, dp(6), 0, dp(6));
+            tab.addView(label);
+            View under = new View(this);
+            tab.addView(under, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(2)));
+            tab.setClickable(true);
+            tab.setOnClickListener(v -> {
+                if (index != currentTab) Haptics.tap(this, null, false);
+                showTab(index);
+            });
+            top.addView(tab);
+            tabLabels.add(label);
+            tabLines.add(under);
         }
-        HorizontalFit.wrap(tabBar);
-        right.addView(tabBar);
+        View gap = new View(this);
+        top.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
+        top.addView(text(T("versão ") + versionName(), 12, SUBTLE, false));
+        root.addView(top);
+        root.addView(line());
+
+        // ---- the tab's rows ----
         pageScroll = new ScrollView(this);
+        pageScroll.setVerticalScrollBarEnabled(false);
+        pageScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(0, dp(8), 0, dp(8));
+        page.setPadding(0, dp(8), 0, dp(24));
         pageScroll.addView(page);
-        right.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        root.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.6f));
+        root.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // ---- the buttons' legend ----
+        root.addView(line());
+        TextView legend = text(T("A  Confirmar      B  Voltar      LB / RB  Abas      ◀ ▶  Alterar      START  Jogar"), 12, SUBTLE, false);
+        legend.setSingleLine(true);
+        legend.setEllipsize(TextUtils.TruncateAt.END);
+        legend.setPadding(0, dp(8), 0, 0);
+        root.addView(legend);
 
         setContentView(root);
-        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, prefs().getInt("launcher_tab", 0)));
+        root.requestFocus();
+        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, prefs().getInt("launcher_tab", TAB_PLAY)));
         showTab(currentTab);
-        playButton.requestFocus();
     }
 
-    /** Keeps the category buttons on one line on a narrow screen: their text shrinks rather than wrapping. */
-    static final class HorizontalFit {
-        static void wrap(LinearLayout bar) {
-            for (int i = 0; i < bar.getChildCount(); i++) {
-                View v = bar.getChildAt(i);
-                if (v instanceof TextView) {
-                    ((TextView) v).setSingleLine(true);
-                    ((TextView) v).setEllipsize(android.text.TextUtils.TruncateAt.END);
-                }
-            }
-        }
+    @Override
+    protected void onSaveInstanceState(Bundle out) {
+        super.onSaveInstanceState(out);
+        out.putIntArray("tab_selection", tabSelection);
     }
 
     private String versionName() {
@@ -318,181 +323,432 @@ public final class LauncherActivity extends Activity {
     protected void onResume() {
         super.onResume();
         starting = false;
-        playButton.setEnabled(true);
-        playButton.setText(T("JOGAR"));
+        pickerOpen = false;
         refresh();
     }
 
+    @Override
+    protected void onPause() {
+        super.onPause();
+        releaseHeld();
+        Haptics.cancel();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (!hasFocus) releaseHeld();   // a key released under a dialog or another app never reaches this window
+    }
+
     // ---- the controller -------------------------------------------------------------------------------------------------
+    private boolean dialogOpen() {
+        return openDialog != null && openDialog.isShowing();
+    }
+
+    private static int dirOfKey(int code) {
+        switch (code) {
+            case KeyEvent.KEYCODE_DPAD_UP: return Nav.UP;
+            case KeyEvent.KEYCODE_DPAD_DOWN: return Nav.DOWN;
+            case KeyEvent.KEYCODE_DPAD_LEFT: return Nav.LEFT;
+            case KeyEvent.KEYCODE_DPAD_RIGHT: return Nav.RIGHT;
+            default: return Nav.NONE;
+        }
+    }
+
+    private void releaseHeld() {
+        dpad.release();
+        stick.release();
+        stickDir = Nav.NONE;
+        ui.removeCallbacks(repeatTick);
+        repeatPosted = false;
+    }
+
+    private void scheduleRepeat() {
+        if (repeatPosted || !(dpad.held() || stick.held())) return;
+        repeatPosted = true;
+        ui.postDelayed(repeatTick, 30);
+    }
+
     @Override
     public boolean dispatchKeyEvent(KeyEvent e) {
-        if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
-            switch (e.getKeyCode()) {
-                case KeyEvent.KEYCODE_BUTTON_L1:
-                    Haptics.tap(this, e, false);
-                    showTab((currentTab + TAB_NAMES.length - 1) % TAB_NAMES.length);
-                    tabs.get(currentTab).requestFocus();
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_R1:
-                    Haptics.tap(this, e, false);
-                    showTab((currentTab + 1) % TAB_NAMES.length);
-                    tabs.get(currentTab).requestFocus();
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_START:
+        int code = e.getKeyCode();
+        if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN || code == KeyEvent.KEYCODE_VOLUME_MUTE)
+            return super.dispatchKeyEvent(e);
+        int dir = dirOfKey(code);
+        if (dir != Nav.NONE) {
+            // one step at the press; the repeat is this screen's own (Android's key repeats ignored)
+            if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+                int step = dpad.press(dir, SystemClock.uptimeMillis());
+                if (step != Nav.NONE) navigate(step);
+                scheduleRepeat();
+            } else if (e.getAction() == KeyEvent.ACTION_UP && dpad.dir() == dir) {
+                dpad.release();
+            }
+            return true;
+        }
+        boolean ours;
+        switch (code) {
+            case KeyEvent.KEYCODE_BUTTON_A: case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER:
+            case KeyEvent.KEYCODE_BUTTON_B: case KeyEvent.KEYCODE_BACK: case KeyEvent.KEYCODE_ESCAPE:
+            case KeyEvent.KEYCODE_BUTTON_L1: case KeyEvent.KEYCODE_BUTTON_R1: case KeyEvent.KEYCODE_BUTTON_START:
+                ours = true;
+                break;
+            default:
+                ours = false;
+        }
+        if (!ours) return super.dispatchKeyEvent(e);
+        if (e.getAction() != KeyEvent.ACTION_DOWN || e.getRepeatCount() != 0) return true;   // one action a press
+        switch (code) {
+            case KeyEvent.KEYCODE_BUTTON_A: case KeyEvent.KEYCODE_DPAD_CENTER: case KeyEvent.KEYCODE_ENTER:
+                confirm(e);
+                break;
+            case KeyEvent.KEYCODE_BUTTON_B: case KeyEvent.KEYCODE_BACK: case KeyEvent.KEYCODE_ESCAPE:
+                back();
+                break;
+            case KeyEvent.KEYCODE_BUTTON_L1:
+                changeTab(-1, e);
+                break;
+            case KeyEvent.KEYCODE_BUTTON_R1:
+                changeTab(1, e);
+                break;
+            default:   // START
+                if (Nav.startAllowed(currentTab, dialogOpen(), pickerOpen, copying, starting)) {
                     Haptics.tap(this, e, true);
                     startGame(false);
-                    return true;
-                case KeyEvent.KEYCODE_BUTTON_A:
-                case KeyEvent.KEYCODE_DPAD_CENTER:
-                case KeyEvent.KEYCODE_ENTER:
-                    // a confirm on a focused control (the press goes on to the view as before)
-                    if (getCurrentFocus() != null) Haptics.tap(this, e, true);
-                    break;
-                default:
-                    break;
+                } else if (currentTab != TAB_PLAY && !dialogOpen()) {
+                    tabSelection[TAB_PLAY] = 0;   // JOGAR selected, nothing started: START again plays
+                    showTab(TAB_PLAY);
+                }
+                break;
+        }
+        return true;
+    }
+
+    // The left stick and the d-pad's hat (a controller that sends its d-pad as axes): this screen's own -- returning true
+    // keeps Android from making its own d-pad keys out of them (with its own, faster repeat)
+    @Override
+    public boolean dispatchGenericMotionEvent(MotionEvent ev) {
+        if ((ev.getSource() & (InputDevice.SOURCE_JOYSTICK | InputDevice.SOURCE_GAMEPAD)) == 0 || ev.getAction() != MotionEvent.ACTION_MOVE)
+            return super.dispatchGenericMotionEvent(ev);
+        long now = SystemClock.uptimeMillis();
+        float hx = ev.getAxisValue(MotionEvent.AXIS_HAT_X), hy = ev.getAxisValue(MotionEvent.AXIS_HAT_Y);
+        int hat = hy < -0.5f ? Nav.UP : hy > 0.5f ? Nav.DOWN : hx < -0.5f ? Nav.LEFT : hx > 0.5f ? Nav.RIGHT : Nav.NONE;
+        if (hat != Nav.NONE) {
+            int step = dpad.press(hat, now);
+            if (step != Nav.NONE) navigate(step);
+        } else if (dpad.held() && ev.getDevice() != null && ev.getDevice().getMotionRange(MotionEvent.AXIS_HAT_X) != null) {
+            dpad.release();
+        }
+        int d = Nav.stickDir(ev.getAxisValue(MotionEvent.AXIS_X), ev.getAxisValue(MotionEvent.AXIS_Y), stickDir);
+        if (d != stickDir) {
+            stickDir = d;
+            if (d == Nav.NONE) stick.release();
+            else {
+                int step = stick.press(d, now);
+                if (step != Nav.NONE) navigate(step);
             }
         }
-        return super.dispatchKeyEvent(e);
+        scheduleRepeat();
+        return true;
     }
 
-    @Override
-    public void onBackPressed() {
-        // B (the system's fallback to BACK) first brings the focus back to JOGAR; from there it leaves
-        if (!playButton.isFocused()) {
-            playButton.requestFocus();
+    private void navigate(int dir) {
+        if (dialogOpen()) return;
+        if (dir == Nav.UP || dir == Nav.DOWN) {
+            int delta = dir == Nav.UP ? -1 : 1;
+            int next = Nav.move(enabledItems(), selected, delta);
+            if (next != selected && next >= 0) {
+                select(next);
+            } else {
+                // at the end of the rows: the text below (the notes, the diagnostics) scrolls into view
+                pageScroll.scrollBy(0, delta * dp(140));
+            }
             return;
         }
-        super.onBackPressed();
+        Item it = current();
+        if (it != null && it.onStep != null && it.isEnabled()) it.onStep.accept(dir == Nav.LEFT ? -1 : 1);
     }
 
-    // ---- the pages ------------------------------------------------------------------------------------------------------
+    private Item current() {
+        return selected >= 0 && selected < items.size() ? items.get(selected) : null;
+    }
+
+    private void confirm(KeyEvent e) {
+        Item it = current();
+        if (it == null || !it.isEnabled()) return;
+        Haptics.tap(this, e, true);
+        act(it);
+    }
+
+    private void act(Item it) {
+        if (it.onA != null) it.onA.run();
+        else if (it.onStep != null) it.onStep.accept(1);
+    }
+
+    private void back() {
+        if (currentTab != TAB_PLAY) showTab(TAB_PLAY);
+        else confirmExit();
+    }
+
+    private void changeTab(int delta, KeyEvent e) {
+        Haptics.tap(this, e, false);
+        showTab(Nav.nextTab(currentTab, delta, TAB_NAMES.length));
+    }
+
+    private boolean[] enabledItems() {
+        boolean[] en = new boolean[items.size()];
+        for (int i = 0; i < en.length; i++) en[i] = items.get(i).isEnabled();
+        return en;
+    }
+
+    private void select(int index) {
+        selected = index;
+        if (index >= 0) tabSelection[currentTab] = index;
+        paintItems();
+        ensureVisible();
+    }
+
+    private void paintItems() {
+        for (int i = 0; i < items.size(); i++) {
+            Item it = items.get(i);
+            boolean on = i == selected;
+            boolean en = it.isEnabled();
+            it.view.setBackgroundColor(on ? FG : BG);
+            for (TextView t : it.main) t.setTextColor(on ? BG : en ? FG : DIM);
+            for (TextView t : it.sub) t.setTextColor(on ? SEL_SUB : en ? SUBTLE : DIM);
+        }
+    }
+
+    // the selected row kept on screen with a margin; the first row shows the tab's top (the disc's state on Jogar)
+    private void ensureVisible() {
+        final Item it = current();
+        if (it == null) return;
+        pageScroll.post(() -> {
+            int first = Nav.firstEnabled(enabledItems(), 0);
+            if (selected == first) {
+                pageScroll.scrollTo(0, 0);
+                return;
+            }
+            int top = it.view.getTop(), bottom = it.view.getBottom();
+            int y = pageScroll.getScrollY(), h = pageScroll.getHeight(), m = dp(56);
+            if (top - m < y) pageScroll.scrollTo(0, Math.max(0, top - m));
+            else if (bottom + m > y + h) pageScroll.scrollTo(0, bottom + m - h);
+        });
+    }
+
+    // ---- the tabs -------------------------------------------------------------------------------------------------------
     private void showTab(int index) {
         currentTab = index;
         prefs().edit().putInt("launcher_tab", index).apply();
-        for (int i = 0; i < tabs.size(); i++) {
-            Button t = tabs.get(i);
+        for (int i = 0; i < tabLabels.size(); i++) {
             boolean on = i == index;
-            t.setBackground(focusable(on ? ROW : PANEL, ROW_FOCUS));
-            t.setTextColor(on ? ACCENT : SUBTLE);
-            t.setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            tabLabels.get(i).setTextColor(on ? FG : SUBTLE);
+            tabLabels.get(i).setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+            tabLines.get(i).setBackgroundColor(on ? FG : BG);
         }
         page.removeAllViews();
+        items.clear();
         status = null;
+        isoName = isoState = lastRun = playLabel = null;
         Settings st = new Settings(this);
         switch (index) {
-            case 0:
-                page.addView(presetRow(st));
-                for (Choice c : GRAPHICS) page.addView(choiceRow(st, c));
+            case TAB_PLAY:
+                playPage();
+                break;
+            case TAB_GRAPHICS:
+                presetRow(st);
+                for (Choice c : GRAPHICS) choiceRow(st, c);
                 note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
                 break;
-            case 1:
-                for (Choice c : AUDIO) page.addView(choiceRow(st, c));
+            case TAB_AUDIO:
+                for (Choice c : AUDIO) choiceRow(st, c);
                 note(T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
                         + T("Driver e buffer também estão no jogo: Opções → android settings."));
                 break;
-            case 2:
-                for (Choice c : CONTROLS) page.addView(choiceRow(st, c));
+            case TAB_CONTROLS:
+                for (Choice c : CONTROLS) choiceRow(st, c);
                 note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
-                note("BOTÕES — escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
+                section("BOTÕES");
+                note("Escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
                         + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
-                for (int i = 0; i < PAD_BUTTONS.length; i++) page.addView(padRow(st, i));
-                page.addView(actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", v -> confirmPadRestore()));
-                break;
-            case 3:
-                page.addView(choiceRow(st, LANGUAGE));
-                note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
-                page.addView(actionRow("Restaurar apenas gráficos",
-                    "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
-                    v -> confirmRestoreGraphics()));
-                page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
-                note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
-                note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
-                        + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
+                for (int i = 0; i < PAD_BUTTONS.length; i++) padRow(st, i);
+                actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", this::confirmPadRestore);
                 break;
             default:
-                page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
-                page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
-                final boolean diag = prefs().getBoolean("diagnostic_mode", false);
-                page.addView(actionRow(T("Modo diagnóstico: ") + T(diag ? "LIGADO" : "desligado"),
-                        "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
-                            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
-                            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
-                            showTab(4);
-                        }));
-                page.addView(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
-                page.addView(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
-                status = text("", 11, SUBTLE, false);
-                status.setTypeface(Typeface.MONOSPACE);
-                status.setTextIsSelectable(true);
-                status.setPadding(dp(6), dp(10), dp(6), dp(6));
-                page.addView(status);
-                status.setText(statusText());
+                systemPage(st);
                 break;
         }
+        selected = Nav.firstEnabled(enabledItems(), tabSelection[index]);
+        if (selected >= 0) tabSelection[index] = selected;
+        paintItems();
         pageScroll.scrollTo(0, 0);
+        ensureVisible();
+    }
+
+    /** The tab built again where it is (a change that touches other rows); the selected row stays the same. */
+    private void rebuild() {
+        int keep = pageScroll.getScrollY();
+        showTab(currentTab);
+        pageScroll.post(() -> {
+            pageScroll.scrollTo(0, keep);
+            ensureVisible();
+        });
+    }
+
+    private void playPage() {
+        LinearLayout head = new LinearLayout(this);
+        head.setOrientation(LinearLayout.VERTICAL);
+        head.setPadding(dp(4), dp(10), dp(4), dp(14));
+        head.addView(text("Crash Twinsanity", 30, FG, true));
+        head.addView(text("TwinsanityEvolved · port nativo Android", 13, SUBTLE, false));
+        TextView label = text("JOGO SELECIONADO", 11, SUBTLE, true);
+        label.setPadding(0, dp(18), 0, dp(2));
+        head.addView(label);
+        isoName = text("—", 17, FG, true);
+        isoState = text("", 13, SUBTLE, false);
+        head.addView(isoName);
+        head.addView(isoState);
+        page.addView(head);
+        page.addView(line());
+        Item play = row("JOGAR", null, "START", true);
+        playLabel = play.main.get(0);
+        play.onA = () -> startGame(false);
+        play.enabled = () -> !starting && !copying;
+        Item pick = row("Selecionar ISO ou CHD…", "Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "›", false);
+        pick.onA = this::pickIso;
+        pick.enabled = () -> !copying;
+        lastRun = text("", 12, SUBTLE, false);
+        lastRun.setPadding(dp(4), dp(14), dp(4), 0);
+        page.addView(lastRun);
+        note("No jogo: Opções → android settings → return to launcher volta para cá.");
+        updatePlayState();
+    }
+
+    private void systemPage(Settings st) {
+        choiceRow(st, LANGUAGE);
+        note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
+        section("RESTAURAR");
+        actionRow("Restaurar apenas gráficos",
+            "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
+            this::confirmRestoreGraphics);
+        actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", this::confirmRestore);
+        section("DIAGNÓSTICO");
+        actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", () -> buildReport(true));
+        actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", () -> buildReport(false));
+        final boolean diag = prefs().getBoolean("diagnostic_mode", false);
+        Item mode = row("Modo diagnóstico", "Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
+                T(diag ? "Ligado" : "Desligado"), false);
+        mode.onA = () -> {
+            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
+            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
+            rebuild();
+        };
+        actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", () -> startActivity(new Intent(this, ProbeActivity.class)));
+        actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", this::startSdlTest);
+        section("APLICATIVO");
+        actionRow("Sair do aplicativo", "Fecha o TwinsanityEvolved (configurações, saves e a ISO ficam guardados)", this::confirmExit);
+        note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
+        note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
+        status = text("", 11, SUBTLE, false);
+        status.setTypeface(Typeface.MONOSPACE);
+        status.setPadding(dp(4), dp(14), dp(4), dp(6));
+        page.addView(status);
+        status.setText(statusText());
     }
 
     private void note(String s) {
         TextView t = text(s, 12, SUBTLE, false);
-        t.setPadding(dp(6), dp(12), dp(6), 0);
+        t.setPadding(dp(4), dp(10), dp(4), dp(4));
         page.addView(t);
     }
 
-    private View rowFrame(String label, String help, TextView value) {
-        LinearLayout row = new LinearLayout(this);
-        row.setOrientation(LinearLayout.HORIZONTAL);
-        row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(focusable(ROW, ROW_FOCUS));
-        row.setPadding(dp(14), dp(10), dp(14), dp(10));
-        row.setFocusable(true);
-        row.setClickable(true);
+    private void section(String s) {
+        TextView t = text(s, 11, SUBTLE, true);
+        t.setPadding(dp(4), dp(22), dp(4), dp(6));
+        page.addView(t);
+        page.addView(line());
+    }
+
+    // A row: the label (and its help) on the left, the value on the right, a separator under it. A tap selects it and acts.
+    private Item row(String label, String help, String value, boolean large) {
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.HORIZONTAL);
+        v.setGravity(Gravity.CENTER_VERTICAL);
+        v.setPadding(dp(14), dp(large ? 16 : 11), dp(14), dp(large ? 16 : 11));
+        v.setMinimumHeight(dp(large ? 64 : 52));
+        final Item it = new Item(v);
         LinearLayout words = new LinearLayout(this);
         words.setOrientation(LinearLayout.VERTICAL);
-        words.addView(text(label, 15, TEXT, true));
-        if (help != null) words.addView(text(help, 12, SUBTLE, false));
-        row.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        if (value != null) row.addView(value);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.topMargin = dp(6);
-        row.setLayoutParams(p);
-        return row;
+        TextView l = text(label, large ? 22 : 16, FG, large);
+        words.addView(l);
+        it.main.add(l);
+        if (help != null) {
+            TextView h = text(help, 12, SUBTLE, false);
+            h.setPadding(0, dp(2), 0, 0);
+            words.addView(h);
+            it.sub.add(h);
+        }
+        v.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (value != null) {
+            TextView val = text(value, large ? 15 : 15, FG, false);
+            val.setSingleLine(true);
+            val.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            val.setPadding(dp(16), 0, 0, 0);
+            v.addView(val, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            it.main.add(val);
+        }
+        v.setClickable(true);
+        v.setOnClickListener(x -> {
+            if (dialogOpen()) return;
+            int index = items.indexOf(it);
+            if (index < 0 || !it.isEnabled()) return;
+            select(index);
+            Haptics.tap(this, null, true);
+            act(it);
+        });
+        page.addView(v);
+        page.addView(line());
+        items.add(it);
+        return it;
     }
 
-    private View actionRow(String label, String help, View.OnClickListener l) {
-        View row = rowFrame(label, help, text("›", 20, ACCENT, true));
-        row.setOnClickListener(l);
-        return row;
+    private Item actionRow(String label, String help, Runnable action) {
+        Item it = row(label, help, "›", false);
+        it.onA = action;
+        return it;
     }
 
-    // A setting: tap / A = the next value, left / right on the controller = the previous / next; written at once
-    private View choiceRow(final Settings st, final Choice c) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
+    private static String chooser(String name) {
+        return "‹   " + name + "   ›";
+    }
+
+    // A setting: left / right = the previous / next value, A or a tap = the next; written at once, shown at once
+    private Item choiceRow(final Settings st, final Choice c) {
         final int[] at = {c.index(st.get(c.key, c.def))};
-        final Runnable show = () -> value.setText("◀  " + T(c.names[at[0]]) + "  ▶");
-        show.run();
-        final View row = rowFrame(c.label, c.help, value);
-        final java.util.function.IntConsumer step = d -> {
+        final Item it = row(c.label, c.help, chooser(T(c.names[at[0]])), false);
+        final TextView value = it.main.get(it.main.size() - 1);
+        it.onStep = d -> {
             at[0] = (at[0] + d + c.values.length) % c.values.length;
             if (st.set(c.key, c.values[at[0]])) {
                 Diag.log(this, "main", "setting " + c.key + " = " + c.values[at[0]]);
             } else {
                 Toast.makeText(this, T("Não foi possível salvar em ") + st.file(), Toast.LENGTH_LONG).show();
             }
-            show.run();
+            value.setText(chooser(T(c.names[at[0]])));
+            if (Haptics.KEY.equals(c.key)) Haptics.refresh(this);
             if (Lang.KEY.equals(c.key)) {   // the launcher's language: the screen is built again in it
                 Lang.init(this);
                 recreate();
+                return;
+            }
+            if (currentTab == TAB_GRAPHICS) {
+                // the preset row names what the rows now make (Personalizado once they differ from all three)
+                Item preset = items.isEmpty() ? null : items.get(0);
+                if (preset != null && preset != it) preset.main.get(preset.main.size() - 1).setText(chooser(T(PRESET_NAMES[presetNow(st)])));
             }
         };
-        row.setOnClickListener(v -> step.accept(1));
-        row.setOnKeyListener((v, keyCode, e) -> {
-            if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { step.accept(-1); return true; }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { step.accept(1); return true; }
-            return false;
-        });
-        return row;
+        return it;
     }
 
     // Leaving the app (not the same as the game's "return to launcher", which ends a game session and comes back here): the
@@ -501,15 +757,22 @@ public final class LauncherActivity extends Activity {
     // the app keeps running. The settings, the saves, the ISO and the logs are files: nothing is lost.
     private void confirmExit() {
         final boolean gameAlive = Diag.processAlive(this, "game");
-        new AlertDialog.Builder(this)
-            .setTitle(T("Sair do aplicativo?"))
-            .setMessage(T(gameAlive
-                    ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
-                      + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
-                    : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados."))
-            .setPositiveButton(T("Sair"), (d, w) -> exitApp())
-            .setNegativeButton(T("Cancelar"), null)
-            .show();
+        dialog(T("Sair do aplicativo?"),
+            T(gameAlive
+                ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
+                  + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
+                : "O TwinsanityEvolved será fechado. Configurações, saves e a ISO continuam guardados."),
+            null, new String[] {T("Sair"), T("Cancelar")}, 1, 1, i -> { if (i == 0) exitApp(); });
+    }
+
+    /** A dialog over the launcher (OledDialog): a held direction is let go, and START is refused while it is shown. */
+    private OledDialog dialog(String title, String text, View extra, String[] labels, int defaultIndex, int cancelIndex,
+                              OledDialog.OnChoice onChoice) {
+        releaseHeld();
+        final OledDialog d = OledDialog.show(this, title, text, extra, labels, defaultIndex, cancelIndex, onChoice);
+        openDialog = d;
+        d.setOnDismissListener(x -> { if (openDialog == d) openDialog = null; });
+        return d;
     }
 
     private void exitApp() {
@@ -525,6 +788,7 @@ public final class LauncherActivity extends Activity {
         }
         finishAndRemoveTask();
     }
+
 
     // ---- the gamepad-button remap (ps2r.ini android.pad.<ps2 button> = <SDL control>; the game applies it at its start) ----
     // The PS2 buttons (the engine's [pad] names), their labels, and SDL's standard layout (the DualShock 2's)
@@ -585,58 +849,51 @@ public final class LauncherActivity extends Activity {
         return st.get("android.pad." + PAD_BUTTONS[i], PAD_DEFAULTS[i]);
     }
 
-    private View padRow(final Settings st, final int i) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
-        value.setText(controlLabel(padControl(st, i)));   // (A, B, L1, ...: the same in both languages)
-        View row = rowFrame(PAD_LABELS[i], null, value);
-        row.setOnClickListener(v -> capturePad(st, i));
-        return row;
+
+    private Item padRow(final Settings st, final int i) {
+        Item it = row(PAD_LABELS[i], null, controlLabel(padControl(st, i)), false);   // (A, B, L1, ...: the same in both languages)
+        it.onA = () -> capturePad(st, i);
+        return it;
     }
 
     // Press-to-bind: the next gamepad key is the PS2 button's control; a control already bound to another PS2 button
-    // swaps with this one's (no button is ever left without a control). Cancel: the dialog's button (touch) or 6 s.
+    // swaps with this one's (no button is ever left without a control). B binds like any other button: the dialog is
+    // cancelled by its button (touch), Android's back gesture or 6 s.
     private void capturePad(final Settings st, final int i) {
-        final AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(T(PAD_LABELS[i]))
-            .setMessage(T("Aperte agora o botão do controle para ") + T(PAD_LABELS[i]) + T(".\n(Atual: ") + controlLabel(padControl(st, i))
-                    + T(". Cancela sozinho em 6 segundos.)"))
-            .setNegativeButton(T("Cancelar"), null)
-            .create();
-        final android.os.Handler h = new android.os.Handler(getMainLooper());
-        final Runnable timeout = () -> { if (dialog.isShowing()) dialog.dismiss(); };
-        dialog.setOnKeyListener((d, keyCode, e) -> {
-            String control = sdlControl(keyCode);
+        final OledDialog[] holder = new OledDialog[1];
+        final Runnable timeout = () -> { if (holder[0] != null) holder[0].close(); };
+        holder[0] = dialog(T(PAD_LABELS[i]),
+            T("Aperte agora o botão do controle para ") + T(PAD_LABELS[i]) + T(".\n(Atual: ") + controlLabel(padControl(st, i))
+                + T(". Cancela sozinho em 6 segundos.)"),
+            null, new String[] {T("Cancelar")}, 0, 0, x -> ui.removeCallbacks(timeout));
+        holder[0].setKeyInterceptor(e -> {
+            String control = sdlControl(e.getKeyCode());
             if (control == null) return false;
-            if (e.getAction() != KeyEvent.ACTION_DOWN) return true;
+            if (e.getAction() != KeyEvent.ACTION_DOWN || e.getRepeatCount() != 0) return true;
             String old = padControl(st, i);
             boolean ok = true;
             for (int k = 0; k < PAD_BUTTONS.length; k++)
                 if (k != i && padControl(st, k).equals(control)) ok &= st.set("android.pad." + PAD_BUTTONS[k], old);
             ok &= st.set("android.pad." + PAD_BUTTONS[i], control);
             Diag.log(this, "main", "pad remap: " + PAD_BUTTONS[i] + " = " + control + (ok ? "" : " (NOT written)"));
-            h.removeCallbacks(timeout);
-            dialog.dismiss();
-            showTab(2);
+            ui.removeCallbacks(timeout);
+            Haptics.tap(this, e, true);
+            holder[0].close();
+            rebuild();
             return true;
         });
-        dialog.setOnDismissListener(d -> h.removeCallbacks(timeout));
-        dialog.show();
-        h.postDelayed(timeout, 6000);
+        ui.postDelayed(timeout, 6000);
     }
 
     private void confirmPadRestore() {
-        new AlertDialog.Builder(this)
-            .setTitle(T("Restaurar botões padrão?"))
-            .setMessage(T("Todos os botões voltam ao layout do DualShock 2 (A = ✕, B = ○, X = □, Y = △...)."))
-            .setPositiveButton(T("Restaurar"), (d, w) -> {
+        dialog(T("Restaurar botões padrão?"), T("Todos os botões voltam ao layout do DualShock 2 (A = ✕, B = ○, X = □, Y = △...)."),
+            null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
+                if (w != 0) return;
                 Settings st = new Settings(this);
                 for (int k = 0; k < PAD_BUTTONS.length; k++) st.set("android.pad." + PAD_BUTTONS[k], PAD_DEFAULTS[k]);
                 Diag.log(this, "main", "pad remap restored to the standard layout");
-                showTab(2);
-            })
-            .setNegativeButton(T("Cancelar"), null)
-            .show();
+                rebuild();
+            });
     }
 
     // ---- graphics presets: the filter, the anisotropy, the LOD, FXAA and dithering together (the game's 'graphics preset'
@@ -655,15 +912,13 @@ public final class LauncherActivity extends Activity {
         return 3;
     }
 
-    private View presetRow(final Settings st) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
-        final int now = presetNow(st);
-        value.setText("◀  " + T(PRESET_NAMES[now]) + "  ▶");
-        View row = rowFrame("Predefinição gráfica",
+
+    private Item presetRow(final Settings st) {
+        Item it = row("Predefinição gráfica",
             "Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
-            value);
-        final java.util.function.IntConsumer step = d -> {
+            chooser(T(PRESET_NAMES[presetNow(st)])), false);
+        it.onStep = d -> {
+            int now = presetNow(st);
             int next = now == 3 ? (d > 0 ? 0 : 2) : (now + d + 3) % 3;
             st.set(Settings.TEXTURE_FILTER, "bilinear");
             st.set(Settings.ANISOTROPY, PRESETS[next][0]);
@@ -671,91 +926,86 @@ public final class LauncherActivity extends Activity {
             st.set(Settings.FXAA, "off");
             st.set(Settings.DITHERING, "off");
             Diag.log(this, "main", "graphics preset " + PRESET_NAMES[next]);
-            showTab(0);
+            rebuild();
         };
-        row.setOnClickListener(v -> step.accept(1));
-        row.setOnKeyListener((v, keyCode, e) -> {
-            if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
-            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { step.accept(-1); return true; }
-            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { step.accept(1); return true; }
-            return false;
-        });
-        return row;
+        return it;
     }
 
     // Recovery: the graphic options alone back to the Android profile (a black screen or a failed start after a graphics
     // change); the audio, the controls, the language, the ISO and the saves are not touched
     private void confirmRestoreGraphics() {
-        new AlertDialog.Builder(this)
-            .setTitle(T("Restaurar apenas gráficos?"))
-            .setMessage(T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."))
-            .setPositiveButton(T("Restaurar"), (d, w) -> {
+        dialog(T("Restaurar apenas gráficos?"), T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."),
+            null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
+                if (w != 0) return;
                 Settings st = new Settings(this);
                 boolean ok = true;
                 for (Choice c : GRAPHICS) ok &= st.set(c.key, c.def);
                 ok &= st.set(Settings.FULLSCREEN, "fullscreen");
                 Diag.log(this, "main", "graphics restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
                 Toast.makeText(this, ok ? T("Gráficos restaurados") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
-                showTab(currentTab);
-            })
-            .setNegativeButton(T("Cancelar"), null)
-            .show();
+                rebuild();
+            });
     }
 
     private void confirmRestore() {
-        new AlertDialog.Builder(this)
-            .setTitle(T("Restaurar configurações padrão?"))
-            .setMessage(T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
-                    + T("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas)."))
-            .setPositiveButton(T("Restaurar"), (d, w) -> {
+        dialog(T("Restaurar configurações padrão?"),
+            T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
+                + T("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas)."),
+            null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
+                if (w != 0) return;
                 Settings st = new Settings(this);
                 boolean ok = true;
                 for (Choice[] group : new Choice[][] {GRAPHICS, AUDIO, CONTROLS})
                     for (Choice c : group) ok &= st.set(c.key, c.def);
+                Haptics.refresh(this);
                 Diag.log(this, "main", "settings restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
                 Toast.makeText(this, ok ? T("Configurações padrão restauradas") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
-                showTab(currentTab);
-            })
-            .setNegativeButton(T("Cancelar"), null)
-            .show();
+                rebuild();
+            });
     }
 
-    // ---- the game's state on the left -----------------------------------------------------------------------------------
+    // ---- the game's state on the Jogar tab -------------------------------------------------------------------------------
     private void refresh() {
+        updatePlayState();
+        if (status != null) status.setText(statusText());
+        paintItems();
+    }
+
+    private void updatePlayState() {
+        if (playLabel != null) playLabel.setText(T(starting ? "Iniciando…" : "JOGAR"));
+        if (isoName == null) return;
         String source = prefs().getString("iso_source", null);
         String[] disc = Diag.findDiscImage(this);
         if (disc[0] == null) {
             isoName.setText(T("Nenhuma ISO selecionada"));
-            isoState.setText(T("Toque em \"Selecionar ISO…\" e escolha a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
-            isoState.setTextColor(BAD);
+            isoState.setText(T("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
+            isoState.setTextColor(FG);
         } else {
             StringBuilder r = new StringBuilder();
             String err = Diag.checkDiscImage(disc[0], r);
             isoName.setText(source != null ? source : new File(disc[0]).getName());
-            isoState.setText(err == null ? T("Pronta — ") + r : T("Não utilizável: ") + err);
-            isoState.setTextColor(err == null ? GOOD : BAD);
+            isoState.setText(err == null ? "✓  " + T("Pronta — ") + r : "✕  " + T("Não utilizável: ") + err);
+            isoState.setTextColor(err == null ? SUBTLE : FG);
         }
-        lastRun.setText(T(lastRunLine()));
-        if (status != null) status.setText(statusText());
+        if (lastRun != null) {
+            String[] line = lastRunLine();
+            lastRun.setText(T(line[0]));
+            lastRun.setTextColor(line[1] != null ? FG : SUBTLE);
+        }
     }
 
-    // what the last start did, in one line (the Diagnóstico page has the detail)
-    private String lastRunLine() {
+    // what the last start did, in one line (Sistema's diagnostics have the detail); [1] non-null when it went wrong
+    private String[] lastRunLine() {
         File f = new File(Diag.logsDir(this), "stage-game.txt");
         String s = Diag.readFile(f, 2000);
-        if (s == null) return "Ainda não executado nesta instalação.";
+        if (s == null) return new String[] {"Ainda não executado nesta instalação.", null};
         s = s.trim();
         if (s.startsWith("running")) {
-            if (Diag.processAlive(this, "game")) return "O jogo está em execução.";
-            lastRun.setTextColor(BAD);
-            return "A última execução terminou de forma inesperada. Veja Diagnóstico → Compartilhar relatório.";
+            if (Diag.processAlive(this, "game")) return new String[] {"O jogo está em execução.", null};
+            return new String[] {"A última execução terminou de forma inesperada. Veja Sistema → Compartilhar relatório.", "bad"};
         }
-        if (s.startsWith("crash")) {
-            lastRun.setTextColor(BAD);
-            return "A última execução travou. Veja Diagnóstico → Compartilhar relatório.";
-        }
-        lastRun.setTextColor(SUBTLE);
-        return "A última execução terminou normalmente.";
+        if (s.startsWith("crash")) return new String[] {"A última execução travou. Veja Sistema → Compartilhar relatório.", "bad"};
+        return new String[] {"A última execução terminou normalmente.", null};
     }
 
     private SharedPreferences prefs() {
@@ -772,20 +1022,19 @@ public final class LauncherActivity extends Activity {
         StringBuilder r = new StringBuilder();
         String err = disc[0] == null ? disc[1] : Diag.checkDiscImage(disc[0], r);
         if (err != null && !force) {
-            new AlertDialog.Builder(this)
-                .setTitle(T("Imagem do disco não disponível"))
-                .setMessage(T("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n")
-                        + T("Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n")
-                        + T("Detalhe: ") + err)
-                .setPositiveButton(T("Selecionar ISO"), (d, w) -> pickIso())
-                .setNeutralButton(T("Cancelar"), null)
-                .setNegativeButton(T("Iniciar mesmo assim"), (d, w) -> startGame(true))
-                .show();
+            dialog(T("Imagem do disco não disponível"),
+                T("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n")
+                    + T("Escolha \"Selecionar ISO ou CHD…\" e indique o arquivo no gerenciador de arquivos do Android.\n\n")
+                    + T("Detalhe: ") + err,
+                null, new String[] {T("Selecionar ISO"), T("Iniciar mesmo assim"), T("Cancelar")}, 0, 2, w -> {
+                    if (w == 0) pickIso();
+                    else if (w == 1) startGame(true);
+                });
             return;
         }
         starting = true;
-        playButton.setText(T("Iniciando…"));
-        playButton.setEnabled(false);
+        updatePlayState();
+        paintItems();
         Diag.log(this, "main", "starting the game (disc: " + disc[0] + ", " + r + ")");
         Intent i = new Intent(this, MainActivity.class);
         if (err == null) i.putExtra(MainActivity.EXTRA_ISO, disc[0]);
@@ -880,6 +1129,7 @@ public final class LauncherActivity extends Activity {
         return b.toString();
     }
 
+
     // --- the disc image picker (Storage Access Framework) and the copy into the app's private storage ---------------------
     // The engine reads a file path; a document URI is not one, and a file another app put in Android/data may not be
     // readable by this app (EACCES on Android 11+). So the chosen document is copied through the ContentResolver into
@@ -892,8 +1142,10 @@ public final class LauncherActivity extends Activity {
         i.setType("*/*");
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION);
         try {
+            pickerOpen = true;
             startActivityForResult(i, REQUEST_PICK_ISO);
         } catch (Exception e) {
+            pickerOpen = false;
             Diag.log(this, "main", "ACTION_OPEN_DOCUMENT failed: " + e);
             Toast.makeText(this, T("O seletor de arquivos do Android não abriu: ") + e.getMessage(), Toast.LENGTH_LONG).show();
         }
@@ -903,6 +1155,7 @@ public final class LauncherActivity extends Activity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         if (requestCode != REQUEST_PICK_ISO) return;
+        pickerOpen = false;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) {
             Diag.log(this, "main", "ISO picker: cancelled");
             return;
@@ -922,6 +1175,7 @@ public final class LauncherActivity extends Activity {
         return String.format(Locale.US, "%.1f MB", bytes / 1048576.0);
     }
 
+
     private void copyIso(final Uri uri) {
         String name = "(sem nome)";
         long size = -1;
@@ -940,9 +1194,9 @@ public final class LauncherActivity extends Activity {
         long free = new StatFs(getFilesDir().getAbsolutePath()).getAvailableBytes();
         long existing = target.isFile() ? target.length() : 0;
         if (size > 0 && size + 64L * 1048576 > free + existing) {
-            new AlertDialog.Builder(this).setTitle(T("Espaço insuficiente"))
-                .setMessage(T("A ISO tem ") + mb(size) + T(" e o armazenamento interno tem ") + mb(free + existing) + T(" livres. Libere espaço e tente de novo."))
-                .setPositiveButton(T("OK"), null).show();
+            dialog(T("Espaço insuficiente"),
+                T("A ISO tem ") + mb(size) + T(" e o armazenamento interno tem ") + mb(free + existing) + T(" livres. Libere espaço e tente de novo."),
+                null, new String[] {T("OK")}, 0, 0, null);
             Diag.log(this, "main", "ISO copy refused: " + mb(size) + " needed, " + mb(free + existing) + " free");
             return;
         }
@@ -951,23 +1205,21 @@ public final class LauncherActivity extends Activity {
         final long total = size;
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (20 * getResources().getDisplayMetrics().density);
-        box.setPadding(pad, pad, pad, pad);
-        final TextView label = new TextView(this);
+        final TextView label = text("", 14, FG, false);
         label.setText(T("Copiando ") + displayName + "…");
         final ProgressBar bar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         bar.setMax(1000);
         bar.setIndeterminate(total <= 0);
+        bar.setProgressTintList(ColorStateList.valueOf(FG));
+        bar.setIndeterminateTintList(ColorStateList.valueOf(FG));
+        bar.setProgressBackgroundTintList(ColorStateList.valueOf(DIM));
         box.addView(label);
         box.addView(bar);
         copyCancel.set(false);
-        final AlertDialog dialog = new AlertDialog.Builder(this)
-            .setTitle(T("Copiando a ISO para o app"))
-            .setView(box)
-            .setCancelable(false)
-            .setNegativeButton(T("Cancelar"), (d, w) -> copyCancel.set(true))
-            .show();
         copying = true;
+        paintItems();
+        final OledDialog dialog = dialog(T("Copiando a ISO para o app"), null, box, new String[] {T("Cancelar")}, 0, 0,
+            w -> copyCancel.set(true));
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         final File tmp = new File(target.getParentFile(), "twinsanity.iso.part");
 
@@ -1024,21 +1276,20 @@ public final class LauncherActivity extends Activity {
             runOnUiThread(() -> {
                 copying = false;
                 getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-                dialog.dismiss();
+                dialog.close();
                 if (err == null) {
                     prefs().edit().putString("iso_source", displayName + " (" + mb(finalCopied) + ")").apply();
-                    new AlertDialog.Builder(this).setTitle(T("ISO pronta"))
-                        .setMessage(displayName + T(" foi copiada e verificada:\n") + report + T("\n\nVocê pode apagar o arquivo original se quiser liberar espaço."))
-                        .setPositiveButton(T("Iniciar jogo"), (d, w) -> startGame(false))
-                        .setNegativeButton(T("OK"), null).show();
+                    dialog(T("ISO pronta"),
+                        displayName + T(" foi copiada e verificada:\n") + report + T("\n\nVocê pode apagar o arquivo original se quiser liberar espaço."),
+                        null, new String[] {T("Iniciar jogo"), T("OK")}, 0, 1, w -> { if (w == 0) startGame(false); });
                 } else {
-                    new AlertDialog.Builder(this).setTitle(T("A cópia da ISO falhou"))
-                        .setMessage(err).setPositiveButton(T("OK"), null).show();
+                    dialog(T("A cópia da ISO falhou"), err, null, new String[] {T("OK")}, 0, 0, null);
                 }
                 refresh();
             });
         }, "te-iso-copy").start();
     }
+
 
     private void buildReport(final boolean share) {
         Toast.makeText(this, T("Gerando relatório…"), Toast.LENGTH_SHORT).show();

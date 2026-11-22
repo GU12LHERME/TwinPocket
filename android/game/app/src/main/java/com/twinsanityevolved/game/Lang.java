@@ -49,27 +49,37 @@ final class Lang {
         e("Áudio", "Audio");
         e("Controles", "Controls");
         e("Sistema", "System");
-        e("Diagnóstico", "Diagnostics");
         e("JOGAR", "PLAY");
         e("Iniciando…", "Starting…");
-        e("Selecionar ISO…", "Select ISO…");
         e("Selecionar ISO", "Select ISO");
         e("Sair do aplicativo", "Exit application");
         e("JOGO SELECIONADO", "SELECTED GAME");
         e("TwinsanityEvolved · port nativo Android", "TwinsanityEvolved · native Android port");
-        e("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar · no jogo: Opções → android settings → return to launcher",
-          "A select · ◀ ▶ change · L1/R1 category · START play · B back · in game: Options → android settings → return to launcher");
+        e("A  Confirmar      B  Voltar      LB / RB  Abas      ◀ ▶  Alterar      START  Jogar",
+          "A  Confirm      B  Back      LB / RB  Tabs      ◀ ▶  Change      START  Play");
+        e("Jogar", "Play");
+        e("Selecionar ISO ou CHD…", "Select ISO or CHD…");
+        e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
+        e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
+        e("RESTAURAR", "RESTORE");
+        e("DIAGNÓSTICO", "DIAGNOSTICS");
+        e("APLICATIVO", "APPLICATION");
+        e("BOTÕES", "BUTTONS");
+        e("Modo diagnóstico", "Diagnostic mode");
+        e("Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
+          "Logs the GPU messages, the sticks and the game's vibration and lets L3 + R3 capture a frame (leave off to play)");
+        e("Fecha o TwinsanityEvolved (configurações, saves e a ISO ficam guardados)", "Closes TwinsanityEvolved (settings, saves and the ISO are kept)");
         e("versão ", "version ");
         e("Nenhuma ISO selecionada", "No ISO selected");
-        e("Toque em \"Selecionar ISO…\" e escolha a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
-          "Tap \"Select ISO…\" and choose YOUR Crash Twinsanity disc image (PAL or NTSC-U).");
+        e("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
+          "Choose \"Select ISO or CHD…\" and point to YOUR Crash Twinsanity disc image (PAL or NTSC-U).");
         e("Pronta — ", "Ready — ");
         e("Não utilizável: ", "Not usable: ");
         e("Ainda não executado nesta instalação.", "Not run yet on this installation.");
         e("O jogo está em execução.", "The game is running.");
-        e("A última execução terminou de forma inesperada. Veja Diagnóstico → Compartilhar relatório.",
-          "The last run ended unexpectedly. See Diagnostics → Share report.");
-        e("A última execução travou. Veja Diagnóstico → Compartilhar relatório.", "The last run crashed. See Diagnostics → Share report.");
+        e("A última execução terminou de forma inesperada. Veja Sistema → Compartilhar relatório.",
+          "The last run ended unexpectedly. See System → Share report.");
+        e("A última execução travou. Veja Sistema → Compartilhar relatório.", "The last run crashed. See System → Share report.");
         e("A última execução terminou normalmente.", "The last run ended normally.");
 
         // graphics
@@ -139,9 +149,9 @@ final class Lang {
         e("Maior: o personagem chega à velocidade máxima com menos inclinação", "Higher: the character reaches full speed with less tilt");
         e("133% — padrão", "133% — default");
         e("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).", "The sticks change at once, from the game too (Options → android settings).");
-        e("BOTÕES — escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
+        e("Escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
                 + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.",
-          "BUTTONS — choose a PS2 button and press the controller button that should act as it. If that button is already in use, "
+          "Choose a PS2 button and press the controller button that should act as it. If that button is already in use, "
                 + "the two swap. Applies at the next game start; the launcher does not change.");
         e("Restaurar botões padrão", "Restore default buttons");
         e("O layout do controle volta ao do DualShock 2", "The controller layout goes back to the DualShock 2's");
@@ -207,8 +217,6 @@ final class Lang {
         e("Um arquivo de texto com os logs da última execução", "A text file with the last run's logs");
         e("Copiar relatório", "Copy report");
         e("O mesmo relatório para a área de transferência", "The same report to the clipboard");
-        e("Modo diagnóstico: ", "Diagnostic mode: ");
-        e("LIGADO", "ON");
         e("desligado", "off");
         e("Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
           "Logs the GPU's messages and the sticks and lets L3 + R3 capture a frame (leave it off to play)");
@@ -237,8 +245,8 @@ final class Lang {
         e("Imagem do disco não disponível", "Disc image not available");
         e("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n",
           "The game needs YOUR Crash Twinsanity disc image (PAL SLES-52568 or NTSC-U SLUS-20909 v2.00).\n\n");
-        e("Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n",
-          "Tap \"Select ISO\" and choose the file in Android's file manager.\n\n");
+        e("Escolha \"Selecionar ISO ou CHD…\" e indique o arquivo no gerenciador de arquivos do Android.\n\n",
+          "Choose \"Select ISO or CHD…\" and point to the file in Android's file manager.\n\n");
         e("Detalhe: ", "Detail: ");
         e("Iniciar mesmo assim", "Start anyway");
         e("O seletor de arquivos do Android não abriu: ", "Android's file picker did not open: ");
