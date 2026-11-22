@@ -68,7 +68,8 @@ GamepadBackend::GamepadBackend(float deadzone, float sensitivity, bool enabled,
 #if defined(__ANDROID__)
     // the accelerometer is not a pad (see IsSensor); set before the joystick subsystem starts
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
-    log_sticks_ = true;
+    // the stick log (LogSticks: up to 8 lines a second while a stick moves) was on by default for the stick-drift diagnosis,
+    // now fixed; it is the launcher's diagnostic mode's (TE_INPUT_LOG=1), off for play
 #endif
     if (const char* v = std::getenv("TE_INPUT_LOG")) log_sticks_ = v[0] == '1';
     if (SDL_InitSubSystem(SDL_INIT_GAMECONTROLLER) != 0) {

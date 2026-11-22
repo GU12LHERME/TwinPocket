@@ -77,8 +77,9 @@ public final class LauncherActivity extends Activity {
     static final String DEFAULT_AUDIO_DRIVER = "openslES";
 
     // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
-    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), for a report about a graphics problem. Off, neither costs anything.
-    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1"};
+    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1) and logs the sticks (TE_INPUT_LOG=1), for a report about a graphics or a
+    // controls problem. Off, none of them costs anything.
+    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1", "TE_INPUT_LOG=1"};
 
     // ---- the settings this screen shows: the game's keys and words (Settings.java) ---------------------------------------
     static final class Choice {
@@ -375,7 +376,7 @@ public final class LauncherActivity extends Activity {
                 page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
                 final boolean diag = prefs().getBoolean("diagnostic_mode", false);
                 page.addView(actionRow("Modo diagnóstico: " + (diag ? "LIGADO" : "desligado"),
-                        "Registra as mensagens da GPU e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
+                        "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
                             prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
                             Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
                             showTab(4);
