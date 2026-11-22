@@ -167,6 +167,13 @@ jobs:
           javac -d "$RUNNER_TEMP/nav" android/game/app/src/main/java/com/twinsanityevolved/game/Nav.java tools/android/TestNav.java
           java -cp "$RUNNER_TEMP/nav" com.twinsanityevolved.game.TestNav 2>&1 | tee "$LOG_DIR/launcher-nav.log"
 
+      - name: Guarded game memory (every out-of-range access faults, as the checked build trapped)
+        shell: bash
+        run: |
+          set -euo pipefail
+          clang++ -std=c++17 -O1 -D__ANDROID__=1 -Iengine tools/android/test_guarded_memory.cpp engine/engine/ee/mem/main_memory.cpp -o "$RUNNER_TEMP/test_guarded_memory"
+          "$RUNNER_TEMP/test_guarded_memory" 2>&1 | tee "$LOG_DIR/guarded-memory.log"
+
       - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
         shell: bash
         run: |

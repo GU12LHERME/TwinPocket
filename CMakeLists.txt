@@ -311,7 +311,11 @@ endforeach()
 # the parts (the table's allocation; no table.grow) for TE_W2C_FIXED_TABLE; every switch is a -D, the text is the same.
 set(TE_W2C_UNCHECKED_STEP)
 set(TE_W2C_UNCHECKED_DEP)
-if(TE_VITA)
+if(TE_ANDROID)
+    # Android: the module's loads and stores without the per-access compare, over a guarded memory (see below)
+    option(TE_ANDROID_UNCHECKED_MEMORY "Android: the module's loads and stores unchecked over the guarded 8 GiB reservation (OFF = checked)" ON)
+endif()
+if(TE_VITA OR (TE_ANDROID AND TE_ANDROID_UNCHECKED_MEMORY))
     set(TE_W2C_UNCHECKED_STEP COMMAND ${Python3_EXECUTABLE} "${TE_TOOLS}/w2c_unchecked.py" "${TE_W2C}/game-impl.h" ${TE_W2C_SOURCES})
     set(TE_W2C_UNCHECKED_DEP "${TE_TOOLS}/w2c_unchecked.py")
 endif()
@@ -427,6 +431,18 @@ elseif(TE_ANDROID)
     # [te.android] perf lines (the launcher's report, DESEMPENHO). TE_ANDROID_W2C_FLAGS="-O1" restores the previous build.
     set(TE_ANDROID_W2C_FLAGS "-O2;-fno-math-errno" CACHE STRING "Android: the w2c parts' optimisation flags (a ;-list)")
     set_source_files_properties(${TE_W2C_SOURCES} PROPERTIES COMPILE_OPTIONS "${TE_ANDROID_W2C_FLAGS}")
+    # TE_ANDROID_UNCHECKED_MEMORY (ON): the per-access bounds check compiled out, as the Vita's shipped build
+    # (tools/w2c_unchecked.py: every load and store was a 64-bit add and compare against the size, plus the memory's base
+    # and size reloaded from the instance after every store and call -- the Vita measured the hot TransformJoints at 278
+    # instructions unchecked against 754 checked). Unlike the Vita, Android loses no safety: on a 64-bit device the 32 MB
+    # sit at the start of an 8 GiB reservation that is otherwise inaccessible (engine/ee/mem/main_memory.h
+    # MainMemoryGuardedAllocator) -- every address the module can form (32-bit address + 32-bit offset) is inside it, so an
+    # access outside the 32 MB faults exactly where the checked build would have trapped (both end the game), and no other
+    # memory is ever read or written. The same switch takes float->i32 by its bits first (identical for all 2^32 inputs).
+    # The bulk copies / fills keep their range checks. OFF = the checked build, for an A/B or a hunt for a stray access.
+    if(TE_ANDROID_UNCHECKED_MEMORY)
+        target_compile_definitions(tegame PUBLIC TE_W2C_UNCHECKED_MEMORY=1)
+    endif()
 else()
     set_source_files_properties(${TE_W2C_SOURCES} PROPERTIES COMPILE_OPTIONS "-O1")   # 39 MB of C: -O1 keeps the build minutes, not hours
 endif()
