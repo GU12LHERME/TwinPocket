@@ -173,6 +173,12 @@ final class Lang {
         e("Original: a saída de 16 bits com dithering do próprio PS2. Desligado: a imagem de 24 bits do port, mais lisa",
           "Original: the PS2's own dithered 16-bit output. Off: the port's smoother 24-bit picture");
         e("Original (PS2)", "Original (PS2)");
+        e("Predefinição gráfica", "Graphics preset");
+        e("Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
+          "Original: as the game. Balanced: anisotropic 4x, LOD 2x. Quality: anisotropic 16x, LOD 4x. The resolution does not change (2x not validated yet)");
+        e("Equilibrado", "Balanced");
+        e("Qualidade", "Quality");
+        e("Personalizado", "Custom");
         e("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas).",
           "buffer 2048, sticks at their defaults. The ISO and the saves do not change; the game's widescreen option is kept in the save (Options → graphic options).");
         e("Restaurar", "Restore");

@@ -367,6 +367,7 @@ public final class LauncherActivity extends Activity {
         Settings st = new Settings(this);
         switch (index) {
             case 0:
+                page.addView(presetRow(st));
                 for (Choice c : GRAPHICS) page.addView(choiceRow(st, c));
                 note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
                 break;
@@ -619,6 +620,50 @@ public final class LauncherActivity extends Activity {
             })
             .setNegativeButton(T("Cancelar"), null)
             .show();
+    }
+
+    // ---- graphics presets: the filter, the anisotropy, the LOD, FXAA and dithering together (the game's 'graphics preset'
+    // row is the same, display.cpp); the resolution, the frame rate, the shape, the audio and the controls never change ----
+    static final String[] PRESET_NAMES = {"Original", "Equilibrado", "Qualidade", "Personalizado"};
+    static final String[][] PRESETS = {   // anisotropy, LOD
+        {"1", "original"}, {"4", "medium"}, {"16", "max"}};
+
+    private int presetNow(Settings st) {
+        for (int i = 0; i < PRESETS.length; i++) {
+            if (st.get(Settings.TEXTURE_FILTER, "bilinear").equals("bilinear") && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
+                    && st.get(Settings.DRAW_DISTANCE, "original").equals(PRESETS[i][1]) && st.get(Settings.FXAA, "off").equals("off")
+                    && st.get(Settings.DITHERING, "off").equals("off"))
+                return i;
+        }
+        return 3;
+    }
+
+    private View presetRow(final Settings st) {
+        final TextView value = text("", 14, ACCENT, true);
+        value.setPadding(dp(12), 0, 0, 0);
+        final int now = presetNow(st);
+        value.setText("◀  " + T(PRESET_NAMES[now]) + "  ▶");
+        View row = rowFrame("Predefinição gráfica",
+            "Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
+            value);
+        final java.util.function.IntConsumer step = d -> {
+            int next = now == 3 ? (d > 0 ? 0 : 2) : (now + d + 3) % 3;
+            st.set(Settings.TEXTURE_FILTER, "bilinear");
+            st.set(Settings.ANISOTROPY, PRESETS[next][0]);
+            st.set(Settings.DRAW_DISTANCE, PRESETS[next][1]);
+            st.set(Settings.FXAA, "off");
+            st.set(Settings.DITHERING, "off");
+            Diag.log(this, "main", "graphics preset " + PRESET_NAMES[next]);
+            showTab(0);
+        };
+        row.setOnClickListener(v -> step.accept(1));
+        row.setOnKeyListener((v, keyCode, e) -> {
+            if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { step.accept(-1); return true; }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { step.accept(1); return true; }
+            return false;
+        });
+        return row;
     }
 
     private void confirmRestore() {

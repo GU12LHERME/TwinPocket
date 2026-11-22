@@ -98,6 +98,28 @@ uint32_t AnisoIndex(int anisotropy) {
     return i;
 }
 
+// THE GRAPHICS PRESETS (Android): only what exists and is validated -- the filter (bilinear), the anisotropy (up to the
+// driver's maximum), the draw distance, the anti-aliasing (off: not validated on the device yet), the dithering (off).
+// The resolution, the frame rate, the shape, the audio and the controls are never a preset's.
+//   original: off, original;  balanced: 4x, medium;  quality: 16x, max.  Custom = none of them matches.
+struct Preset { int anisotropy; uint32_t distance; };
+constexpr Preset kPresets[] = {{1, 0}, {4, 1}, {16, 3}};
+int AnisoClamped(int a) {
+    const int max = std::max(1, gfx::MaxAnisotropy());
+    int best = 1;
+    for (int l : kAnisoLevels) if (l <= a && l <= max) best = l;
+    return best;
+}
+uint32_t PresetNow() {
+    for (uint32_t i = 0; i < 3; ++i) {
+        const Preset& p = kPresets[i];
+        if (g_settings.texture_filter == 2 && AnisoClamped(g_settings.anisotropy) == AnisoClamped(p.anisotropy) &&
+            te::port_settings::DrawDistanceChoice() == p.distance && te::port_settings::Fxaa() == 0 && te::port_settings::Dithering() == 0)
+            return i;
+    }
+    return 3;   // custom
+}
+
 }  // namespace
 
 void Configure(const Settings& settings) {
@@ -238,6 +260,7 @@ uint32_t Choices(uint32_t row) {
     case RowAnisotropy: return AnisoChoices();
     case RowAntiAliasing: return te::port_settings::FxaaChoices();
     case RowDithering: return te::port_settings::DitheringChoices();
+    case RowPreset: return te::port_settings::DitheringChoices() ? 4u : 0u;   // (Android: the port rows exist)
     default: return 0;
     }
 }
@@ -284,6 +307,7 @@ std::string RowLabel(uint32_t row) {
     case RowAnisotropy: return "anisotropic filter";
     case RowAntiAliasing: return "anti-aliasing";
     case RowDithering: return "dithering";
+    case RowPreset: return "graphics preset";
     default: return "";
     }
 }
@@ -325,6 +349,10 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     case RowAnisotropy: return choice == 0 ? std::string("off") : choice < 5 ? std::to_string(kAnisoLevels[choice]) + "x" : std::string();
     case RowAntiAliasing: return choice == 0 ? "off" : choice == 1 ? "fxaa" : "";
     case RowDithering: return choice == 0 ? "off" : choice == 1 ? "original (ps2)" : "";
+    case RowPreset: {
+        static const char* const kNames[] = {"original", "balanced", "quality", "custom"};
+        return choice < 4 ? kNames[choice] : "";
+    }
     case RowDisplayMode: {
         static const Id ids[] = {Id::Windowed, Id::Fullscreen, Id::Borderless};
         return choice < 3 ? MS(ids[choice]) : "";
@@ -356,6 +384,7 @@ uint32_t Value(uint32_t row) {
     case RowAnisotropy: return std::min(AnisoIndex(g_settings.anisotropy), AnisoChoices() ? AnisoChoices() - 1 : 0u);
     case RowAntiAliasing: return te::port_settings::Fxaa();
     case RowDithering: return te::port_settings::Dithering();
+    case RowPreset: return PresetNow();
     default: return 0;
     }
 }
@@ -407,6 +436,20 @@ void Set(uint32_t row, uint32_t choice) {
         return;
     case RowAntiAliasing: te::port_settings::SetFxaa(choice); return;
     case RowDithering: te::port_settings::SetDithering(choice); return;
+    case RowPreset: {
+        if (choice >= 3) return;   // custom is what the rows say; choosing it changes nothing (the row snaps back)
+        const Preset& p = kPresets[choice];
+        Set(RowTextureFilter, 2);
+        if (AnisoChoices()) {
+            g_settings.anisotropy = AnisoClamped(p.anisotropy);
+            Persist("video.anisotropy", std::to_string(g_settings.anisotropy));
+        }
+        te::port_settings::SetDrawDistance(p.distance);
+        te::port_settings::SetFxaa(0);
+        te::port_settings::SetDithering(0);
+        std::fprintf(stderr, "[twinsanityevolved] display: graphics preset %s\n", choice == 0 ? "original" : choice == 1 ? "balanced" : "quality");
+        break;
+    }
     case RowAnisotropy:
         g_settings.anisotropy = kAnisoLevels[choice];
         Persist("video.anisotropy", std::to_string(g_settings.anisotropy));
