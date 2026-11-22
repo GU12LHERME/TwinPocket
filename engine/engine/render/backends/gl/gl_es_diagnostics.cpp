@@ -14,8 +14,16 @@
 #include <unordered_map>
 #endif
 
+#include <atomic>
+
 namespace ps2r {
 namespace render {
+
+namespace {
+std::atomic<bool> g_draw_capture{false};
+}  // namespace
+void SetDrawCapture(bool on) { g_draw_capture.store(on, std::memory_order_relaxed); }
+bool DrawCapture() { return g_draw_capture.load(std::memory_order_relaxed); }
 
 #if PS2R_HOST_ANDROID
 namespace {

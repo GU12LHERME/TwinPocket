@@ -11,5 +11,10 @@ namespace render {
 // at intervals. A no-op except on PS2R_HOST_ANDROID.
 void InstallEsDiagnostics();
 
+// The one-picture draw capture (the port's diagnosis: platform/nativeee/host graphics.cpp, L3 + R3 held): while on, the
+// executor logs each textured draw's sampler as chosen and as the driver holds it ("[gl.capture]" lines). Every lane.
+void SetDrawCapture(bool on);
+bool DrawCapture();
+
 }  // namespace render
 }  // namespace ps2r

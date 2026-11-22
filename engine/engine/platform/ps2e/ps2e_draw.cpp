@@ -3097,6 +3097,18 @@ int ps2e_draw_particle_pass_begin(ps2e_draw* d) {
 #endif
 }
 
+int ps2e_draw_texture_info(ps2e_draw* d, uint32_t texture, int* width, int* height, int* levels, int* max_alpha) {
+    if (!d || !texture || texture == PS2E_DRAW_TEXTURE_FRAME_COPY) return 0;
+    auto it = d->textures.find(texture);
+    if (it == d->textures.end()) return 0;
+    const ps2e_draw::Texture& t = it->second;
+    if (width) *width = t.w;
+    if (height) *height = t.h;
+    if (levels) *levels = t.levels;
+    if (max_alpha) *max_alpha = t.max_alpha;
+    return 1;
+}
+
 void ps2e_draw_particle_pass_end(ps2e_draw* d) {
     if (d) EndParticlePass(d);
 }

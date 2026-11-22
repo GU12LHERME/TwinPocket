@@ -246,6 +246,8 @@ jobs:
           check "audio: configurable device buffer (RequestedBufferFrames)" 1    'SdlAudioSink::RequestedBufferFrames'
           check "audio: device callback timing (SdlAudioSink::Stats)"      1    'SdlAudioSink::Stats'
           check "graphics: OpenGL ES driver messages (InstallEsDiagnostics)" 1  'InstallEsDiagnostics'
+          check "graphics: on-demand draw capture (te_graphics_request_capture)" 1 'te_graphics_request_capture'
+          check "graphics: texture info for the capture (ps2e_draw_texture_info)" 1 'ps2e_draw_texture_info'
           echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
           "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"

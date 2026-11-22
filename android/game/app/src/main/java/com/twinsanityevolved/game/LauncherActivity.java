@@ -458,7 +458,8 @@ public final class LauncherActivity extends Activity {
                 b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
                 StringBuilder gx = new StringBuilder();
                 for (String line : game.split("\n"))
-                    if (line.contains("[gl") || line.contains("display:") || line.contains("particles") || line.contains("TE_GFX"))
+                    if (line.contains("[gl") || line.contains("display:") || line.contains("particles") || line.contains("TE_GFX")
+                            || line.contains("te.gfx.capture") || line.contains("te.gfx.submit"))
                         gx.append(line).append('\n');
                 b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
             }

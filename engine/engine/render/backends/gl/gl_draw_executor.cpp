@@ -1,5 +1,6 @@
 // render/backends/gl/gl_draw_executor.cpp -- GlDrawExecutor implementation.
 #include "engine/render/backends/gl/gl_draw_executor.h"
+#include "engine/render/backends/gl/gl_es_diagnostics.h"
 
 #include "engine/platform/host/platform.h"
 #include PS2R_GL_HEADER
@@ -1115,6 +1116,33 @@ void GlDrawExecutor::BindTextures(const gs::TextureSource& tex, const DrawParams
         if (s.using_rt && (tex.transform.depth_fmt != 0 || tex.transform.idx_fmt != 0)) {
             st.TexParami(GL_TEXTURE_MAG_FILTER, GL_NEAREST);
             st.TexParami(GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        }
+        if (DrawCapture()) {
+            // the sampler as chosen here and as the driver holds it (a state-cache or sampler-object override shows as a
+            // difference), the texture's storage and the shader's LOD inputs
+            GLint actual_mag = 0, actual_min = 0, sampler = 0, base = 0, max_level = 0;
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, &actual_mag);
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, &actual_min);
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, &base);
+            glGetTexParameteriv(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, &max_level);
+            glGetIntegerv(GL_SAMPLER_BINDING, &sampler);
+            auto name = [](GLint f) -> const char* {
+                switch (f) {
+                    case GL_NEAREST: return "N";
+                    case GL_LINEAR: return "L";
+                    case GL_NEAREST_MIPMAP_NEAREST: return "N_MIP_N";
+                    case GL_NEAREST_MIPMAP_LINEAR: return "N_MIP_L";
+                    case GL_LINEAR_MIPMAP_NEAREST: return "L_MIP_N";
+                    case GL_LINEAR_MIPMAP_LINEAR: return "L_MIP_L";
+                    default: return "?";
+                }
+            };
+            std::fprintf(stderr, "[gl.capture] tex %u %ux%u levels %d synth %d rt %d | chosen mag %s min %s (title mag_linear %d mmin %d) hw_lod %d "
+                                 "| driver mag %s min %s base %d max %d sampler %d | mip levels %d k %d l %d lcm %d\n",
+                         owner->tex, owner->desc.width, owner->desc.height, int(owner->levels), int(owner->synth_levels), s.using_rt ? 1 : 0,
+                         name(GLint(mag)), name(GLint(min)), tex.sampler.mag_linear ? 1 : 0, int(tex.sampler.mmin), s.hw_lod ? 1 : 0,
+                         name(actual_mag), name(actual_min), base, max_level, sampler, int(tex.transform.mip_levels), int(tex.transform.mip_k),
+                         int(tex.transform.mip_l), tex.transform.mip_lcm ? 1 : 0);
         }
     }
     // Units 2 (u_clut) and 3 (u_idx_tex2) hold valid textures on every draw (bound without a unit switch when they hold

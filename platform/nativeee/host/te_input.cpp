@@ -34,6 +34,8 @@
 #endif
 #endif
 
+extern "C" void te_graphics_request_capture();   // graphics.cpp: one picture's draws logged (L3 + R3)
+
 namespace te::input {
 
 namespace {
@@ -368,6 +370,15 @@ bool Install(Pads& pads, const Settings& settings) {
         s.connected = g_input->Connected() || te::GetSettings().pad_connected;
         s.buttons = p.buttons;
         s.lx = p.lx; s.ly = p.ly; s.rx = p.rx; s.ry = p.ry;
+        {
+            // L3 + R3 pressed together: one picture's draws logged for a graphics diagnosis (graphics.cpp
+            // te_graphics_request_capture); the game still sees the buttons
+            static bool both_was = false;
+            const uint32_t both = ps2r::platform::sdl::kBtnL3 | ps2r::platform::sdl::kBtnR3;
+            const bool both_now = (p.buttons & both) == both;
+            if (both_now && !both_was) te_graphics_request_capture();
+            both_was = both_now;
+        }
 #if defined(__vita__)
         if (g_vpad.on && g_vpad.check_every && g_vpad.reads % g_vpad.check_every == 0) {
             CheckVitaPad(g_vpad);

@@ -209,6 +209,9 @@ enum ps2e_draw_stencil { PS2E_DRAW_STENCIL_OFF = 0, PS2E_DRAW_STENCIL_COUNT_UP =
 /* One draw of `count` vertices (a multiple of 3: a triangle list). Returns the number of triangles rasterised, or a
  * negative value when the state or the vertices were refused (nothing drawn). */
 int ps2e_draw_submit(ps2e_draw* device, const ps2e_draw_state* state, const ps2e_draw_vertex* vertices, int count);
+/* A texture's size, the levels below its first and the largest PS2 alpha uploaded into it, for a diagnosis line (the
+ * drawing thread's). 0 when the handle names no made texture. */
+int ps2e_draw_texture_info(ps2e_draw* device, uint32_t texture, int* width, int* height, int* levels, int* max_alpha);
 
 /* NATIVE MESHES: a model's triangles kept on the device and drawn through a matrix, the transform to the GS's 12.4 screen,
  * the divide and the lighting done per vertex by the device (the CPU builds nothing per frame). ps2e_draw_mesh_create

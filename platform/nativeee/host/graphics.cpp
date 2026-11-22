@@ -69,6 +69,7 @@ extern "C" size_t vglMemFree(int type);
 #include "../../../runner/te_vita.h"   // te::vita::LogRunning (the log's synced start-up ends at the first picture)
 #endif
 #include "../../../runner/te_android_diag.h"   // TE_ANDROID_STAGE (the Android lane; nothing elsewhere)
+#include "engine/render/backends/gl/gl_es_diagnostics.h"   // ps2r::render::SetDrawCapture (the on-demand capture)
 #include <cfenv>
 #include <chrono>
 #include <cmath>
@@ -441,6 +442,7 @@ struct Gfx {
     long diag_delay_from = 0, diag_delay_to = 0;   // TE_VITA_DIAG_RENDER_DELAY_FROM / _TO: the delay's presents (0: all)
     long diag_delay_every = 0;                     // TE_VITA_DIAG_RENDER_DELAY_EVERY: one picture in N delayed (0 / 1: every one)
 } g;
+std::atomic<uint64_t> g_capture_picture{0};   // te_graphics_request_capture: the picture whose submits are logged
 
 #if defined(__vita__)
 // The low-latency hand-over is in force (see Gfx::ll_on): the drawing thread runs, the clock is the wall's, 60 (every
@@ -3996,7 +3998,17 @@ uint64_t SubmitBuckets(Gfx::Bucket* buckets, int screen_w, int screen_h, bool co
             if (const char* c = std::strchr(p, ',')) diagStop = std::atol(c + 1);
         }
     }
+    // the on-demand capture (te_graphics_request_capture: L3 + R3 held, te_input.cpp): this picture's submits as
+    // TE_GFX_DIAG_SUBMITS logs them, with each draw's sampler, levels and UV span, and the executor's [gl.capture] lines
+    const uint64_t capturePic = g_capture_picture.load(std::memory_order_relaxed);
+    const bool captured = count_as_picture && capturePic && g.pictures.load() + 1 >= capturePic;
+    if (captured) {
+        g_capture_picture.store(0, std::memory_order_relaxed);
+        diagPresent = long(g.pictures.load() + 1);
+        std::fprintf(stderr, "[te.gfx.capture] picture %ld: every submit follows ([te.gfx.submit] + [te.gfx.capture] + [gl.capture])\n", diagPresent);
+    }
     const bool diag = count_as_picture && diagPresent >= 0 && g.pictures.load() + 1 == uint64_t(diagPresent);
+    ps2r::render::SetDrawCapture(diag);
     long submitIndex = 0;
 #if !defined(__vita__)
     ParticleRun particleRun;   // the particles at the title's resolution (TE_GFX_PARTICLE_SCALE)
@@ -4294,6 +4306,24 @@ uint64_t SubmitBuckets(Gfx::Bucket* buckets, int screen_w, int screen_h, bool co
                              st.alpha_test, st.alpha_method, st.alpha_reference, st.alpha_fail, st.tfx, st.tcc, st.no_colour_write,
                              st.stencil,
                              st.scissor_x0, st.scissor_y0, st.scissor_x1, st.scissor_y1, x0, y0, x1, y1, z0, z1, r / n, gg / n, bb / n, a / n);
+                // the sampling side: the texture's size, levels and largest alpha, the state's TEX1 fields, the drawn UV span
+                // (u / q, v / q over the vertices) as texels and the texels per frame pixel it implies, and what kind of draw
+                int tw = 0, th = 0, tl = 0, tma = 0;
+                const int known = ps2e_draw_texture_info(g.dev, st.texture, &tw, &th, &tl, &tma);
+                float u0 = 1e30f, u1 = -1e30f, v0 = 1e30f, v1 = -1e30f;
+                for (size_t k = 0; k < d.VertexCount(); ++k) {
+                    const auto& v = d.Vertices()[k];
+                    const float q = v.q != 0.f ? v.q : 1.f;
+                    u0 = std::min(u0, v.u / q); u1 = std::max(u1, v.u / q); v0 = std::min(v0, v.v / q); v1 = std::max(v1, v.v / q);
+                }
+                const float bw = std::max(1.f, x1 - x0), bh = std::max(1.f, y1 - y0);
+                std::fprintf(stderr, "[te.gfx.capture] #%ld %s%s tex %u %s%dx%d levels %d max_alpha %d | linear %d mip (minify %d max %d k %d l %d) wrap %d/%d "
+                                     "| uv span (%.4f..%.4f, %.4f..%.4f) = %.1f x %.1f texels over %.0f x %.0f px (%.3f texels/px)\n",
+                             submitIndex, d.mesh ? "mesh" : "verts", d.particles ? " particles" : "", st.texture,
+                             st.texture == PS2E_DRAW_TEXTURE_FRAME_COPY ? "FRAME_COPY " : known ? "" : "(unknown) ", tw, th, tl, tma,
+                             st.linear, st.mip_minify, st.mip_max_level, st.mip_k, st.mip_l, st.wrap_u, st.wrap_v,
+                             u0, u1, v0, v1, (u1 - u0) * float(tw), (v1 - v0) * float(th), bw, bh,
+                             tw ? (u1 - u0) * float(tw) / bw : 0.f);
             }
             submitIndex++;
             if (diag && diagStop >= 0 && submitIndex > diagStop) continue;
@@ -6094,6 +6124,12 @@ extern "C" void te_graphics_last_present_phases_ms(double* submit, double* prese
     if (pump) *pump = g.last_pump_ms;
 }
 extern "C" uint64_t te_graphics_presents() { return g.presents.load(); }
+
+// The on-demand capture of one picture's draws (te_input.cpp: L3 + R3 held): the next picture recorded logs every submit
+extern "C" void te_graphics_request_capture() {
+    g_capture_picture.store(g.pictures.load() + 1, std::memory_order_relaxed);
+    std::fprintf(stderr, "[te.gfx.capture] requested: the next picture's draws are logged\n");
+}
 // The presenter's census row (the runner's exit lines / the harness): present=rate:shown_fps:interp_frames:snaps:latency_ms:late_presents
 extern "C" void te_graphics_present_census(char* out, size_t size) {
     const std::string row = PresentCensus();
