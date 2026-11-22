@@ -62,6 +62,37 @@ final class Lang {
         e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
         e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
         e("RESTAURAR", "RESTORE");
+        e("Saves", "Saves");
+        e("Os saves do cartão de memória do jogo: backup, restauração e exclusão.", "The game's memory card saves: backup, restore and deletion.");
+        e("BACKUP", "BACKUP");
+        e("SAVES NO CARTÃO", "SAVES ON THE CARD");
+        e("Exportar backup", "Export backup");
+        e("Salva todos os cartões de memória num arquivo .zip onde você escolher", "Saves every memory card to a .zip file wherever you choose");
+        e("Importar backup", "Import backup");
+        e("Restaura um .zip exportado (os cartões atuais ganham um backup automático antes)", "Restores an exported .zip (the current cards are backed up automatically first)");
+        e("Nenhum save ainda. Os saves aparecem aqui depois de salvar dentro do jogo.", "No saves yet. Saves show up here after saving in the game.");
+        e("cartão principal", "main card");
+        e("cartão dos mods", "mods card");
+        e("Backups automáticos (antes de importar ou apagar): ", "Automatic backups (before importing or deleting): ");
+        e("Nenhum gerenciador de arquivos disponível.", "No file manager available.");
+        e("O jogo está aberto", "The game is open");
+        e("Saia do jogo (Opções → android settings → return to launcher) antes de mexer nos saves: o jogo grava no cartão de memória.",
+          "Leave the game (Options → android settings → return to launcher) before touching the saves: the game writes the memory card.");
+        e("Apagar save?", "Delete save?");
+        e("Um backup automático de todos os cartões é feito antes, em save-backups.", "An automatic backup of every card is made first, in save-backups.");
+        e("Apagar", "Delete");
+        e("O backup automático falhou: nada foi apagado.", "The automatic backup failed: nothing was deleted.");
+        e("Save apagado", "Save deleted");
+        e("Não foi possível apagar tudo", "Could not delete everything");
+        e("Backup exportado: ", "Backup exported: ");
+        e(" arquivo(s)", " file(s)");
+        e("A exportação falhou: ", "Export failed: ");
+        e("Importar backup?", "Import backup?");
+        e("Os cartões de memória que estão no arquivo substituem os atuais. Um backup automático dos atuais é feito antes, em save-backups.",
+          "The memory cards in the file replace the current ones. An automatic backup of the current ones is made first, in save-backups.");
+        e("Importar", "Import");
+        e("Backup importado: ", "Backup imported: ");
+        e("A importação falhou: ", "Import failed: ");
         e("IMAGEM", "PICTURE");
         e("QUALIDADE", "QUALITY");
         e("SAÍDA DE ÁUDIO", "AUDIO OUTPUT");

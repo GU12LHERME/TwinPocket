@@ -63,6 +63,8 @@ import static com.twinsanityevolved.game.Lang.T;
  */
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_PICK_ISO = 41;
+    private static final int REQUEST_EXPORT_SAVES = 42;
+    private static final int REQUEST_IMPORT_SAVES = 43;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
     private boolean starting;
@@ -71,8 +73,8 @@ public final class LauncherActivity extends Activity {
     // the palette: OLED black, white, a neutral grey
     static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A;
 
-    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SYSTEM = 4;
-    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Sistema"};
+    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SAVES = 4, TAB_SYSTEM = 5;
+    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Saves", "Sistema"};
 
     // the screen
     private LinearLayout page;
@@ -608,6 +610,9 @@ public final class LauncherActivity extends Activity {
                 for (int i = 0; i < PAD_BUTTONS.length; i++) padRow(st, i);
                 actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", this::confirmPadRestore);
                 break;
+            case TAB_SAVES:
+                savesPage();
+                break;
             default:
                 pageTitle("Sistema", "Idioma, restauração, diagnóstico e informações do aplicativo.");
                 systemPage(st);
@@ -710,6 +715,142 @@ public final class LauncherActivity extends Activity {
         for (String k : keys)
             for (Choice c : group)
                 if (c.key.equals(k)) choiceRow(st, c);
+    }
+
+    // ---- the saves (SaveManager.java) ------------------------------------------------------------------------------------
+    private File gameDir() {
+        return new File(getFilesDir(), "game");
+    }
+
+    private File backupDir() {
+        return new File(getFilesDir(), "save-backups");
+    }
+
+    private boolean gameRunning() {
+        if (!Diag.processAlive(this, "game")) return false;
+        dialog(T("O jogo está aberto"), T("Saia do jogo (Opções → android settings → return to launcher) antes de mexer nos saves: o jogo grava no cartão de memória."),
+            null, new String[] {T("OK")}, 0, 0, null);
+        return true;
+    }
+
+    private void savesPage() {
+        pageTitle("Saves", "Os saves do cartão de memória do jogo: backup, restauração e exclusão.");
+        section("BACKUP");
+        actionRow("Exportar backup", "Salva todos os cartões de memória num arquivo .zip onde você escolher", () -> {
+            if (gameRunning()) return;
+            String name = "crash-twinsanity-saves-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+            Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
+                .putExtra(Intent.EXTRA_TITLE, name);
+            launchPicker(i, REQUEST_EXPORT_SAVES);
+        });
+        actionRow("Importar backup", "Restaura um .zip exportado (os cartões atuais ganham um backup automático antes)", () -> {
+            if (gameRunning()) return;
+            Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
+                .putExtra(Intent.EXTRA_MIME_TYPES, new String[] {"application/zip", "application/x-zip-compressed", "application/octet-stream"});
+            launchPicker(i, REQUEST_IMPORT_SAVES);
+        });
+        section("SAVES NO CARTÃO");
+        List<SaveManager.Save> saves = SaveManager.list(gameDir());
+        if (saves.isEmpty()) note("Nenhum save ainda. Os saves aparecem aqui depois de salvar dentro do jogo.");
+        java.text.DateFormat when = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
+        for (final SaveManager.Save sv : saves) {
+            String card = sv.card.equals("memcards") ? T("cartão principal") : sv.card.equals("memcards-mods") ? T("cartão dos mods") : sv.card;
+            Item it = row(sv.title, card + " · " + sv.port + " · " + SaveManager.humanSize(sv.bytes) + " · " + when.format(new java.util.Date(sv.modified)), "›", false);
+            it.onA = () -> confirmDeleteSave(sv);
+        }
+        note(T("Backups automáticos (antes de importar ou apagar): ") + backupDir().getAbsolutePath());
+    }
+
+    private void launchPicker(Intent i, int request) {
+        try {
+            pickerOpen = true;
+            startActivityForResult(i, request);
+        } catch (Exception e) {
+            pickerOpen = false;
+            Toast.makeText(this, T("Nenhum gerenciador de arquivos disponível."), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** A copy of every card in files/save-backups before an import or a deletion; null when it failed */
+    private File autoBackup(String why) {
+        File dir = backupDir();
+        dir.mkdirs();
+        File f = new File(dir, why + "-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmmss", Locale.ROOT).format(new java.util.Date()) + ".zip");
+        try (FileOutputStream out = new FileOutputStream(f)) {
+            SaveManager.exportZip(gameDir(), out);
+            Diag.log(this, "main", "saves: automatic backup " + f.getName());
+            return f;
+        } catch (Exception e) {
+            Diag.log(this, "main", "saves: automatic backup failed: " + e);
+            f.delete();
+            return null;
+        }
+    }
+
+    private void confirmDeleteSave(final SaveManager.Save sv) {
+        if (gameRunning()) return;
+        dialog(T("Apagar save?"), "\"" + sv.title + "\" (" + sv.port + ", " + SaveManager.humanSize(sv.bytes) + ")\n\n"
+                + T("Um backup automático de todos os cartões é feito antes, em save-backups."),
+            null, new String[] {T("Apagar"), T("Cancelar")}, 1, 1, w -> {
+                if (w != 0) return;
+                if (autoBackup("antes-de-apagar") == null) {
+                    Toast.makeText(this, T("O backup automático falhou: nada foi apagado."), Toast.LENGTH_LONG).show();
+                    return;
+                }
+                boolean ok = SaveManager.deleteTree(sv.dir);
+                Diag.log(this, "main", "saves: deleted " + sv.dir + (ok ? "" : " (NOT all)"));
+                Toast.makeText(this, ok ? T("Save apagado") : T("Não foi possível apagar tudo"), Toast.LENGTH_LONG).show();
+                rebuild();
+            });
+    }
+
+    private void exportSaves(final Uri uri) {
+        new Thread(() -> {
+            String msg;
+            try (java.io.OutputStream out = getContentResolver().openOutputStream(uri)) {
+                if (out == null) throw new java.io.IOException("destino indisponível");
+                int n = SaveManager.exportZip(gameDir(), out);
+                msg = T("Backup exportado: ") + n + T(" arquivo(s)");
+                Diag.log(this, "main", "saves: exported " + n + " file(s)");
+            } catch (Exception e) {
+                msg = T("A exportação falhou: ") + e.getMessage();
+                Diag.log(this, "main", "saves: export failed: " + e);
+            }
+            final String m = msg;
+            runOnUiThread(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show());
+        }, "export-saves").start();
+    }
+
+    private void importSaves(final Uri uri) {
+        dialog(T("Importar backup?"), T("Os cartões de memória que estão no arquivo substituem os atuais. Um backup automático dos atuais é feito antes, em save-backups."),
+            null, new String[] {T("Importar"), T("Cancelar")}, 1, 1, w -> {
+                if (w != 0) return;
+                new Thread(() -> {
+                    String msg;
+                    File tmp = new File(getCacheDir(), "import-saves.zip");
+                    try {
+                        try (InputStream in = getContentResolver().openInputStream(uri); FileOutputStream out = new FileOutputStream(tmp)) {
+                            if (in == null) throw new java.io.IOException("arquivo indisponível");
+                            SaveManager.copy(in, out);
+                        }
+                        if (!SaveManager.cardFolders(gameDir()).isEmpty() && autoBackup("antes-de-importar") == null)
+                            throw new java.io.IOException("o backup automático falhou: nada foi importado");
+                        int n = SaveManager.importZip(tmp, gameDir());
+                        msg = T("Backup importado: ") + n + T(" arquivo(s)");
+                        Diag.log(this, "main", "saves: imported " + n + " file(s)");
+                    } catch (Exception e) {
+                        msg = T("A importação falhou: ") + e.getMessage();
+                        Diag.log(this, "main", "saves: import failed: " + e);
+                    } finally {
+                        tmp.delete();
+                    }
+                    final String m = msg;
+                    runOnUiThread(() -> {
+                        Toast.makeText(this, m, Toast.LENGTH_LONG).show();
+                        if (currentTab == TAB_SAVES) rebuild();
+                    });
+                }, "import-saves").start();
+            });
     }
 
     private void note(String s) {
@@ -1208,6 +1349,13 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
+        if (requestCode == REQUEST_EXPORT_SAVES || requestCode == REQUEST_IMPORT_SAVES) {
+            pickerOpen = false;
+            if (resultCode != RESULT_OK || data == null || data.getData() == null) return;
+            if (requestCode == REQUEST_EXPORT_SAVES) exportSaves(data.getData());
+            else importSaves(data.getData());
+            return;
+        }
         if (requestCode != REQUEST_PICK_ISO) return;
         pickerOpen = false;
         if (resultCode != RESULT_OK || data == null || data.getData() == null) {
