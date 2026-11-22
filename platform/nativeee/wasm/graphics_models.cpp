@@ -986,9 +986,12 @@ RigidModel* LodModelAt(Lod* lodHandle, u32 distance)
 
     te_gfx_lod_policy& census = g_LodPolicy;
     const s32 original = te_lod_level_at(lod, distance);
-    const u32 percent = census.percent;
-    // the game's own visibility at every percent; above 100 the same or a finer level (te_lod_choice.h te_lod_choose)
-    const s32 level = te_lod_choose(lod, distance, percent);
+    s32 level = original;
+    const u32 percent = census.percent;   // 100 on the title screen and the main menu (lod_policy.cpp: the flicker there)
+    if (percent > 100)
+    {
+        level = te_lod_level_at(lod, te_lod_distance(distance, percent));
+    }
 
     census.lookups++;
     if (lod->count > 1)

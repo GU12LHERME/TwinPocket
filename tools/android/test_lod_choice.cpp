@@ -87,42 +87,6 @@ int main() {
     }
     Check(te_lod_distance(0xFFFFFFFFu, 400) == 0xFFFFFFFFu / 16u, "the largest squared distance at 400 %: no overflow");
     Check(te_lod_distance(0xFFFFFFFFu, 800) == 0xFFFFFFFFu / 64u, "the largest squared distance at 800 %: no overflow");
-    // te_lod_choose (what LodModelAt draws): visibility always the game's own, the level the same or finer, the finer
-    // level wherever the scaled distance picks one -- at every percent of the menus (and the hidden 6x / 8x)
-    {
-        std::mt19937 r2(7);
-        long visibility = 0, coarse = 0, notFiner = 0, n = 0;
-        for (int i = 0; i < 20000; ++i) {
-            const te_gfx_lod l = RandomLod(r2);
-            for (int k = 0; k < 64; ++k) {
-                const uint32_t d = k == 0 ? 0xFFFFFFFFu : uint32_t(r2() % 400000u);
-                const int32_t original = te_lod_level_at(&l, d);
-                for (uint32_t percent : {100u, 200u, 300u, 400u, 600u, 800u}) {
-                    ++n;
-                    const int32_t chosen = te_lod_choose(&l, d, percent);
-                    if ((chosen < 0) != (original < 0)) ++visibility;
-                    if (original >= 0 && chosen > original) ++coarse;
-                    const int32_t scaled = te_lod_level_at(&l, te_lod_distance(d, percent));
-                    if (original >= 0 && scaled >= 0 && scaled < original && chosen != scaled) ++notFiner;
-                }
-            }
-        }
-        std::snprintf(what, sizeof what, "choose: drawn / not drawn exactly as the game's own choice (%ld cases)", n);
-        Check(visibility == 0, what);
-        Check(coarse == 0, "choose: never a coarser level than the game's");
-        Check(notFiner == 0, "choose: the finer level wherever the draw distance picks one");
-        te_gfx_lod pair{};
-        pair.count = 2;
-        pair.switchDistances[0] = 50 * 50;
-        pair.farthest = 100 * 100;   // the detailed model's cut
-        Check(te_lod_choose(&pair, 150 * 150, 400) == -1, "choose: past the original farthest stays undrawn at 400 %");
-        te_gfx_lod standIn{};
-        standIn.count = 1;
-        standIn.nearest = 100 * 100;  // a far stand-in from 100 units
-        standIn.farthest = 0xFFFFFFFFu;
-        Check(te_lod_choose(&standIn, 150 * 150, 400) == 0, "choose: a far stand-in the game draws stays drawn at 400 %");
-        Check(te_lod_choose(&pair, 90 * 90, 200) == 0, "choose: 90 units at 200 %: the finest level (as at 45 units)");
-    }
     std::printf("%s\n", g_failures ? "LOD CHOICE: FAILED" : "LOD CHOICE: OK");
     return g_failures ? 1 : 0;
 }

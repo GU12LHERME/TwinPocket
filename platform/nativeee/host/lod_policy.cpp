@@ -8,13 +8,16 @@
 
 #include "ps2e_seam.h"
 #include "te_gfx_layout.h"
+#include "te_harness.h"
 #include "te_host.h"
+#include "te_services.h"
 
 namespace te::lod {
 
 namespace {
 std::atomic<uint32_t> g_block{0};       // the module's te_gfx_lod_policy (a guest address), 0 until it registers
 std::atomic<uint32_t> g_percent{100};
+std::atomic<bool> g_front{false};       // the title screen / main menu showing: the game's own distance there
 te_gfx_lod_policy g_last{};             // the counters at the last census
 
 te_gfx_lod_policy* Block() {
@@ -27,11 +30,31 @@ te_gfx_lod_policy* Block() {
 double Units(uint32_t squared) { return std::sqrt(double(squared)); }
 }  // namespace
 
+// The percent the module reads: the player's, except on the title screen and the main menu (GameController states
+// LoadingTitle 6, Title 7, MainMenu 8, RestartingTitle 20) -- there the scenery behind the logo flickered with any draw
+// distance above the game's (the RP6, 0.19.0); in play, the pause menu, loads and everything else the setting applies.
+uint32_t Effective() { return g_front.load(std::memory_order_relaxed) ? 100u : g_percent.load(std::memory_order_relaxed); }
+
 void SetPercent(uint32_t percent) {
     if (percent < 100) percent = 100;
     g_percent.store(percent, std::memory_order_relaxed);
-    if (te_gfx_lod_policy* p = Block()) p->percent = percent;
+    if (te_gfx_lod_policy* p = Block()) p->percent = Effective();
 }
+
+namespace {
+void OnBoundary(uint64_t) {
+    unsigned state = 0, last = 0, next = 0;
+    const bool front = te::harness::ReadGameState(&state, &last, &next) && (state == 6 || state == 7 || state == 8 || state == 20);
+    if (front != g_front.load(std::memory_order_relaxed)) {
+        g_front.store(front, std::memory_order_relaxed);
+        if (g_percent.load(std::memory_order_relaxed) > 100)
+            std::fprintf(stderr, "[te.gfx] lod: %s -- draw distance %u %%\n", front ? "the title / main menu: the game's own distance"
+                                                                                  : "out of the title: the setting's distance", Effective());
+    }
+    if (te_gfx_lod_policy* p = Block())
+        if (p->percent != Effective()) p->percent = Effective();
+}
+}  // namespace
 
 uint32_t Percent() { return g_percent.load(std::memory_order_relaxed); }
 
@@ -42,9 +65,14 @@ void Register(uint32_t policy) {
                      TE_GFX_LOD_POLICY_VERSION);
         return;
     }
-    p->percent = Percent();
+    p->percent = Effective();
     std::memcpy(&g_last, p, sizeof g_last);
     g_block.store(policy, std::memory_order_release);
+    static bool hooked = false;
+    if (!hooked) {
+        hooked = true;
+        te::Services::Get().clock().AddBoundaryHook("draw distance (title)", [](uint64_t boundary) { OnBoundary(boundary); });
+    }
     std::fprintf(stderr, "[te.gfx] lod: the module's levels of detail registered (block 0x%x): draw distance %u %%\n", policy, p->percent);
 }
 
