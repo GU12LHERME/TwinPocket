@@ -97,6 +97,33 @@ int main(int argc, char** argv) {
         Check(e.aspect == 2 && e.fullscreen == 1 && e.vsync, "16:9, fullscreen, vsync on read back as written");
     }
 
+    // the Android menus' rules (te_display.h ApplyLaneRules, display.cpp Configure): always full screen, never stretched,
+    // 4:3 or 16:9, 30 or 60 -- older values read into range; nothing changes on the other lanes
+    {
+        struct Case { int aspect, fit, fullscreen, rate; int want_aspect, want_fit, want_fullscreen, want_rate; const char* what; };
+#if defined(TE_DEFAULTS_ANDROID)
+        const Case cases[] = {
+            {0, 1, 1, 1, 1, 1, 1, 1, "auto -> original (4:3)"},
+            {4, 1, 1, 1, 2, 1, 1, 1, "21:9 -> wide (16:9)"},
+            {3, 1, 1, 1, 2, 1, 1, 1, "16:10 -> wide (16:9)"},
+            {1, 0, 0, 3, 1, 1, 1, 1, "4:3 kept; stretch -> fit; windowed -> fullscreen; 144 -> 60"},
+            {2, 1, 2, 0, 2, 1, 1, 0, "16:9 kept; borderless -> fullscreen; 30 kept"},
+            {2, 1, 1, 5, 2, 1, 1, 1, "uncapped -> 60"},
+        };
+#else
+        const Case cases[] = {
+            {0, 1, 0, 3, 0, 1, 0, 3, "desktop: auto, windowed, 144 kept"},
+            {4, 0, 2, 5, 4, 0, 2, 5, "desktop: 21:9, stretch, borderless, uncapped kept"},
+        };
+#endif
+        for (const Case& c : cases) {
+            te::display::Settings d;
+            d.aspect = c.aspect; d.fit = c.fit; d.fullscreen = c.fullscreen; d.frame_rate = c.rate;
+            te::display::ApplyLaneRules(d);
+            Check(d.aspect == c.want_aspect && d.fit == c.want_fit && d.fullscreen == c.want_fullscreen && d.frame_rate == c.want_rate, c.what);
+        }
+    }
+
     // the row's three choices (display.cpp kFilterKeys) written as the menu writes them, read back as the next start reads them
     std::string err;
     Check(ps2r::SettingsFile::Set(path, "game.text_language", "english", &err), "a first key written");

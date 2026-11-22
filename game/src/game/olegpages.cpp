@@ -140,6 +140,9 @@ constexpr u32 ActionModRow = 0x1000;
 // An ActionItem's action for a switchless mod's row on the Mods page: the base, the mod in bits 8..11 -- the mod goes on and its
 // page opens
 constexpr u32 ActionModOpen = 0x2000;
+// TwinsanityEvolved: an ActionItem's action for a platform setting's ACTION row (Platform::Graphics::DisplaySettingKind 1): the
+// base and the setting in bits 0..7
+constexpr u32 ActionPlatformSetting = 0x4000;
 OlegPage* BuildModPage(u32 mod);
 constexpr u32 CentreScreenText = 0x11;
 constexpr u32 CentreScreenItem = 0x15;
@@ -416,6 +419,17 @@ MenuPage* ActionItem::Activate(u32 player, MenuPage* page)
             }
 
             target = BuildModPage(mod);
+        }
+        // TwinsanityEvolved: a platform setting's action row -- the platform acts (or asks for a second press), and the row's
+        // label is read again
+        else if ((action & ActionPlatformSetting) != 0)
+        {
+            u32 setting = action & 0xFF;
+            Platform::Graphics::SetDisplaySetting(setting, 0);
+            if (page != nullptr && text != nullptr)
+            {
+                Platform::Graphics::DisplaySettingLabel(setting, const_cast<char*>(text), DisplaySettingLabelSize);
+            }
         }
         // TwinsanityEvolved: a row of a mod's page -- the platform says what the game does
         else if ((action & ActionModRow) != 0)
@@ -821,6 +835,13 @@ static void SyncDisplaySettingRows(MenuPage* page, u32 player)
             continue;
         }
 
+        // an action row: its label again (a pending confirmation ends when the page is left)
+        if (Platform::Graphics::DisplaySettingKind(setting) == 1)
+        {
+            Platform::Graphics::DisplaySettingLabel(setting, const_cast<char*>(row->text), DisplaySettingLabelSize);
+            continue;
+        }
+
         row->SetIntValue(player, static_cast<s32>(Platform::Graphics::DisplaySettingValue(setting)));
         auto* choice = static_cast<ChoiceItem*>(row);
         if (choice->usesStrings != 0 && choice->strings != nullptr)
@@ -860,7 +881,7 @@ void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
     for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
     {
         MenuItem* row = Find(DisplaySettingFirstItem + setting);
-        if (row == nullptr)
+        if (row == nullptr || Platform::Graphics::DisplaySettingKind(setting) == 1)
         {
             continue;
         }
@@ -1148,6 +1169,18 @@ void AddDisplaySettingRows(MenuPage* owner, u32 page)
         u32 choices = Platform::Graphics::DisplaySettingChoices(setting);
         if (choices == 0 || Platform::Graphics::DisplaySettingPage(setting) != page)
         {
+            continue;
+        }
+
+        // an action: one entry, the label its whole text (re-read after it is chosen)
+        if (Platform::Graphics::DisplaySettingKind(setting) == 1)
+        {
+            ActionItem* action = ActionItem::Construct(Allocate<ActionItem>(), 0, DisplaySettingFirstItem + setting,
+                                                       ActionPlatformSetting | setting);
+            auto* text = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
+            Platform::Graphics::DisplaySettingLabel(setting, text, DisplaySettingLabelSize);
+            action->text = text;
+            owner->Add(action);
             continue;
         }
 

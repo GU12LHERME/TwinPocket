@@ -60,6 +60,23 @@ struct Settings {
     int running_hz = 60;        // the game rate this run started with (te::Settings::field_hz)
 };
 
+// THE ANDROID MENUS' RULES (applied to what ps2r.ini says, every start; the file keeps its words, the launcher rewrites them once):
+// the window is always full screen (immersive: the display mode row is not shown), the picture is never stretched (fit), the
+// shape is 4:3 (auto, the TV's) or 16:9 (16:10, 21:9, 32:9 read as 16:9), and the frame rate is 30 or 60 (120 / 144 / 240 /
+// uncapped read as 60). Nothing on the other lanes.
+inline void ApplyLaneRules(Settings& s) {
+#if defined(__ANDROID__) || defined(TE_DEFAULTS_ANDROID)
+    s.fullscreen = 1;
+    s.fit = 1;                                   // fit (letterbox): 4:3 with bars at the sides, never stretched
+    if (s.aspect == 0) s.aspect = 1;             // auto: the TV's 4:3
+    else if (s.aspect > 2) s.aspect = 2;         // the wider shapes: 16:9
+    if (s.frame_rate > 1) s.frame_rate = 1;      // 120 / 144 / 240 / uncapped: 60
+    if (s.frame_rate < 0) s.frame_rate = 1;
+#else
+    (void)s;
+#endif
+}
+
 // The runner's settings (before the device; applied when it is created, re-applied on every change).
 void Configure(const Settings& settings);
 const Settings& Current();

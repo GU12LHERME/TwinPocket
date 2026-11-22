@@ -6,6 +6,7 @@
 #include <iterator>
 
 #include "engine/core/config/settings_file.h"
+#include "te_services.h"
 #include "te_display.h"
 #include "te_host.h"
 #include "te_input.h"
@@ -31,13 +32,24 @@ constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: th
 const char* const kDistanceKeys[] = {"original", "medium", "long", "max", "extreme", "ultra"};
 const uint32_t kDistancePercents[] = {100, 200, 300, 400, 600, 800};
 constexpr uint32_t kDistanceCount = 6, kDefaultDistance = 0;   // the game's own
+constexpr uint32_t kDistanceShown = 4;   // the menus offer original .. max (4x); extreme / ultra stay readable, shown as max
 
 struct State {
     uint32_t driver = kDefaultDriver, buffer = kDefaultBuffer;
     uint32_t running_driver = kDefaultDriver, running_buffer = kDefaultBuffer;   // what this run started with
     uint32_t deadzone = kDefaultDeadzone, sensitivity = kDefaultSensitivity;
     uint32_t distance = kDefaultDistance;
+    // the action rows' confirmation: the row pressed once (RowCount = none), the boundary it was pressed at, and the last one
+    // done (its label says so until the page is left)
+    uint32_t armed = RowCount;
+    uint64_t armed_at = 0;
+    uint32_t done = RowCount;
 } g;
+
+constexpr uint64_t kConfirmBoundaries = 300;   // a second press within ~5 s confirms
+
+uint64_t Now() { return Services::Get().clock().BoundaryCount(); }
+bool Armed(uint32_t row) { return g.armed == row && Now() - g.armed_at <= kConfirmBoundaries; }
 
 uint32_t IndexOf(const char* const* keys, uint32_t count, const std::string& value, uint32_t fallback) {
     for (uint32_t i = 0; i < count; ++i)
@@ -98,6 +110,7 @@ void Configure(const std::string& ini_text) {
         if (ps2r::SettingsFile::GetFromText(ini_text, "android.draw_distance", &v) && (v == "100" || v == "150" || v == "200" || v == "300"))
             g.distance = v == "100" ? 0u : v == "300" ? 2u : 1u;
         else g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
+        if (g.distance >= kDistanceShown) g.distance = kDistanceShown - 1;   // 0.8.2's extreme (6x) / ultra (8x): max (4x)
         te::lod::SetPercent(kDistancePercents[g.distance]);
     }
     ApplySticks();
@@ -123,10 +136,12 @@ uint32_t Choices(uint32_t row) {
     case RowAudioBuffer: return kBuffers;
     case RowStickDeadzone: return kDeadzoneCount;
     case RowStickSensitivity: return kSensitivityCount;
-    case RowRestoreDefaults: return 2;
+    case RowRestoreDefaults: return 1;   // an action (Kind 1): one entry
     default: return 0;
     }
 }
+
+uint32_t Kind(uint32_t row) { return row == RowRestoreDefaults ? 1u : 0u; }
 
 std::string RowLabel(uint32_t row) {
     switch (row) {
@@ -134,7 +149,7 @@ std::string RowLabel(uint32_t row) {
     case RowAudioBuffer: return "audio buffer";
     case RowStickDeadzone: return "stick deadzone";
     case RowStickSensitivity: return "stick sensitivity";
-    case RowRestoreDefaults: return "restore defaults";
+    case RowRestoreDefaults: return Armed(row) ? "restore defaults? press again" : g.done == row ? "defaults restored" : "restore defaults";
     default: return "";
     }
 }
@@ -149,7 +164,6 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
         return choice < kBuffers ? next(choice == g.buffer && g.buffer != g.running_buffer, kBufferKeys[choice]) : "";
     case RowStickDeadzone: return choice < kDeadzoneCount ? kDeadzoneKeys[choice] : "";
     case RowStickSensitivity: return choice < kSensitivityCount ? std::string("x") + kSensitivityKeys[choice] : "";
-    case RowRestoreDefaults: return choice == 0 ? "no" : choice == 1 ? "yes" : "";
     default: return "";
     }
 }
@@ -186,7 +200,15 @@ void Set(uint32_t row, uint32_t choice) {
         ApplySticks();
         break;
     case RowRestoreDefaults:
-        if (choice != 1) return;
+        // the first press asks (the label: "press again"), a second within ~5 s restores
+        if (!Armed(row)) {
+            g.armed = row;
+            g.armed_at = Now();
+            g.done = RowCount;
+            return;
+        }
+        g.armed = RowCount;
+        g.done = row;
         // this page's rows and the graphic options of the Android profile (te_display.h): 16:9, full screen (immersive),
         // vsync on, the bilinear filter, the resolution 1x, the frame rate 60 (the presenter shows every picture the game
         // makes: the game's own pace), the fps counter off, the draw distance original. The game's own widescreen option is
@@ -203,8 +225,11 @@ void Set(uint32_t row, uint32_t choice) {
         SetDrawDistance(kDefaultDistance);
         te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
         te::display::Set(te::display::RowVSync, te::display::kDefaultVSync ? 1u : 0u);
+#if defined(__ANDROID__)
+        te::display::Set(te::display::RowAspect, 1);   // the Android row's 16:9 (original 4:3 is 0)
+#else
         te::display::Set(te::display::RowAspect, uint32_t(te::display::kDefaultAspect));
-        te::display::Set(te::display::RowDisplayMode, uint32_t(te::display::kDefaultFullscreen));
+#endif
         te::display::Set(te::display::RowTextureFilter, uint32_t(te::display::kDefaultTextureFilter));
         te::display::Set(te::display::RowScale, 0);
         te::display::Set(te::display::RowFpsCounter, 0);
@@ -224,7 +249,7 @@ std::string Describe() {
     return buf;
 }
 
-uint32_t DrawDistanceChoices() { return Count() ? kDistanceCount : 0; }
+uint32_t DrawDistanceChoices() { return Count() ? kDistanceShown : 0; }
 uint32_t DrawDistanceChoice() { return g.distance; }
 
 std::string DrawDistanceLabel(uint32_t choice) {
@@ -233,7 +258,7 @@ std::string DrawDistanceLabel(uint32_t choice) {
 }
 
 void SetDrawDistance(uint32_t choice) {
-    if (choice >= kDistanceCount) return;
+    if (choice >= kDistanceShown) return;
     g.distance = choice;
     Persist("android.draw_distance", kDistanceKeys[choice]);
     te::lod::SetPercent(kDistancePercents[choice]);

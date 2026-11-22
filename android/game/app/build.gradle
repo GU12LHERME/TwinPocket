@@ -24,8 +24,8 @@ android {
         applicationId "com.twinsanityevolved.game"
         minSdk 24
         targetSdk 33
-        versionCode 17
-        versionName "0.8.2-android-lod-8x"
+        versionCode 18
+        versionName "0.9.0-android-menus"
         ndk {
             abiFilters "arm64-v8a"
         }

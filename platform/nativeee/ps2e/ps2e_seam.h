@@ -126,6 +126,8 @@ ps2e_s32 ps2e_graphics_display_setting_value(ps2e_s32 setting);
 void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice);
 // Platform::Graphics::u32 DisplaySettingPage(u32 setting);
 ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting);
+// Platform::Graphics::u32 DisplaySettingKind(u32 setting);
+ps2e_s32 ps2e_graphics_display_setting_kind(ps2e_s32 setting);
 // Platform::Graphics::void DisplaySettingPageTitle(char* out, u32 size);
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size);
 // Platform::Graphics::f32 WidescreenAspect();

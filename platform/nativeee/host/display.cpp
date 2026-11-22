@@ -100,9 +100,6 @@ void Configure(const Settings& settings) {
 #endif
     g_settings.texture_filter = std::clamp(g_settings.texture_filter, 0, 3);
     g_settings.fullscreen = std::clamp(g_settings.fullscreen, 0, 2);
-#if defined(__ANDROID__)
-    if (g_settings.fullscreen == 2) g_settings.fullscreen = 1;   // a desktop's borderless (a copied ps2r.ini): fullscreen here
-#endif
     g_settings.offset_x = std::clamp(g_settings.offset_x, -256, 256);
     g_settings.offset_y = std::clamp(g_settings.offset_y, -256, 256);
     g_settings.frame_rate = std::clamp(g_settings.frame_rate, 0, 5);
@@ -113,6 +110,7 @@ void Configure(const Settings& settings) {
     g_settings.frame_rate = int(Pacer::Rate::Rate60);
     tick_lock::Configure(g_settings.tick_lock);
 #endif
+    ApplyLaneRules(g_settings);   // Android: always full screen, 4:3 or 16:9, 30 or 60 (te_display.h)
     if (g_settings.game_hz != 50) g_settings.game_hz = 60;
     if (g_settings.running_hz != 50) g_settings.running_hz = 60;
 #if defined(__vita__)
@@ -191,17 +189,23 @@ std::string Describe() {
 
 uint32_t Choices(uint32_t row) {
     switch (row) {
+#if defined(__ANDROID__)
+    case RowAspect: return 2;   // original (4:3), wide (16:9)
+#else
     case RowAspect: return uint32_t(kAspects);
+#endif
     case RowScale: return uint32_t(kMaxScale);   // 1x .. 4x (the Vita: 1x, 2x)
     case RowTextureFilter: return 3;
     case RowVSync: return 2;
 #if defined(__vita__)
     case RowFrameRate: return 3;   // auto (60/30), 60, 30: the tick lock (te_tick_lock.h)
+#elif defined(__ANDROID__)
+    case RowFrameRate: return 2;   // 30, 60: the presenter shows every other picture or each one; the game's pace is its own
 #else
     case RowFrameRate: return 6;
 #endif
 #if defined(__ANDROID__)
-    case RowDisplayMode: return 2;   // windowed (the system bars shown), fullscreen (immersive); borderless is a desktop's
+    case RowDisplayMode: return 0;   // not shown: always full screen (immersive)
 #else
     case RowDisplayMode: return 3;
 #endif
@@ -259,6 +263,9 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     using Id = title::MenuStrings::Id;
     switch (row) {
     case RowAspect: {
+#if defined(__ANDROID__)
+        return choice == 0 ? "original (4:3)" : choice == 1 ? "wide (16:9)" : "";
+#endif
         static const Id ids[] = {Id::AspectAuto, Id::AspectNormal, Id::AspectWide, Id::AspectWideTen, Id::AspectUltraWide,
                                  Id::AspectSuperWide};
         return choice < uint32_t(kAspects) ? MS(ids[choice]) : "";
@@ -297,7 +304,11 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
 uint32_t Value(uint32_t row) {
     g_page_polled_at = Services::Get().clock().BoundaryCount();   // the page's Frame reads every row each frame
     switch (row) {
+#if defined(__ANDROID__)
+    case RowAspect: return g_settings.aspect == 2 ? 1u : 0u;
+#else
     case RowAspect: return uint32_t(g_settings.aspect);
+#endif
     case RowScale: return uint32_t(g_settings.scale - 1);
     case RowTextureFilter: return uint32_t(std::min(g_settings.texture_filter, 2));
     case RowVSync: return EffectiveVSync() ? 1u : 0u;   // uncapped: off, and the row's label says why
@@ -317,7 +328,11 @@ uint32_t Value(uint32_t row) {
 void Set(uint32_t row, uint32_t choice) {
     if (choice >= Choices(row)) return;
     switch (row) {
+#if defined(__ANDROID__)
+    case RowAspect: g_settings.aspect = choice == 0 ? 1 : 2; Persist("video.aspect", kAspectKeys[g_settings.aspect]); break;
+#else
     case RowAspect: g_settings.aspect = int(choice); Persist("video.aspect", kAspectKeys[choice]); break;
+#endif
     case RowScale: g_settings.scale = int(choice) + 1; Persist("video.scale", std::to_string(g_settings.scale)); break;
     case RowTextureFilter: g_settings.texture_filter = int(choice); Persist("video.texture_filter", kFilterKeys[choice]); break;
     case RowVSync:
@@ -419,6 +434,11 @@ void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice) {
     if (setting < 0 || choice < 0) return;
     if (IsPortRow(setting)) te::port_settings::Set(PortRow(setting), static_cast<uint32_t>(choice));
     else te::display::Set(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice));
+}
+
+// Platform::Graphics::DisplaySettingKind: a choice row (0) or an action (1: te_port_settings.h's restore defaults)
+ps2e_s32 ps2e_graphics_display_setting_kind(ps2e_s32 setting) {
+    return IsPortRow(setting) ? static_cast<ps2e_s32>(te::port_settings::Kind(PortRow(setting))) : 0;
 }
 
 // Platform::Graphics::DisplaySettingPage / DisplaySettingPageTitle: which page a row is on, and the platform page's title

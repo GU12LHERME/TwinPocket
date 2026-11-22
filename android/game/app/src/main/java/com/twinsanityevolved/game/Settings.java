@@ -140,15 +140,33 @@ final class Settings {
     }
 
     /**
-     * Once: the launcher's earlier audio options (SharedPreferences, versions up to 0.2.0) moved into ps2r.ini, when the
-     * file names no audio driver yet -- so a player's choice survives the move to the shared file.
+     * The Android menus' values (every launch; a value already in range is left as it is): the draw distance's percents of
+     * 0.5.0 - 0.6.0 (100 / 150 / 200 / 300) and 0.8.2's extreme / ultra as the levels of the menus (original .. max); the
+     * shape as 4:3 or 16:9 (auto is the TV's 4:3; 16:10 / 21:9 / 32:9 are 16:9); the frame rate as 30 or 60; the window
+     * always full screen. The game reads the older words the same way (platform/nativeee/host/te_display.h ApplyLaneRules,
+     * port_settings.cpp), so the launcher and the game agree before and after this rewrite.
      */
-    void migrate(SharedPreferences prefs) {
-        // the draw distance's percents of 0.5.0 - 0.6.0 (100 / 150 / 200 / 300) as the levels of 0.7.0 (the game reads both)
+    void normalize() {
         String dd = get(DRAW_DISTANCE, null);
         if ("100".equals(dd)) set(DRAW_DISTANCE, "original");
         else if ("150".equals(dd) || "200".equals(dd)) set(DRAW_DISTANCE, "medium");
         else if ("300".equals(dd)) set(DRAW_DISTANCE, "long");
+        else if ("extreme".equals(dd) || "ultra".equals(dd)) set(DRAW_DISTANCE, "max");
+        String aspect = get(ASPECT, null);
+        if ("auto".equals(aspect)) set(ASPECT, "4:3");
+        else if ("16:10".equals(aspect) || "21:9".equals(aspect) || "32:9".equals(aspect)) set(ASPECT, "16:9");
+        String rate = get(FRAME_RATE, null);
+        if (rate != null && !rate.equals("30") && !rate.equals("60")) set(FRAME_RATE, "60");
+        String window = get(FULLSCREEN, null);
+        if (window != null && !window.equals("fullscreen")) set(FULLSCREEN, "fullscreen");
+    }
+
+    /**
+     * Once: the launcher's earlier audio options (SharedPreferences, versions up to 0.2.0) moved into ps2r.ini, when the
+     * file names no audio driver yet -- so a player's choice survives the move to the shared file.
+     */
+    void migrate(SharedPreferences prefs) {
+        normalize();
         if (prefs.getBoolean("settings_migrated", false)) return;
         String driver = prefs.getString("audio_driver", null);
         if (driver != null && !has(AUDIO_DRIVER)

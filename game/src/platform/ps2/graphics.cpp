@@ -782,6 +782,11 @@ u32 Platform::Graphics::DisplaySettingPage(u32)
     return 0;
 }
 
+u32 Platform::Graphics::DisplaySettingKind(u32)
+{
+    return 0;
+}
+
 void Platform::Graphics::DisplaySettingPageTitle(char* out, u32 size)
 {
     if (size != 0)
