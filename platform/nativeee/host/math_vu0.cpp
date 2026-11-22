@@ -448,7 +448,8 @@ ps2e_s32 ps2e_graphics_load_particle_view(ps2e_u32 matrices, ps2e_s32 index) {
         v.planes[i] = TransformPlane(plane, *chunk);
     }
     v.valid = true;
-    if (std::getenv("TE_PARTICLE_DIAG")) {
+    static const bool particleDiag = std::getenv("TE_PARTICLE_DIAG") != nullptr;   // (read once: every view of every frame)
+    if (particleDiag) {
         static int said = 0;
         if (said++ < 64) {
             std::fprintf(stderr, "[te.math.diag] particle view %d chunk matrix rows (%.2f %.2f %.2f %.2f) (%.2f %.2f %.2f %.2f) (%.2f %.2f %.2f %.2f) (%.2f %.2f %.2f %.2f)\n", index,

@@ -6561,13 +6561,10 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
     const bool filtered = filter >= 2 || (filter == 0 && st.linear != 0);
     g.text_quads += uint64_t(count);
     static const bool textDiag = std::getenv("TE_GFX_DIAG_TEXT") != nullptr;
-#if defined(__vita__)
-    // (TE_GFX_DIAG_PRESENT read once: a getenv every call -- the environment's linear scan -- on the Vita)
+    // (TE_GFX_DIAG_PRESENT read once on every lane: a getenv is the environment's linear scan, and this runs for every
+    // text page of every frame -- the Vita had it cached already, Android and the desktop scanned it each call)
     static const char* const diagPresent = std::getenv("TE_GFX_DIAG_PRESENT");
     if (const char* diag = textDiag ? "all" : diagPresent) {
-#else
-    if (const char* diag = textDiag ? "all" : std::getenv("TE_GFX_DIAG_PRESENT")) {
-#endif
         if (textDiag || g.presents.load() + 1 == uint64_t(std::atol(diag))) {
             // The TEXT-QUAD HASH (the language judge): FNV-1a over every glyph's texel rectangle and its size -- the glyph sequence of
             // the string drawn, independent of where on the frame, how large and in what colour it is drawn; two draws of the same string
