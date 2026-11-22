@@ -7,18 +7,28 @@ import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.ActivityInfo;
 import android.database.Cursor;
-import android.net.Uri;
-import android.os.StatFs;
-import android.provider.OpenableColumns;
-import android.view.WindowManager;
-import android.widget.ProgressBar;
+import android.graphics.Color;
 import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.StatFs;
+import android.provider.OpenableColumns;
+import android.util.TypedValue;
+import android.view.Gravity;
+import android.view.KeyEvent;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.WindowManager;
 import android.widget.Button;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.ProgressBar;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -26,77 +36,511 @@ import android.widget.Toast;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * The app's entry (launcher icon), in the app's main process, with no native code and no SDL: it shows what the last
- * start reached (the stage files and logs the native and Java halves write in files/logs), whether the disc image is in
- * place, and starts the game (MainActivity, ":game" process), the SDL test (MainActivity with no game) or the diagnostic
- * (ProbeActivity, ":probe" process). Because the game runs in another process, a crash there brings the player back here
- * with the stage it died in. "Compartilhar relatório" puts everything into one text file for the share sheet.
+ * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A landscape screen for a
+ * handheld: on the left the game (the chosen disc image, its state, a large JOGAR button, the ISO picker and what the
+ * last start did); on the right the settings by category (Gráficos, Áudio, Controles, Sistema) and the Diagnóstico
+ * page (the report, the probe, the SDL test, the diagnostic mode).
+ *
+ * The settings are the game's own, in ps2r.ini (Settings.java): the game's menus (Options > graphic options, Options >
+ * android settings) and this screen edit the same keys, and every change here is written at once.
+ *
+ * Controller: the D-pad moves between the rows (Android's focus search), left / right change a setting, A chooses (the
+ * system's fallback of BUTTON_A to DPAD_CENTER), L1 / R1 change category, START plays, B comes back to JOGAR.
  */
 public final class LauncherActivity extends Activity {
     private static final int REQUEST_PICK_ISO = 41;
-    private TextView status;
-    private Button startButton;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
+    private boolean starting;
+
+    // the screen
+    private Button playButton;
+    private TextView isoName, isoState, lastRun;
+    private LinearLayout tabBar, page;
+    private ScrollView pageScroll;
+    private final List<Button> tabs = new ArrayList<>();
+    private int currentTab = 0;
+    private TextView status;   // the Diagnóstico page's text (null on the other pages)
+
+    // the palette
+    static final int BG = 0xFF101318, PANEL = 0xFF181C23, ROW = 0xFF1F242D, ROW_FOCUS = 0xFF2B3240, TEXT = 0xFFEDEFF3,
+            SUBTLE = 0xFF9AA3B2, ACCENT = 0xFFFF8A1F, ACCENT_DARK = 0xFFD86A00, GOOD = 0xFF4CC38A, BAD = 0xFFFF5D5D;
+
+    // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
+    // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). Every driver stays selectable.
+    static final String DEFAULT_AUDIO_DRIVER = "openslES";
+
+    // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
+    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), for a report about a graphics problem. Off, neither costs anything.
+    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1"};
+
+    // ---- the settings this screen shows: the game's keys and words (Settings.java) ---------------------------------------
+    static final class Choice {
+        final String key, label, help, def;
+        final String[] values, names;
+
+        Choice(String key, String label, String help, String def, String[] values, String[] names) {
+            this.key = key;
+            this.label = label;
+            this.help = help;
+            this.def = def;
+            this.values = values;
+            this.names = names;
+        }
+
+        int index(String v) {
+            for (int i = 0; i < values.length; i++) if (values[i].equals(v)) return i;
+            for (int i = 0; i < values.length; i++) if (values[i].equals(def)) return i;
+            return 0;
+        }
+    }
+
+    static final Choice[] GRAPHICS = {
+        new Choice(Settings.TEXTURE_FILTER, "Filtro de texturas", "Bilinear corrige os brilhos quadrados (máscara do Aku Aku, cogumelos, cachoeira)",
+            "bilinear", new String[] {"title", "point", "bilinear"}, new String[] {"Original (do jogo)", "Point (pixelado)", "Bilinear — recomendado"}),
+        new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
+            "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
+        new Choice(Settings.ASPECT, "Proporção da tela", "16:9 e mais largas mostram mais do cenário com a opção widescreen do jogo",
+            "auto", new String[] {"auto", "4:3", "16:9", "16:10", "21:9", "32:9"}, new String[] {"Automática (4:3)", "4:3", "16:9", "16:10", "21:9", "32:9"}),
+        new Choice(Settings.FRAME_RATE, "Limite de FPS", "Quantos quadros são apresentados por segundo; a velocidade do jogo não muda",
+            "60", new String[] {"30", "60", "120", "144", "240", "uncapped"}, new String[] {"30", "60 — padrão", "120", "144", "240", "Sem limite"}),
+        new Choice(Settings.VSYNC, "VSync", "Desligado é o padrão do port: o próprio jogo marca o ritmo",
+            "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
+        new Choice(Settings.FPS_COUNTER, "Contador de FPS", "Mostra o FPS no canto da tela durante o jogo",
+            "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
+    };
+    static final Choice[] AUDIO = {
+        new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",
+            DEFAULT_AUDIO_DRIVER, new String[] {"openslES", "aaudio", "android", "auto"},
+            new String[] {"OpenSL ES — recomendado", "AAudio", "AudioTrack (Java)", "Automático (ordem do SDL)"}),
+        new Choice(Settings.AUDIO_BUFFER, "Tamanho do buffer", "Maior: mais estável, com um pouco mais de atraso (vale no próximo início)",
+            "2048", new String[] {"1024", "2048", "4096"}, new String[] {"1024 (21 ms)", "2048 (43 ms) — padrão", "4096 (85 ms)"}),
+    };
+    static final Choice[] CONTROLS = {
+        new Choice(Settings.STICK_DEADZONE, "Zona morta dos analógicos", "Quanto do centro do analógico é ignorado",
+            "0.15", new String[] {"0.05", "0.10", "0.15", "0.20", "0.25"}, new String[] {"5%", "10%", "15% — padrão", "20%", "25%"}),
+        new Choice(Settings.STICK_SENSITIVITY, "Sensibilidade dos analógicos", "Maior: o personagem chega à velocidade máxima com menos inclinação",
+            "1.33", new String[] {"1.00", "1.33", "1.66", "2.00"}, new String[] {"100%", "133% — padrão", "166%", "200%"}),
+    };
+    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Diagnóstico"};
+
+    private int dp(float v) {
+        return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
+    }
+
+    private static GradientDrawable rounded(int color, float radius, int strokeWidth, int strokeColor) {
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radius);
+        if (strokeWidth > 0) g.setStroke(strokeWidth, strokeColor);
+        return g;
+    }
+
+    // a background that shows where the controller's focus is (an orange outline) and a press
+    private Drawable focusable(int normal, int focused) {
+        StateListDrawable s = new StateListDrawable();
+        s.addState(new int[] {android.R.attr.state_pressed}, rounded(focused, dp(10), dp(2), ACCENT));
+        s.addState(new int[] {android.R.attr.state_focused}, rounded(focused, dp(10), dp(2), ACCENT));
+        s.addState(new int[] {}, rounded(normal, dp(10), 0, 0));
+        return s;
+    }
+
+    private TextView text(String s, float sp, int color, boolean bold) {
+        TextView t = new TextView(this);
+        t.setText(s);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTextColor(color);
+        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
+        return t;
+    }
+
+    private Button button(String label, int normal, int focusedColor, View.OnClickListener l) {
+        Button b = new Button(this);
+        b.setText(label);
+        b.setAllCaps(false);
+        b.setTextColor(TEXT);
+        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
+        b.setBackground(focusable(normal, focusedColor));
+        b.setPadding(dp(14), dp(8), dp(14), dp(8));
+        b.setFocusable(true);
+        b.setOnClickListener(l);
+        if (Build.VERSION.SDK_INT >= 21) b.setStateListAnimator(null);
+        return b;
+    }
+
+    private LinearLayout.LayoutParams fill(int height, int top) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height);
+        p.topMargin = top;
+        return p;
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Diag.installCrashHandler(this, "main");
         new Settings(this).migrate(prefs());
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        getWindow().setStatusBarColor(BG);
+        getWindow().setNavigationBarColor(BG);
 
         LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        int pad = (int) (16 * getResources().getDisplayMetrics().density);
-        root.setPadding(pad, pad, pad, pad);
+        root.setOrientation(LinearLayout.HORIZONTAL);
+        root.setBackgroundColor(BG);
+        root.setPadding(dp(20), dp(16), dp(20), dp(16));
 
-        TextView title = new TextView(this);
-        title.setText("TwinsanityEvolved — Android (diagnóstico)");
-        title.setTextSize(20);
-        root.addView(title);
+        // ---- left: the game ----
+        LinearLayout left = new LinearLayout(this);
+        left.setOrientation(LinearLayout.VERTICAL);
+        left.setBackground(rounded(PANEL, dp(16), 0, 0));
+        left.setPadding(dp(20), dp(18), dp(20), dp(18));
+        left.addView(text("Crash Twinsanity", 26, ACCENT, true));
+        left.addView(text("TwinsanityEvolved · port nativo Android", 13, SUBTLE, false));
 
-        LinearLayout row1 = new LinearLayout(this);
-        LinearLayout row2 = new LinearLayout(this);
-        addButton(row1, "Selecionar ISO", v -> pickIso());
-        startButton = addButton(row1, "Iniciar jogo", v -> startGame(false));
-        addButton(row1, "Diagnóstico (sem o jogo)", v -> startActivity(new Intent(this, ProbeActivity.class)));
-        addButton(row1, "Teste SDL (sem o jogo)", v -> startSdlTest());
-        addButton(row2, "Compartilhar relatório", v -> buildReport(true));
-        addButton(row2, "Copiar relatório", v -> buildReport(false));
-        addButton(row2, "Áudio…", v -> audioOptions());
-        addButton(row2, "Modo diagnóstico…", v -> diagnosticMode());
-        addButton(row2, "Atualizar", v -> refresh());
-        root.addView(row1);
-        root.addView(row2);
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(rounded(ROW, dp(12), 0, 0));
+        card.setPadding(dp(14), dp(10), dp(14), dp(10));
+        card.addView(text("JOGO SELECIONADO", 11, SUBTLE, true));
+        isoName = text("—", 15, TEXT, true);
+        isoState = text("", 13, SUBTLE, false);
+        card.addView(isoName);
+        card.addView(isoState);
+        left.addView(card, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(14)));
 
-        status = new TextView(this);
-        status.setTypeface(Typeface.MONOSPACE);
-        status.setTextSize(12);
-        status.setTextIsSelectable(true);
-        ScrollView scroll = new ScrollView(this);
-        scroll.addView(status);
-        root.addView(scroll, new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f));
+        playButton = button("JOGAR", ACCENT_DARK, ACCENT, v -> startGame(false));
+        playButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
+        playButton.setTypeface(Typeface.DEFAULT_BOLD);
+        left.addView(playButton, fill(dp(64), dp(14)));
+        Button pick = button("Selecionar ISO…", ROW, ROW_FOCUS, v -> pickIso());
+        left.addView(pick, fill(dp(48), dp(10)));
+
+        lastRun = text("", 12, SUBTLE, false);
+        left.addView(lastRun, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)));
+        View spacer = new View(this);
+        left.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar", 11, SUBTLE, false));
+        left.addView(text("versão " + versionName(), 11, SUBTLE, false));
+
+        ScrollView leftScroll = new ScrollView(this);
+        leftScroll.setFillViewport(true);
+        leftScroll.addView(left);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.4f);
+        lp.rightMargin = dp(16);
+        root.addView(leftScroll, lp);
+
+        // ---- right: the settings by category, and the diagnostics ----
+        LinearLayout right = new LinearLayout(this);
+        right.setOrientation(LinearLayout.VERTICAL);
+        right.setBackground(rounded(PANEL, dp(16), 0, 0));
+        right.setPadding(dp(14), dp(12), dp(14), dp(12));
+        tabBar = new LinearLayout(this);
+        tabBar.setOrientation(LinearLayout.HORIZONTAL);
+        for (int i = 0; i < TAB_NAMES.length; i++) {
+            final int index = i;
+            Button t = button(TAB_NAMES[i], PANEL, ROW_FOCUS, v -> showTab(index));
+            t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
+            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(44), 1f);
+            tp.rightMargin = dp(4);
+            tabBar.addView(t, tp);
+            tabs.add(t);
+        }
+        HorizontalFit.wrap(tabBar);
+        right.addView(tabBar);
+        pageScroll = new ScrollView(this);
+        page = new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(0, dp(8), 0, dp(8));
+        pageScroll.addView(page);
+        right.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        root.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.6f));
+
         setContentView(root);
-        startButton.requestFocus();
+        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, prefs().getInt("launcher_tab", 0)));
+        showTab(currentTab);
+        playButton.requestFocus();
     }
 
-    private Button addButton(LinearLayout row, String label, View.OnClickListener l) {
-        Button b = new Button(this);
-        b.setText(label);
-        b.setAllCaps(false);
-        b.setOnClickListener(l);
-        row.addView(b, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
-        return b;
+    /** Keeps the category buttons on one line on a narrow screen: their text shrinks rather than wrapping. */
+    static final class HorizontalFit {
+        static void wrap(LinearLayout bar) {
+            for (int i = 0; i < bar.getChildCount(); i++) {
+                View v = bar.getChildAt(i);
+                if (v instanceof TextView) {
+                    ((TextView) v).setSingleLine(true);
+                    ((TextView) v).setEllipsize(android.text.TextUtils.TruncateAt.END);
+                }
+            }
+        }
+    }
+
+    private String versionName() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (Exception e) {
+            return "?";
+        }
     }
 
     @Override
     protected void onResume() {
         super.onResume();
+        starting = false;
+        playButton.setEnabled(true);
+        playButton.setText("JOGAR");
         refresh();
+    }
+
+    // ---- the controller -------------------------------------------------------------------------------------------------
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent e) {
+        if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
+            switch (e.getKeyCode()) {
+                case KeyEvent.KEYCODE_BUTTON_L1:
+                    showTab((currentTab + TAB_NAMES.length - 1) % TAB_NAMES.length);
+                    tabs.get(currentTab).requestFocus();
+                    return true;
+                case KeyEvent.KEYCODE_BUTTON_R1:
+                    showTab((currentTab + 1) % TAB_NAMES.length);
+                    tabs.get(currentTab).requestFocus();
+                    return true;
+                case KeyEvent.KEYCODE_BUTTON_START:
+                    startGame(false);
+                    return true;
+                default:
+                    break;
+            }
+        }
+        return super.dispatchKeyEvent(e);
+    }
+
+    @Override
+    public void onBackPressed() {
+        // B (the system's fallback to BACK) first brings the focus back to JOGAR; from there it leaves
+        if (!playButton.isFocused()) {
+            playButton.requestFocus();
+            return;
+        }
+        super.onBackPressed();
+    }
+
+    // ---- the pages ------------------------------------------------------------------------------------------------------
+    private void showTab(int index) {
+        currentTab = index;
+        prefs().edit().putInt("launcher_tab", index).apply();
+        for (int i = 0; i < tabs.size(); i++) {
+            Button t = tabs.get(i);
+            boolean on = i == index;
+            t.setBackground(focusable(on ? ROW : PANEL, ROW_FOCUS));
+            t.setTextColor(on ? ACCENT : SUBTLE);
+            t.setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
+        }
+        page.removeAllViews();
+        status = null;
+        Settings st = new Settings(this);
+        switch (index) {
+            case 0:
+                for (Choice c : GRAPHICS) page.addView(choiceRow(st, c));
+                note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
+                break;
+            case 1:
+                for (Choice c : AUDIO) page.addView(choiceRow(st, c));
+                note("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). "
+                        + "Driver e buffer também estão no jogo: Opções → android settings.");
+                break;
+            case 2:
+                for (Choice c : CONTROLS) page.addView(choiceRow(st, c));
+                note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings). "
+                        + "O remapeamento de botões ainda não está disponível no Android.");
+                break;
+            case 3:
+                page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
+                note("Arquivo de configurações (compartilhado com o jogo):\n" + st.file().getAbsolutePath());
+                note("Versão " + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                        + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
+                break;
+            default:
+                page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
+                page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
+                final boolean diag = prefs().getBoolean("diagnostic_mode", false);
+                page.addView(actionRow("Modo diagnóstico: " + (diag ? "LIGADO" : "desligado"),
+                        "Registra as mensagens da GPU e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
+                            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
+                            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
+                            showTab(4);
+                        }));
+                page.addView(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
+                page.addView(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
+                status = text("", 11, SUBTLE, false);
+                status.setTypeface(Typeface.MONOSPACE);
+                status.setTextIsSelectable(true);
+                status.setPadding(dp(6), dp(10), dp(6), dp(6));
+                page.addView(status);
+                status.setText(statusText());
+                break;
+        }
+        pageScroll.scrollTo(0, 0);
+    }
+
+    private void note(String s) {
+        TextView t = text(s, 12, SUBTLE, false);
+        t.setPadding(dp(6), dp(12), dp(6), 0);
+        page.addView(t);
+    }
+
+    private View rowFrame(String label, String help, TextView value) {
+        LinearLayout row = new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        row.setGravity(Gravity.CENTER_VERTICAL);
+        row.setBackground(focusable(ROW, ROW_FOCUS));
+        row.setPadding(dp(14), dp(10), dp(14), dp(10));
+        row.setFocusable(true);
+        row.setClickable(true);
+        LinearLayout words = new LinearLayout(this);
+        words.setOrientation(LinearLayout.VERTICAL);
+        words.addView(text(label, 15, TEXT, true));
+        if (help != null) words.addView(text(help, 12, SUBTLE, false));
+        row.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        if (value != null) row.addView(value);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        p.topMargin = dp(6);
+        row.setLayoutParams(p);
+        return row;
+    }
+
+    private View actionRow(String label, String help, View.OnClickListener l) {
+        View row = rowFrame(label, help, text("›", 20, ACCENT, true));
+        row.setOnClickListener(l);
+        return row;
+    }
+
+    // A setting: tap / A = the next value, left / right on the controller = the previous / next; written at once
+    private View choiceRow(final Settings st, final Choice c) {
+        final TextView value = text("", 14, ACCENT, true);
+        value.setPadding(dp(12), 0, 0, 0);
+        final int[] at = {c.index(st.get(c.key, c.def))};
+        final Runnable show = () -> value.setText("◀  " + c.names[at[0]] + "  ▶");
+        show.run();
+        final View row = rowFrame(c.label, c.help, value);
+        final java.util.function.IntConsumer step = d -> {
+            at[0] = (at[0] + d + c.values.length) % c.values.length;
+            if (st.set(c.key, c.values[at[0]])) {
+                Diag.log(this, "main", "setting " + c.key + " = " + c.values[at[0]]);
+            } else {
+                Toast.makeText(this, "Não foi possível salvar em " + st.file(), Toast.LENGTH_LONG).show();
+            }
+            show.run();
+        };
+        row.setOnClickListener(v -> step.accept(1));
+        row.setOnKeyListener((v, keyCode, e) -> {
+            if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
+            if (keyCode == KeyEvent.KEYCODE_DPAD_LEFT) { step.accept(-1); return true; }
+            if (keyCode == KeyEvent.KEYCODE_DPAD_RIGHT) { step.accept(1); return true; }
+            return false;
+        });
+        return row;
+    }
+
+    private void confirmRestore() {
+        new AlertDialog.Builder(this)
+            .setTitle("Restaurar configurações padrão?")
+            .setMessage("Filtro bilinear, resolução 1x, proporção automática, 60 FPS, VSync e contador desligados, OpenSL ES com "
+                    + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam.")
+            .setPositiveButton("Restaurar", (d, w) -> {
+                Settings st = new Settings(this);
+                boolean ok = true;
+                for (Choice[] group : new Choice[][] {GRAPHICS, AUDIO, CONTROLS})
+                    for (Choice c : group) ok &= st.set(c.key, c.def);
+                Diag.log(this, "main", "settings restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
+                Toast.makeText(this, ok ? "Configurações padrão restauradas" : "Falha ao salvar em " + st.file(), Toast.LENGTH_LONG).show();
+                showTab(currentTab);
+            })
+            .setNegativeButton("Cancelar", null)
+            .show();
+    }
+
+    // ---- the game's state on the left -----------------------------------------------------------------------------------
+    private void refresh() {
+        String source = prefs().getString("iso_source", null);
+        String[] disc = Diag.findDiscImage(this);
+        if (disc[0] == null) {
+            isoName.setText("Nenhuma ISO selecionada");
+            isoState.setText("Toque em \"Selecionar ISO…\" e escolha a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).");
+            isoState.setTextColor(BAD);
+        } else {
+            StringBuilder r = new StringBuilder();
+            String err = Diag.checkDiscImage(disc[0], r);
+            isoName.setText(source != null ? source : new File(disc[0]).getName());
+            isoState.setText(err == null ? "Pronta — " + r : "Não utilizável: " + err);
+            isoState.setTextColor(err == null ? GOOD : BAD);
+        }
+        lastRun.setText(lastRunLine());
+        if (status != null) status.setText(statusText());
+    }
+
+    // what the last start did, in one line (the Diagnóstico page has the detail)
+    private String lastRunLine() {
+        File f = new File(Diag.logsDir(this), "stage-game.txt");
+        String s = Diag.readFile(f, 2000);
+        if (s == null) return "Ainda não executado nesta instalação.";
+        s = s.trim();
+        if (s.startsWith("running")) {
+            if (Diag.processAlive(this, "game")) return "O jogo está em execução.";
+            lastRun.setTextColor(BAD);
+            return "A última execução terminou de forma inesperada. Veja Diagnóstico → Compartilhar relatório.";
+        }
+        if (s.startsWith("crash")) {
+            lastRun.setTextColor(BAD);
+            return "A última execução travou. Veja Diagnóstico → Compartilhar relatório.";
+        }
+        lastRun.setTextColor(SUBTLE);
+        return "A última execução terminou normalmente.";
+    }
+
+    private SharedPreferences prefs() {
+        return getSharedPreferences("twinsanity", MODE_PRIVATE);
+    }
+
+    private void startGame(boolean force) {
+        if (copying) {
+            Toast.makeText(this, "Aguarde a cópia da ISO terminar.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (starting) return;
+        String[] disc = Diag.findDiscImage(this);
+        StringBuilder r = new StringBuilder();
+        String err = disc[0] == null ? disc[1] : Diag.checkDiscImage(disc[0], r);
+        if (err != null && !force) {
+            new AlertDialog.Builder(this)
+                .setTitle("Imagem do disco não disponível")
+                .setMessage("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n"
+                        + "Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n"
+                        + "Detalhe: " + err)
+                .setPositiveButton("Selecionar ISO", (d, w) -> pickIso())
+                .setNeutralButton("Cancelar", null)
+                .setNegativeButton("Iniciar mesmo assim", (d, w) -> startGame(true))
+                .show();
+            return;
+        }
+        starting = true;
+        playButton.setText("Iniciando…");
+        playButton.setEnabled(false);
+        Diag.log(this, "main", "starting the game (disc: " + disc[0] + ", " + r + ")");
+        Intent i = new Intent(this, MainActivity.class);
+        if (err == null) i.putExtra(MainActivity.EXTRA_ISO, disc[0]);
+        startActivity(i);
+    }
+
+    private void startSdlTest() {
+        Diag.log(this, "main", "starting the SDL test (no game)");
+        Intent i = new Intent(this, MainActivity.class);
+        i.putExtra(MainActivity.EXTRA_SDL_TEST, true);
+        startActivity(i);
     }
 
     private String describeStage(String proc, String label) {
@@ -178,96 +622,6 @@ public final class LauncherActivity extends Activity {
         }
         b.append("\nLogs: ").append(Diag.logsDir(this).getAbsolutePath()).append('\n');
         return b.toString();
-    }
-
-    private void refresh() {
-        status.setText(statusText());
-    }
-
-    private void startGame(boolean force) {
-        if (copying) {
-            Toast.makeText(this, "Aguarde a cópia da ISO terminar.", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        String[] disc = Diag.findDiscImage(this);
-        StringBuilder r = new StringBuilder();
-        String err = disc[0] == null ? disc[1] : Diag.checkDiscImage(disc[0], r);
-        if (err != null && !force) {
-            new AlertDialog.Builder(this)
-                .setTitle("Imagem do disco não disponível")
-                .setMessage("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n"
-                        + "Toque em \"Selecionar ISO\" e escolha o arquivo no gerenciador de arquivos do Android.\n\n"
-                        + "Detalhe: " + err)
-                .setPositiveButton("Selecionar ISO", (d, w) -> pickIso())
-                .setNeutralButton("Cancelar", null)
-                .setNegativeButton("Iniciar mesmo assim", (d, w) -> startGame(true))
-                .show();
-            return;
-        }
-        Diag.log(this, "main", "starting the game (disc: " + disc[0] + ", " + r + ")");
-        Intent i = new Intent(this, MainActivity.class);
-        if (err == null) i.putExtra(MainActivity.EXTRA_ISO, disc[0]);
-        startActivity(i);
-    }
-
-    private void startSdlTest() {
-        Diag.log(this, "main", "starting the SDL test (no game)");
-        Intent i = new Intent(this, MainActivity.class);
-        i.putExtra(MainActivity.EXTRA_SDL_TEST, true);
-        startActivity(i);
-    }
-
-    // The audio options the game starts with (MainActivity.getArguments -> runner/te_android.cpp --te-env): the device
-    // buffer (frames a callback: 1024 / 2048 / 4096, TE_AUDIO_BUFFER_FRAMES) and SDL's Android audio driver (auto =
-    // SDL's order: AAudio, then OpenSL ES, then Java AudioTrack). The report's "audio device" lines say how each did.
-    private void audioOptions() {
-        final int[] buffers = {1024, 2048, 4096};
-        final String[] drivers = {"auto", "aaudio", "openslES", "android"};
-        final String[] labels = {
-            "Buffer 1024 frames (21 ms)", "Buffer 2048 frames (43 ms) — padrão", "Buffer 4096 frames (85 ms)",
-            "Driver: automático (ordem do SDL: AAudio primeiro)", "Driver: AAudio", "Driver: OpenSL ES — padrão", "Driver: Java AudioTrack"};
-        final Settings st = new Settings(this);
-        final String curBuffer = st.get(Settings.AUDIO_BUFFER, "2048");
-        final String curDriver = st.get(Settings.AUDIO_DRIVER, DEFAULT_AUDIO_DRIVER);
-        new AlertDialog.Builder(this)
-            .setTitle("Áudio — atual: " + curBuffer + " frames, " + curDriver)
-            .setItems(labels, (d, which) -> {
-                if (which < 3) st.set(Settings.AUDIO_BUFFER, Integer.toString(buffers[which]));
-                else st.set(Settings.AUDIO_DRIVER, drivers[which - 3]);
-                Diag.log(this, "main", "audio option: " + labels[which]);
-                Toast.makeText(this, labels[which], Toast.LENGTH_SHORT).show();
-                refresh();
-            })
-            .setNegativeButton("Fechar", null)
-            .show();
-    }
-
-    // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
-    // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). The "Áudio…" list keeps every driver.
-    static final String DEFAULT_AUDIO_DRIVER = "openslES";
-
-    // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
-    // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), for a report about a graphics problem. Off, neither costs anything.
-    static final String[] DIAGNOSTIC_ENV = {"TE_DIAG_GL=1", "TE_DIAG_CAPTURE=1"};
-
-    private void diagnosticMode() {
-        final boolean on = prefs().getBoolean("diagnostic_mode", false);
-        new AlertDialog.Builder(this)
-            .setTitle("Modo diagnóstico — " + (on ? "LIGADO" : "desligado"))
-            .setMessage("Para investigar um problema gráfico: registra as mensagens do driver da GPU e permite capturar os desenhos "
-                    + "de um quadro apertando L3 + R3 juntos durante o jogo. Depois use \"Compartilhar relatório\".\n\n"
-                    + "Deixe desligado para jogar normalmente.")
-            .setPositiveButton(on ? "Desligar" : "Ligar", (d, w) -> {
-                prefs().edit().putBoolean("diagnostic_mode", !on).apply();
-                Diag.log(this, "main", "diagnostic mode " + (!on ? "on" : "off"));
-                refresh();
-            })
-            .setNegativeButton("Fechar", null)
-            .show();
-    }
-
-    private SharedPreferences prefs() {
-        return getSharedPreferences("twinsanity", MODE_PRIVATE);
     }
 
     // --- the disc image picker (Storage Access Framework) and the copy into the app's private storage ---------------------

@@ -13,12 +13,13 @@
         android:label="TwinsanityEvolved"
         android:supportsRtl="true">
 
-        <!-- The entry: Java only, the app's main process. Shows the last start's stages, starts the game. -->
+        <!-- The entry: Java only, the app's main process. The landscape launcher: the game, the settings (ps2r.ini), the diagnostics. -->
         <activity
             android:name="com.twinsanityevolved.game.LauncherActivity"
             android:configChanges="keyboard|keyboardHidden|navigation|orientation|screenLayout|screenSize|smallestScreenSize|uiMode"
             android:exported="true"
             android:launchMode="singleTask"
+            android:screenOrientation="sensorLandscape"
             android:theme="@android:style/Theme.DeviceDefault.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
