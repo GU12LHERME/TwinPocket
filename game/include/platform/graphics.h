@@ -79,6 +79,9 @@ void DisplaySettingPageTitle(char* out, u32 size);
 // menus' and the HUD's squeeze and the movies' picture; wider than 16:9, the menus and the HUD keep the 16:9 layout in the
 // middle of the picture. 0 = a 16:9 TV's (the PS2): the game draws as on the console
 f32 WidescreenAspect();
+// TwinsanityEvolved: whether the game's widescreen option starts on for a game with no save yet (asked once at start-up,
+// before any save is loaded: a save's options set it again). The PS2: no, as on the console
+u32 WidescreenDefault();
 // TwinsanityEvolved: the platform's own texts over the frame (an fps counter, a mod's timer), queued through the GAME's
 // text system every frame -- the renderer's QueueText with the game's font -- after the game's own overlay; the PS2 queues none
 void QueuePlatformTexts(Renderer* renderer, Font* font);

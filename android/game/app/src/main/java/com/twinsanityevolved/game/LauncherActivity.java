@@ -106,12 +106,14 @@ public final class LauncherActivity extends Activity {
             "bilinear", new String[] {"title", "point", "bilinear"}, new String[] {"Original (do jogo)", "Point (pixelado)", "Bilinear — recomendado"}),
         new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
             "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
-        new Choice(Settings.ASPECT, "Proporção da tela", "16:9 e mais largas mostram mais do cenário com a opção widescreen do jogo",
-            "auto", new String[] {"auto", "4:3", "16:9", "16:10", "21:9", "32:9"}, new String[] {"Automática (4:3)", "4:3", "16:9", "16:10", "21:9", "32:9"}),
+        new Choice(Settings.ASPECT, "Proporção da tela", "16:9 com a opção widescreen do jogo ligada é o widescreen verdadeiro",
+            "16:9", new String[] {"auto", "4:3", "16:9", "16:10", "21:9", "32:9"}, new String[] {"Automática (4:3)", "4:3", "16:9 — padrão", "16:10", "21:9", "32:9"}),
+        new Choice(Settings.FULLSCREEN, "Tela cheia", "Imersiva: sem as barras de status e de navegação do Android durante o jogo",
+            "fullscreen", new String[] {"fullscreen", "windowed"}, new String[] {"Ligada (imersiva) — padrão", "Desligada (barras visíveis)"}),
         new Choice(Settings.FRAME_RATE, "Limite de FPS", "Quantos quadros são apresentados por segundo; a velocidade do jogo não muda",
             "60", new String[] {"30", "60", "120", "144", "240", "uncapped"}, new String[] {"30", "60 — padrão", "120", "144", "240", "Sem limite"}),
-        new Choice(Settings.VSYNC, "VSync", "Desligado é o padrão do port: o próprio jogo marca o ritmo",
-            "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
+        new Choice(Settings.VSYNC, "VSync", "Sincroniza com a tela; desligue se notar engasgos no ritmo dos quadros",
+            "on", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado — padrão"}),
         new Choice(Settings.FPS_COUNTER, "Contador de FPS", "Mostra o FPS no canto da tela durante o jogo",
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
         new Choice(Settings.DRAW_DISTANCE, "Distância de detalhe (LOD, experimental)",
@@ -453,8 +455,8 @@ public final class LauncherActivity extends Activity {
     private void confirmRestore() {
         new AlertDialog.Builder(this)
             .setTitle("Restaurar configurações padrão?")
-            .setMessage("Filtro bilinear, resolução 1x, proporção automática, 60 FPS, VSync e contador desligados, distância original, OpenSL ES com "
-                    + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam.")
+            .setMessage("16:9, tela cheia, VSync ligado, filtro bilinear, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com "
+                    + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas).")
             .setPositiveButton("Restaurar", (d, w) -> {
                 Settings st = new Settings(this);
                 boolean ok = true;

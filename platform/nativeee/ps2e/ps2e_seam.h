@@ -130,6 +130,8 @@ ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting);
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size);
 // Platform::Graphics::f32 WidescreenAspect();
 ps2e_f32 ps2e_graphics_widescreen_aspect(void);
+// Platform::Graphics::u32 WidescreenDefault();
+ps2e_s32 ps2e_graphics_widescreen_default(void);
 // Platform::Graphics::void SetUpRenderTarget(RenderTargetDescription* target) RETAIL(FUN_0019f720);
 void ps2e_graphics_set_up_render_target(ps2e_u32 target);
 // Platform::Graphics::void Present(const void* commands);

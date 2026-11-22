@@ -34,6 +34,7 @@ final class Settings {
     static final String FRAME_RATE = "video.frame_rate";
     static final String FPS_COUNTER = "display.fps_counter";
     static final String ASPECT = "video.aspect";
+    static final String FULLSCREEN = "video.fullscreen";
 
     private final File file;
 

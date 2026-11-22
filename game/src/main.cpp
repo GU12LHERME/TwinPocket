@@ -6,7 +6,9 @@
 #include "game/stream.h"
 #include "game/memory.h"
 #include "game/movie.h"
+#include "game/renderer.h"
 #include "game/string.h"
+#include "platform/graphics.h"
 #include "platform/system.h"
 #include "retail/libc.h"
 
@@ -48,6 +50,14 @@ extern "C" int Main(u32 argc, char** argv)
     {
         void* memory = MemoryAllocate(sizeof(GameRendererController));
         G_GameRendererController = GameRendererController::Construct(memory, g_ScreenWidth, g_ScreenHeight, g_Pal);
+    }
+
+    // TwinsanityEvolved: the game's widescreen option for a game with no save yet -- the platform's default (the Android port's
+    // 16:9 screen: on; the PS2 and the other lanes: off, as the retail data has it). Once, before anything is loaded: a save's
+    // options set it again when it is loaded (SaveController::Restore), so the player's own choice is kept
+    if (Platform::Graphics::WidescreenDefault() != 0)
+    {
+        g_WidescreenTv = 1;
     }
 
     if (G_GameClockController == nullptr)

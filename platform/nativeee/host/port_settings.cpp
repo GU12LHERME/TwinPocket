@@ -187,10 +187,10 @@ void Set(uint32_t row, uint32_t choice) {
         break;
     case RowRestoreDefaults:
         if (choice != 1) return;
-        // this page's rows, and the graphic options the Android port sets a default for (te_display.h): the texture filter
-        // (bilinear), the resolution (1x), the frame rate (60), vsync (off), the fps counter (off) and the draw distance
-        // (100 %); the aspect and the
-        // display mode stay the player's (the screen's shape)
+        // this page's rows and the graphic options of the Android profile (te_display.h): 16:9, full screen (immersive),
+        // vsync on, the bilinear filter, the resolution 1x, the frame rate 60 (the presenter shows every picture the game
+        // makes: the game's own pace), the fps counter off, the draw distance original. The game's own widescreen option is
+        // the game's, kept in its save: not changed here
         g.driver = kDefaultDriver;
         g.buffer = kDefaultBuffer;
         g.deadzone = kDefaultDeadzone;
@@ -202,7 +202,9 @@ void Set(uint32_t row, uint32_t choice) {
         ApplySticks();
         SetDrawDistance(kDefaultDistance);
         te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
-        te::display::Set(te::display::RowVSync, 0);
+        te::display::Set(te::display::RowVSync, te::display::kDefaultVSync ? 1u : 0u);
+        te::display::Set(te::display::RowAspect, uint32_t(te::display::kDefaultAspect));
+        te::display::Set(te::display::RowDisplayMode, uint32_t(te::display::kDefaultFullscreen));
         te::display::Set(te::display::RowTextureFilter, uint32_t(te::display::kDefaultTextureFilter));
         te::display::Set(te::display::RowScale, 0);
         te::display::Set(te::display::RowFpsCounter, 0);

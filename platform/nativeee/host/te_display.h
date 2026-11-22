@@ -12,21 +12,35 @@ namespace te::display {
 // choice on every lane but Android, where it is BILINEAR -- on the Retroid Pocket 6 (Adreno 740) the title's choice draws
 // the additive glows (Aku Aku's mask, the glowing mushrooms, the waterfall's mist) as square blocks, and bilinear draws them
 // as on the console (the player's test, APK 0.1.7). The row keeps all its choices; the file's value wins once written.
+//
+// THE ANDROID PROFILE (the Retroid Pocket 6): a new installation starts with the picture's shape 16:9 (the handheld's screen;
+// with the game's own widescreen option on -- Platform::Graphics::WidescreenDefault -- the true 16:9 projection), the window
+// full screen (SDL's fullscreen on Android is the system's immersive mode: no status or navigation bar), vsync on and the
+// bilinear filter. Each applies only while ps2r.ini does not name the key: a value the player chose (in the game's menu or
+// the launcher) is kept across updates. Every other lane keeps its defaults (the title's filter, auto, windowed, vsync off).
 #if defined(__ANDROID__) || defined(TE_DEFAULTS_ANDROID)   // (TE_DEFAULTS_ANDROID: the host test of the Android defaults)
 constexpr int kDefaultTextureFilter = 2;   // bilinear
+constexpr int kDefaultAspect = 2;          // 16:9
+constexpr int kDefaultFullscreen = 1;      // fullscreen (Android: immersive)
+constexpr bool kDefaultVSync = true;
+constexpr bool kDefaultWidescreen = true;  // the game's own widescreen option, for a game with no save yet
 #else
 constexpr int kDefaultTextureFilter = 0;   // title
+constexpr int kDefaultAspect = 0;          // auto
+constexpr int kDefaultFullscreen = 0;      // windowed
+constexpr bool kDefaultVSync = false;      // the port's pacer times the presents
+constexpr bool kDefaultWidescreen = false; // as on the console
 #endif
 
 // What the runner read from ps2r.ini (the engine's VideoConfig, the keys the port honours) before the device exists.
 struct Settings {
-    int aspect = 0;          // video.aspect: 0 auto (the TV's 4:3 in a window; the frame's own pixels headless -- the frozen
+    int aspect = kDefaultAspect;   // video.aspect: 0 auto (the TV's 4:3 in a window; the frame's own pixels headless -- the frozen
                              // judges' captures), 1 4:3, 2 16:9, 3 16:10, 4 21:9, 5 32:9
     int fit = 1;             // video.fit_mode: 0 stretch, 1 fit (letterbox), 2 fill, 3 integer, 4 custom (= fit here)
     int scale = 1;           // video.scale: the frame target's internal scale 1..4 (0 = 1; the PS Vita 1..2: display.cpp)
     int texture_filter = kDefaultTextureFilter;  // video.texture_filter: 0 title, 1 point, 2 bilinear, 3 trilinear (bilinear here: ps2e_draw has no mip chain)
-    bool vsync = false;      // video.vsync (the port's default: off -- its pacer times the presents; a windowed run may turn it on)
-    int fullscreen = 0;      // video.fullscreen: 0 windowed, 1 fullscreen, 2 borderless
+    bool vsync = kDefaultVSync;    // video.vsync (the port's default: off on the desktop -- its pacer times the presents; a windowed run may turn it on)
+    int fullscreen = kDefaultFullscreen;   // video.fullscreen: 0 windowed, 1 fullscreen, 2 borderless
     int offset_x = 0;        // video.custom_offset_x/y: the title's MoveDisplay, in FRAME pixels (the PS2's +-64 across, +-32 down)
     int offset_y = 0;
     bool fps_counter = false;   // display.fps_counter: render fps + game Hz top-right through the GAME's text system

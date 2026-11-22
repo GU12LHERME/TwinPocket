@@ -419,6 +419,10 @@ ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) { return IsPortRow
 
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size) { CopyLabel(te::port_settings::Title(), out, size); }
 
+// Platform::Graphics::WidescreenDefault: the game's widescreen option for a game with no save yet (te_display.h: on in the
+// Android profile, off elsewhere)
+ps2e_s32 ps2e_graphics_widescreen_default(void) { return te::display::kDefaultWidescreen ? 1 : 0; }
+
 // Platform::Graphics::WidescreenAspect: the shape the game's widescreen option draws for (te_display.h)
 ps2e_f32 ps2e_graphics_widescreen_aspect(void) { return te::display::WidescreenAspect(); }
 

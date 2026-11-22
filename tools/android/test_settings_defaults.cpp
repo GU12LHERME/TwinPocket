@@ -33,18 +33,28 @@ std::string ReadAll(const std::string& path) {
     return std::string(std::istreambuf_iterator<char>(in), {});
 }
 
-// runner/main.cpp: the platform default first, then the file's keys
-int StartFilter(const std::string& text) {
-    if (text.empty()) return te::display::Settings{}.texture_filter;   // no file: the display settings' defaults
+// runner/main.cpp: the platform defaults first, then the file's keys -- the display settings a run starts with
+te::display::Settings Start(const std::string& text) {
+    te::display::Settings d;   // no file: the display settings' defaults
+    if (text.empty()) return d;
     ps2r::Config cfg;
+    cfg.video.vsync = te::display::kDefaultVSync;
+    cfg.video.aspect = static_cast<ps2r::AspectSel>(te::display::kDefaultAspect);
+    cfg.video.fullscreen = static_cast<ps2r::FullscreenMode>(te::display::kDefaultFullscreen);
     cfg.video.texture_filter = static_cast<ps2r::TextureFilterSel>(te::display::kDefaultTextureFilter);
     std::string err;
     if (!ps2r::ConfigLoader::ApplyIniText(text, cfg, &err)) {
         std::printf("      parse error: %s\n", err.c_str());
-        return -1;
+        d.texture_filter = -1;
+        return d;
     }
-    return int(cfg.video.texture_filter);
+    d.aspect = int(cfg.video.aspect);
+    d.texture_filter = int(cfg.video.texture_filter);
+    d.vsync = cfg.video.vsync;
+    d.fullscreen = int(cfg.video.fullscreen);
+    return d;
 }
+int StartFilter(const std::string& text) { return Start(text).texture_filter; }
 
 }  // namespace
 
@@ -61,6 +71,31 @@ int main(int argc, char** argv) {
     Check(te::display::kDefaultTextureFilter == expected_default, "the lane's default texture filter");
     Check(StartFilter("") == expected_default, "no ps2r.ini: the lane's default");
     Check(StartFilter("game.text_language = english\n") == expected_default, "ps2r.ini without video.texture_filter: the lane's default");
+
+    // the rest of the profile (te_display.h): Android 16:9, fullscreen (immersive), vsync on, the game's widescreen on;
+    // elsewhere auto, windowed, vsync off, widescreen off
+#if defined(TE_DEFAULTS_ANDROID)
+    const int want_aspect = 2, want_fullscreen = 1;
+    const bool want_vsync = true, want_widescreen = true;
+#else
+    const int want_aspect = 0, want_fullscreen = 0;
+    const bool want_vsync = false, want_widescreen = false;
+#endif
+    for (const char* text : {"", "game.text_language = english\n"}) {
+        const te::display::Settings d = Start(text);
+        char what[128];
+        std::snprintf(what, sizeof what, "%s: aspect %d, fullscreen %d, vsync %d (the lane's profile)", *text ? "ps2r.ini without the keys" : "no ps2r.ini",
+                      d.aspect, d.fullscreen, int(d.vsync));
+        Check(d.aspect == want_aspect && d.fullscreen == want_fullscreen && d.vsync == want_vsync, what);
+    }
+    Check(te::display::kDefaultWidescreen == want_widescreen, "the game's widescreen option for a game with no save: the lane's");
+    // a player's choice in the file wins over the profile (an update never resets it)
+    {
+        const te::display::Settings d = Start("video.aspect = 4:3\nvideo.fullscreen = windowed\nvideo.vsync = off\nvideo.texture_filter = title\n");
+        Check(d.aspect == 1 && d.fullscreen == 0 && !d.vsync && d.texture_filter == 0, "the player's saved aspect, window, vsync and filter kept");
+        const te::display::Settings e = Start("video.aspect = 16:9\nvideo.fullscreen = fullscreen\nvideo.vsync = on\n");
+        Check(e.aspect == 2 && e.fullscreen == 1 && e.vsync, "16:9, fullscreen, vsync on read back as written");
+    }
 
     // the row's three choices (display.cpp kFilterKeys) written as the menu writes them, read back as the next start reads them
     std::string err;
