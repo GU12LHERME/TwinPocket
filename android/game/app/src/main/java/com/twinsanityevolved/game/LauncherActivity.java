@@ -62,17 +62,19 @@ public final class LauncherActivity extends Activity {
     private boolean starting;
 
     // the screen
-    private Button playButton;
+    private View playButton;
     private TextView isoName, isoState, lastRun;
-    private LinearLayout tabBar, page;
+    private LinearLayout page;          // the one scrolling column: the game, then every section
     private ScrollView pageScroll;
-    private final List<Button> tabs = new ArrayList<>();
+    private final List<View> sections = new ArrayList<>();   // the section headers (L1 / R1 jump between them)
+    private LinearLayout pendingRow;    // a half-filled row of the two-column card grid
     private int currentTab = 0;
-    private TextView status;   // the Diagnóstico page's text (null on the other pages)
+    private TextView status;            // the diagnostics' status text
 
     // the palette
-    static final int BG = 0xFF101318, PANEL = 0xFF181C23, ROW = 0xFF1F242D, ROW_FOCUS = 0xFF2B3240, TEXT = 0xFFEDEFF3,
-            SUBTLE = 0xFF9AA3B2, ACCENT = 0xFFFF8A1F, ACCENT_DARK = 0xFFD86A00, GOOD = 0xFF4CC38A, BAD = 0xFFFF5D5D;
+    static final int BG = 0xFF2E7D32, CARD = 0x66173F18, CARD_FOCUS = 0x88204F20, TEXT = 0xFFFFFFFF, SUBTLE = 0xFFE3F2D9,
+            OUTLINE = 0xFF143A12, ACCENT = 0xFFFFE04A, PILL = 0xFF234A1F, GREEN_HI = 0xFF7CC75A, GREEN_LO = 0xFF3D8B2F,
+            RED_HI = 0xFFD9604C, RED_LO = 0xFF9A2E22, GOOD = 0xFFFFE04A, BAD = 0xFFFFB0A0, ROW_FOCUS = CARD_FOCUS;
 
     // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
     // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). Every driver stays selectable.
@@ -161,13 +163,121 @@ public final class LauncherActivity extends Activity {
         return g;
     }
 
-    // a background that shows where the controller's focus is (an orange outline) and a press
-    private Drawable focusable(int normal, int focused) {
+    private static GradientDrawable vertical(int top, int bottom, float radius, int strokeWidth, int strokeColor) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[] {top, bottom});
+        g.setCornerRadius(radius);
+        if (strokeWidth > 0) g.setStroke(strokeWidth, strokeColor);
+        return g;
+    }
+
+    // a card's background: translucent dark green, a yellow outline where the controller's focus is
+    private Drawable cardBackground() {
         StateListDrawable s = new StateListDrawable();
-        s.addState(new int[] {android.R.attr.state_pressed}, rounded(focused, dp(10), dp(2), ACCENT));
-        s.addState(new int[] {android.R.attr.state_focused}, rounded(focused, dp(10), dp(2), ACCENT));
-        s.addState(new int[] {}, rounded(normal, dp(10), 0, 0));
+        s.addState(new int[] {android.R.attr.state_focused}, rounded(CARD_FOCUS, dp(18), dp(3), ACCENT));
+        s.addState(new int[] {android.R.attr.state_pressed}, rounded(CARD_FOCUS, dp(18), dp(3), ACCENT));
+        s.addState(new int[] {}, rounded(CARD, dp(18), 0, 0));
         return s;
+    }
+
+    // a glossy pill button (JOGAR green, SAIR red), outlined in yellow when focused
+    private Drawable pill(int hi, int lo) {
+        StateListDrawable s = new StateListDrawable();
+        s.addState(new int[] {android.R.attr.state_focused}, vertical(hi, lo, dp(40), dp(4), ACCENT));
+        s.addState(new int[] {android.R.attr.state_pressed}, vertical(lo, hi, dp(40), dp(4), ACCENT));
+        s.addState(new int[] {}, vertical(hi, lo, dp(40), dp(3), OUTLINE));
+        return s;
+    }
+
+    /** Text with a dark outline (the screen's bold titles): drawn twice, the stroke under the fill. */
+    static final class OutlineText extends TextView {
+        private final int outline;
+        private final float width;
+        OutlineText(Context c, int outline, float width) {
+            super(c);
+            this.outline = outline;
+            this.width = width;
+        }
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            final int fill = getCurrentTextColor();
+            getPaint().setStyle(android.graphics.Paint.Style.STROKE);
+            getPaint().setStrokeJoin(android.graphics.Paint.Join.ROUND);
+            getPaint().setStrokeWidth(width);
+            setTextColor(outline);
+            super.onDraw(canvas);
+            getPaint().setStyle(android.graphics.Paint.Style.FILL);
+            setTextColor(fill);
+            super.onDraw(canvas);
+        }
+    }
+
+    /** The background: a green field, light rays from the top centre, a soft glow and a thin frame. */
+    static final class RaysBackground extends View {
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        RaysBackground(Context c) { super(c); }
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            final int w = getWidth(), h = getHeight();
+            final float cx = w * 0.5f, cy = h * 0.18f;
+            paint.setShader(new android.graphics.RadialGradient(cx, cy, Math.max(w, h) * 0.9f,
+                new int[] {0xFF8BD06A, 0xFF4CA63B, 0xFF2E7D32, 0xFF1F5E22}, new float[] {0f, 0.25f, 0.6f, 1f},
+                android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawRect(0, 0, w, h, paint);
+            paint.setShader(null);
+            paint.setColor(0x1FFFFFFF);
+            final int rays = 18;
+            final float far = Math.max(w, h) * 1.5f;
+            android.graphics.Path ray = new android.graphics.Path();
+            for (int i = 0; i < rays; i++) {
+                final double a0 = (Math.PI * 2 * i) / rays, a1 = a0 + Math.PI / rays * 0.55;
+                ray.reset();
+                ray.moveTo(cx, cy);
+                ray.lineTo(cx + (float) Math.cos(a0) * far, cy + (float) Math.sin(a0) * far);
+                ray.lineTo(cx + (float) Math.cos(a1) * far, cy + (float) Math.sin(a1) * far);
+                ray.close();
+                canvas.drawPath(ray, paint);
+            }
+            paint.setShader(new android.graphics.RadialGradient(cx, cy, Math.min(w, h) * 0.35f, 0x55FFFFCC, 0x00FFFFCC,
+                android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, Math.min(w, h) * 0.35f, paint);
+            paint.setShader(null);
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(4f);
+            paint.setColor(0x55C8F0A8);
+            final float in = 18f;
+            canvas.drawRect(in, in, w - in, h - in, paint);
+            paint.setStyle(android.graphics.Paint.Style.FILL);
+        }
+    }
+
+    /** A round green arrow button (left / right of a value), touch only: the card takes the controller's left / right. */
+    static final class ArrowButton extends View {
+        private final boolean right;
+        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        ArrowButton(Context c, boolean right) {
+            super(c);
+            this.right = right;
+            setFocusable(false);
+        }
+        @Override
+        protected void onDraw(android.graphics.Canvas canvas) {
+            final float w = getWidth(), h = getHeight(), r = Math.min(w, h) / 2f - 2f, cx = w / 2f, cy = h / 2f;
+            paint.setShader(null);
+            paint.setColor(OUTLINE);
+            canvas.drawCircle(cx, cy, r, paint);
+            paint.setShader(new android.graphics.LinearGradient(0, cy - r, 0, cy + r, GREEN_HI, GREEN_LO, android.graphics.Shader.TileMode.CLAMP));
+            canvas.drawCircle(cx, cy, r - 3f, paint);
+            paint.setShader(null);
+            paint.setColor(0x40FFFFFF);
+            canvas.drawCircle(cx, cy - r * 0.35f, r * 0.55f, paint);
+            paint.setColor(0xFFFFFFFF);
+            android.graphics.Path t = new android.graphics.Path();
+            final float s = r * 0.42f;
+            if (right) { t.moveTo(cx - s * 0.6f, cy - s); t.lineTo(cx + s, cy); t.lineTo(cx - s * 0.6f, cy + s); }
+            else { t.moveTo(cx + s * 0.6f, cy - s); t.lineTo(cx - s, cy); t.lineTo(cx + s * 0.6f, cy + s); }
+            t.close();
+            canvas.drawPath(t, paint);
+        }
     }
 
     private TextView text(String s, float sp, int color, boolean bold) {
@@ -179,23 +289,40 @@ public final class LauncherActivity extends Activity {
         return t;
     }
 
-    private Button button(String label, int normal, int focusedColor, View.OnClickListener l) {
-        Button b = new Button(this);
-        b.setText(T(label));
-        b.setAllCaps(false);
-        b.setTextColor(TEXT);
-        b.setTextSize(TypedValue.COMPLEX_UNIT_SP, 15);
-        b.setBackground(focusable(normal, focusedColor));
-        b.setPadding(dp(14), dp(8), dp(14), dp(8));
-        b.setFocusable(true);
-        b.setOnClickListener(l);
-        if (Build.VERSION.SDK_INT >= 21) b.setStateListAnimator(null);
-        return b;
+    private OutlineText outlined(String s, float sp, int color) {
+        OutlineText t = new OutlineText(this, OUTLINE, dp(4));
+        t.setText(T(s));
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, sp);
+        t.setTextColor(color);
+        t.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        t.setPadding(dp(3), 0, dp(3), 0);
+        return t;
+    }
+
+    // a pill button with an outlined label (JOGAR, SAIR, Selecionar ISO)
+    private View pillButton(String label, float sp, int hi, int lo, View.OnClickListener l) {
+        FrameLayout f = new FrameLayout(this);
+        f.setBackground(pill(hi, lo));
+        f.setFocusable(true);
+        f.setClickable(true);
+        f.setOnClickListener(l);
+        OutlineText t = outlined(label, sp, TEXT);
+        t.setGravity(Gravity.CENTER);
+        f.addView(t, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.CENTER));
+        f.setTag(label);
+        return f;
     }
 
     private LinearLayout.LayoutParams fill(int height, int top) {
         LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, height);
         p.topMargin = top;
+        return p;
+    }
+
+    private LinearLayout.LayoutParams centred(int width, int height, int top) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(width, height);
+        p.topMargin = top;
+        p.gravity = Gravity.CENTER_HORIZONTAL;
         return p;
     }
 
@@ -206,99 +333,60 @@ public final class LauncherActivity extends Activity {
         new Settings(this).migrate(prefs());
         Lang.init(this);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
-        getWindow().setStatusBarColor(BG);
-        getWindow().setNavigationBarColor(BG);
+        getWindow().setStatusBarColor(0xFF1F5E22);
+        getWindow().setNavigationBarColor(0xFF1F5E22);
 
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.HORIZONTAL);
-        root.setBackgroundColor(BG);
-        root.setPadding(dp(20), dp(16), dp(20), dp(16));
+        FrameLayout root = new FrameLayout(this);
+        root.addView(new RaysBackground(this), new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        LinearLayout column = new LinearLayout(this);
+        column.setOrientation(LinearLayout.VERTICAL);
+        column.setPadding(dp(28), dp(14), dp(28), dp(14));
+        root.addView(column, new FrameLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
-        // ---- left: the game ----
-        LinearLayout left = new LinearLayout(this);
-        left.setOrientation(LinearLayout.VERTICAL);
-        left.setBackground(rounded(PANEL, dp(16), 0, 0));
-        left.setPadding(dp(20), dp(18), dp(20), dp(18));
-        left.addView(text("Crash Twinsanity", 26, ACCENT, true));
-        left.addView(text("TwinsanityEvolved · port nativo Android", 13, SUBTLE, false));
-
-        LinearLayout card = new LinearLayout(this);
-        card.setOrientation(LinearLayout.VERTICAL);
-        card.setBackground(rounded(ROW, dp(12), 0, 0));
-        card.setPadding(dp(14), dp(10), dp(14), dp(10));
-        card.addView(text("JOGO SELECIONADO", 11, SUBTLE, true));
-        isoName = text("—", 15, TEXT, true);
-        isoState = text("", 13, SUBTLE, false);
-        card.addView(isoName);
-        card.addView(isoState);
-        left.addView(card, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(14)));
-
-        playButton = button("JOGAR", ACCENT_DARK, ACCENT, v -> startGame(false));
-        playButton.setTextSize(TypedValue.COMPLEX_UNIT_SP, 22);
-        playButton.setTypeface(Typeface.DEFAULT_BOLD);
-        left.addView(playButton, fill(dp(64), dp(14)));
-        Button pick = button("Selecionar ISO…", ROW, ROW_FOCUS, v -> pickIso());
-        left.addView(pick, fill(dp(48), dp(10)));
-        Button exit = button("Sair do aplicativo", ROW, ROW_FOCUS, v -> confirmExit());
-        left.addView(exit, fill(dp(44), dp(8)));
-
-        lastRun = text("", 12, SUBTLE, false);
-        left.addView(lastRun, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(12)));
-        View spacer = new View(this);
-        left.addView(spacer, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        left.addView(text("A escolher · ◀ ▶ mudar · L1/R1 categoria · START jogar · B voltar · no jogo: Opções → android settings → return to launcher", 11, SUBTLE, false));
-        left.addView(text(T("versão ") + versionName(), 11, SUBTLE, false));
-
-        ScrollView leftScroll = new ScrollView(this);
-        leftScroll.setFillViewport(true);
-        leftScroll.addView(left);
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.4f);
-        lp.rightMargin = dp(16);
-        root.addView(leftScroll, lp);
-
-        // ---- right: the settings by category, and the diagnostics ----
-        LinearLayout right = new LinearLayout(this);
-        right.setOrientation(LinearLayout.VERTICAL);
-        right.setBackground(rounded(PANEL, dp(16), 0, 0));
-        right.setPadding(dp(14), dp(12), dp(14), dp(12));
-        tabBar = new LinearLayout(this);
-        tabBar.setOrientation(LinearLayout.HORIZONTAL);
-        for (int i = 0; i < TAB_NAMES.length; i++) {
-            final int index = i;
-            Button t = button(TAB_NAMES[i], PANEL, ROW_FOCUS, v -> showTab(index));
-            t.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-            LinearLayout.LayoutParams tp = new LinearLayout.LayoutParams(0, dp(44), 1f);
-            tp.rightMargin = dp(4);
-            tabBar.addView(t, tp);
-            tabs.add(t);
-        }
-        HorizontalFit.wrap(tabBar);
-        right.addView(tabBar);
         pageScroll = new ScrollView(this);
+        pageScroll.setVerticalScrollBarEnabled(true);
+        pageScroll.setScrollbarFadingEnabled(false);
+        if (Build.VERSION.SDK_INT >= 29) {
+            pageScroll.setVerticalScrollbarThumbDrawable(rounded(ACCENT, dp(4), 0, 0));
+            pageScroll.setVerticalScrollbarTrackDrawable(rounded(0x40143A12, dp(4), 0, 0));
+        }
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(0, dp(8), 0, dp(8));
+        page.setPadding(dp(8), dp(4), dp(18), dp(24));
         pageScroll.addView(page);
-        right.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
-        root.addView(right, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 0.6f));
+        column.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+
+        // the hints at the bottom (A confirmar, the D-pad mover, L1/R1 seções, START jogar)
+        LinearLayout hints = new LinearLayout(this);
+        hints.setOrientation(LinearLayout.HORIZONTAL);
+        hints.setGravity(Gravity.CENTER);
+        hints.setBackground(rounded(0xCC1E4A1B, dp(18), 0, 0));
+        hints.setPadding(dp(16), dp(8), dp(16), dp(8));
+        hints.addView(hint("A", "Confirmar"));
+        hints.addView(hint("✥", "Mover"));
+        hints.addView(hint("L1/R1", "Seções"));
+        hints.addView(hint("START", "Jogar"));
+        column.addView(hints, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(8)));
 
         setContentView(root);
-        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, prefs().getInt("launcher_tab", 0)));
-        showTab(currentTab);
+        buildPage();
         playButton.requestFocus();
     }
 
-    /** Keeps the category buttons on one line on a narrow screen: their text shrinks rather than wrapping. */
-    static final class HorizontalFit {
-        static void wrap(LinearLayout bar) {
-            for (int i = 0; i < bar.getChildCount(); i++) {
-                View v = bar.getChildAt(i);
-                if (v instanceof TextView) {
-                    ((TextView) v).setSingleLine(true);
-                    ((TextView) v).setEllipsize(android.text.TextUtils.TruncateAt.END);
-                }
-            }
-        }
+    // a hint of the bottom bar: a round badge and its word
+    private View hint(String badge, String word) {
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.HORIZONTAL);
+        h.setGravity(Gravity.CENTER_VERTICAL);
+        TextView b = text(badge, 13, TEXT, true);
+        b.setGravity(Gravity.CENTER);
+        b.setBackground(vertical(GREEN_HI, GREEN_LO, dp(16), dp(2), OUTLINE));
+        b.setPadding(dp(10), dp(3), dp(10), dp(3));
+        h.addView(b);
+        TextView w = text(word, 15, TEXT, false);
+        w.setPadding(dp(8), 0, dp(22), 0);
+        h.addView(w);
+        return h;
     }
 
     private String versionName() {
@@ -313,8 +401,9 @@ public final class LauncherActivity extends Activity {
     protected void onResume() {
         super.onResume();
         starting = false;
-        playButton.setEnabled(true);
-        playButton.setText(T("JOGAR"));
+        if (playButton != null) playButton.setEnabled(true);
+        if (playButton instanceof FrameLayout && ((FrameLayout) playButton).getChildAt(0) instanceof TextView)
+            ((TextView) ((FrameLayout) playButton).getChildAt(0)).setText(T("▶  JOGAR"));
         refresh();
     }
 
@@ -324,12 +413,10 @@ public final class LauncherActivity extends Activity {
         if (e.getAction() == KeyEvent.ACTION_DOWN && e.getRepeatCount() == 0) {
             switch (e.getKeyCode()) {
                 case KeyEvent.KEYCODE_BUTTON_L1:
-                    showTab((currentTab + TAB_NAMES.length - 1) % TAB_NAMES.length);
-                    tabs.get(currentTab).requestFocus();
+                    jumpSection(-1);
                     return true;
                 case KeyEvent.KEYCODE_BUTTON_R1:
-                    showTab((currentTab + 1) % TAB_NAMES.length);
-                    tabs.get(currentTab).requestFocus();
+                    jumpSection(1);
                     return true;
                 case KeyEvent.KEYCODE_BUTTON_START:
                     startGame(false);
@@ -341,126 +428,286 @@ public final class LauncherActivity extends Activity {
         return super.dispatchKeyEvent(e);
     }
 
+    // L1 / R1: the previous / next section, its first card focused
+    private void jumpSection(int d) {
+        if (sections.isEmpty()) return;
+        final int y = pageScroll.getScrollY();
+        int target = -1;
+        if (d > 0) {
+            for (int i = 0; i < sections.size(); i++) if (sections.get(i).getTop() > y + dp(8)) { target = i; break; }
+            if (target < 0) target = sections.size() - 1;
+        } else {
+            for (int i = sections.size() - 1; i >= 0; i--) if (sections.get(i).getTop() < y - dp(8)) { target = i; break; }
+            if (target < 0) { pageScroll.smoothScrollTo(0, 0); playButton.requestFocus(); return; }
+        }
+        final View header = sections.get(target);
+        pageScroll.smoothScrollTo(0, header.getTop());
+        View next = header.focusSearch(View.FOCUS_DOWN);
+        if (next != null) next.requestFocus();
+    }
+
     @Override
     public void onBackPressed() {
         // B (the system's fallback to BACK) first brings the focus back to JOGAR; from there it leaves
         if (!playButton.isFocused()) {
+            pageScroll.smoothScrollTo(0, 0);
             playButton.requestFocus();
             return;
         }
         super.onBackPressed();
     }
 
-    // ---- the pages ------------------------------------------------------------------------------------------------------
+    // ---- the page -------------------------------------------------------------------------------------------------------
+    // (the sections' builders call showTab after a change: the page is built again where it was, the same card focused)
     private void showTab(int index) {
         currentTab = index;
-        prefs().edit().putInt("launcher_tab", index).apply();
-        for (int i = 0; i < tabs.size(); i++) {
-            Button t = tabs.get(i);
-            boolean on = i == index;
-            t.setBackground(focusable(on ? ROW : PANEL, ROW_FOCUS));
-            t.setTextColor(on ? ACCENT : SUBTLE);
-            t.setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
-        }
+        View focused = getCurrentFocus();
+        final Object key = focused != null ? focused.getTag() : null;
+        final int y = pageScroll.getScrollY();
+        buildPage();
+        pageScroll.post(() -> {
+            pageScroll.scrollTo(0, y);
+            if (key != null) {
+                View again = page.findViewWithTag(key);
+                if (again != null) again.requestFocus();
+            }
+        });
+    }
+
+    private void buildPage() {
         page.removeAllViews();
+        sections.clear();
+        pendingRow = null;
         status = null;
         Settings st = new Settings(this);
-        switch (index) {
-            case 0:
-                page.addView(presetRow(st));
-                for (Choice c : GRAPHICS) page.addView(choiceRow(st, c));
-                note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
-                break;
-            case 1:
-                for (Choice c : AUDIO) page.addView(choiceRow(st, c));
-                note(T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
-                        + T("Driver e buffer também estão no jogo: Opções → android settings."));
-                break;
-            case 2:
-                for (Choice c : CONTROLS) page.addView(choiceRow(st, c));
-                note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
-                note("BOTÕES — escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
-                        + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
-                for (int i = 0; i < PAD_BUTTONS.length; i++) page.addView(padRow(st, i));
-                page.addView(actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", v -> confirmPadRestore()));
-                break;
-            case 3:
-                page.addView(choiceRow(st, LANGUAGE));
-                note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
-                page.addView(actionRow("Restaurar apenas gráficos",
-                    "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
-                    v -> confirmRestoreGraphics()));
-                page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
-                note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
-                note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
-                        + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
-                break;
-            case 4:
-                achievementsPage();
-                break;
-            default:
-                page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
-                page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
-                final boolean diag = prefs().getBoolean("diagnostic_mode", false);
-                page.addView(actionRow(T("Modo diagnóstico: ") + T(diag ? "LIGADO" : "desligado"),
-                        "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
-                            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
-                            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
-                            showTab(5);
-                        }));
-                page.addView(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
-                page.addView(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
-                status = text("", 11, SUBTLE, false);
-                status.setTypeface(Typeface.MONOSPACE);
-                status.setTextIsSelectable(true);
-                status.setPadding(dp(6), dp(10), dp(6), dp(6));
-                page.addView(status);
-                status.setText(statusText());
-                break;
+
+        // the game: the name, the chosen disc, JOGAR, SAIR, the ISO picker, the last run
+        OutlineText title = outlined("CRASH TWINSANITY", 46, ACCENT);
+        title.setGravity(Gravity.CENTER);
+        page.addView(title, centred(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, dp(10)));
+        OutlineText sub = outlined("TwinsanityEvolved · port nativo Android", 16, TEXT);
+        sub.setGravity(Gravity.CENTER);
+        page.addView(sub, centred(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, 0));
+        isoName = text("—", 15, TEXT, true);
+        isoName.setGravity(Gravity.CENTER);
+        isoState = text("", 13, SUBTLE, false);
+        isoState.setGravity(Gravity.CENTER);
+        page.addView(isoName, centred(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, dp(10)));
+        page.addView(isoState, centred(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, dp(2)));
+        playButton = pillButton("▶  JOGAR", 30, GREEN_HI, GREEN_LO, v -> startGame(false));
+        page.addView(playButton, centred(dp(440), dp(76), dp(14)));
+        page.addView(pillButton("⏻  SAIR", 20, RED_HI, RED_LO, v -> confirmExit()), centred(dp(280), dp(54), dp(8)));
+        page.addView(pillButton("Selecionar ISO…", 16, GREEN_HI, GREEN_LO, v -> pickIso()), centred(dp(280), dp(46), dp(8)));
+        lastRun = text("", 13, SUBTLE, false);
+        lastRun.setGravity(Gravity.CENTER);
+        page.addView(lastRun, centred(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT, dp(8)));
+
+        section("Perfil");
+        add(presetRow(st));
+        flush();
+
+        section("Gráficos");
+        for (Choice c : GRAPHICS) add(choiceRow(st, c));
+        note("As mesmas opções ficam no jogo: Opções → Opções gráficas.");
+
+        section("Áudio");
+        for (Choice c : AUDIO) add(choiceRow(st, c));
+        note(T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
+                + T("Driver e buffer também estão no jogo: Opções → android settings."));
+
+        section("Controles");
+        for (Choice c : CONTROLS) add(choiceRow(st, c));
+        note("Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
+        note("BOTÕES — escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
+                + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
+        for (int i = 0; i < PAD_BUTTONS.length; i++) add(padRow(st, i));
+        add(actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", v -> confirmPadRestore()));
+        flush();
+
+        section("Sistema");
+        add(choiceRow(st, LANGUAGE));
+        add(actionRow("Restaurar apenas gráficos",
+            "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
+            v -> confirmRestoreGraphics()));
+        add(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
+        note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
+        note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
+        note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
+                + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
+
+        section("Conquistas");
+        achievementsPage();
+        flush();
+
+        section("Diagnóstico");
+        add(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
+        add(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
+        final boolean diag = prefs().getBoolean("diagnostic_mode", false);
+        add(actionRow(T("Modo diagnóstico: ") + T(diag ? "LIGADO" : "desligado"),
+                "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
+                    prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
+                    Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
+                    showTab(5);
+                }));
+        add(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
+        add(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
+        flush();
+        status = text("", 11, SUBTLE, false);
+        status.setTypeface(Typeface.MONOSPACE);
+        status.setTextIsSelectable(true);
+        status.setPadding(dp(14), dp(12), dp(14), dp(12));
+        status.setBackground(rounded(CARD, dp(18), 0, 0));
+        page.addView(status, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(10)));
+        status.setText(statusText());
+        refresh();
+    }
+
+    // a section's header: a small star and the name, outlined in yellow
+    private void section(String name) {
+        flush();
+        LinearLayout h = new LinearLayout(this);
+        h.setOrientation(LinearLayout.HORIZONTAL);
+        h.setGravity(Gravity.CENTER_VERTICAL);
+        OutlineText star = outlined("✦", 22, ACCENT);
+        h.addView(star);
+        OutlineText t = outlined(T(name).toUpperCase(Locale.ROOT), 26, ACCENT);
+        t.setPadding(dp(6), 0, dp(6), 0);
+        h.addView(t);
+        page.addView(h, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(28)));
+        sections.add(h);
+    }
+
+    // a card into the two-column grid (a row is completed by the next card, or by flush())
+    private void add(View card) {
+        if (pendingRow == null) {
+            pendingRow = new LinearLayout(this);
+            pendingRow.setOrientation(LinearLayout.HORIZONTAL);
+            page.addView(pendingRow, fill(ViewGroup.LayoutParams.WRAP_CONTENT, dp(14)));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            p.rightMargin = dp(10);
+            pendingRow.addView(card, p);
+        } else {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+            p.leftMargin = dp(10);
+            pendingRow.addView(card, p);
+            pendingRow = null;
         }
-        pageScroll.scrollTo(0, 0);
+    }
+
+    private void flush() {
+        if (pendingRow != null) {
+            // an odd card keeps half the width (the grid stays aligned)
+            View spacer = new View(this);
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(0, 1, 1f);
+            p.leftMargin = dp(10);
+            pendingRow.addView(spacer, p);
+            pendingRow = null;
+        }
     }
 
     private void note(String s) {
-        TextView t = text(s, 12, SUBTLE, false);
-        t.setPadding(dp(6), dp(12), dp(6), 0);
+        flush();
+        TextView t = text(s, 13, SUBTLE, false);
+        t.setPadding(dp(8), dp(10), dp(8), 0);
         page.addView(t);
     }
 
-    private View rowFrame(String label, String help, TextView value) {
+    // a card's frame: the title (outlined), the help line, and below them the control (a value row, or nothing)
+    private View rowFrame(String label, String help, View control) {
+        LinearLayout card = new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setBackground(cardBackground());
+        card.setPadding(dp(18), dp(14), dp(18), dp(14));
+        card.setFocusable(true);
+        card.setClickable(true);
+        card.setTag("card:" + label);
+        card.addView(outlined(label, 20, TEXT));
+        if (help != null) {
+            TextView h = text(help, 13, SUBTLE, false);
+            h.setPadding(dp(3), dp(4), 0, 0);
+            card.addView(h);
+        }
+        if (control != null) {
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            p.topMargin = dp(12);
+            card.addView(control, p);
+        }
+        return card;
+    }
+
+    // the value row of a choice card: ◀ [ VALUE ] ▶ and a dot per value under it
+    private View valueRow(final TextView value, final LinearLayout dots, Runnable prev, Runnable next) {
+        LinearLayout box = new LinearLayout(this);
+        box.setOrientation(LinearLayout.VERTICAL);
         LinearLayout row = new LinearLayout(this);
         row.setOrientation(LinearLayout.HORIZONTAL);
         row.setGravity(Gravity.CENTER_VERTICAL);
-        row.setBackground(focusable(ROW, ROW_FOCUS));
-        row.setPadding(dp(14), dp(10), dp(14), dp(10));
-        row.setFocusable(true);
-        row.setClickable(true);
-        LinearLayout words = new LinearLayout(this);
-        words.setOrientation(LinearLayout.VERTICAL);
-        words.addView(text(label, 15, TEXT, true));
-        if (help != null) words.addView(text(help, 12, SUBTLE, false));
-        row.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        if (value != null) row.addView(value);
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        p.topMargin = dp(6);
-        row.setLayoutParams(p);
-        return row;
+        ArrowButton left = new ArrowButton(this, false);
+        left.setOnClickListener(v -> prev.run());
+        row.addView(left, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        value.setGravity(Gravity.CENTER);
+        value.setBackground(rounded(PILL, dp(28), dp(2), 0xFFB9A84A));
+        value.setPadding(dp(10), dp(10), dp(10), dp(10));
+        LinearLayout.LayoutParams vp = new LinearLayout.LayoutParams(0, dp(52), 1f);
+        vp.leftMargin = dp(6);
+        vp.rightMargin = dp(6);
+        row.addView(value, vp);
+        ArrowButton right = new ArrowButton(this, true);
+        right.setOnClickListener(v -> next.run());
+        row.addView(right, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        box.addView(row);
+        if (dots != null) {
+            dots.setGravity(Gravity.CENTER);
+            LinearLayout.LayoutParams dp = new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            dp.topMargin = dp(6);
+            box.addView(dots, dp);
+        }
+        return box;
     }
 
+    private void showDots(LinearLayout dots, int count, int at) {
+        dots.removeAllViews();
+        for (int i = 0; i < count; i++) {
+            View d = new View(this);
+            d.setBackground(rounded(i == at ? ACCENT : 0x80C8E6B8, dp(4), 0, 0));
+            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(8), dp(8));
+            p.leftMargin = dp(3);
+            p.rightMargin = dp(3);
+            dots.addView(d, p);
+        }
+    }
+
+    private TextView valueText() {
+        OutlineText v = new OutlineText(this, OUTLINE, dp(3));
+        v.setTextSize(TypedValue.COMPLEX_UNIT_SP, 18);
+        v.setTextColor(ACCENT);
+        v.setTypeface(Typeface.DEFAULT_BOLD);
+        v.setSingleLine(true);
+        v.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        return v;
+    }
+
+    // an action card: the title, the help, and a pill that says what A does
     private View actionRow(String label, String help, View.OnClickListener l) {
-        View row = rowFrame(label, help, text("›", 20, ACCENT, true));
-        row.setOnClickListener(l);
-        return row;
+        TextView go = valueText();
+        go.setText(T("ABRIR"));
+        go.setGravity(Gravity.CENTER);
+        go.setBackground(rounded(PILL, dp(28), dp(2), 0xFFB9A84A));
+        go.setPadding(dp(10), dp(8), dp(10), dp(8));
+        View card = rowFrame(label, help, go);
+        card.setOnClickListener(l);
+        return card;
     }
 
-    // A setting: tap / A = the next value, left / right on the controller = the previous / next; written at once
+    // A setting: A or the right arrow = the next value, left / right on the controller = the previous / next; written at once
     private View choiceRow(final Settings st, final Choice c) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
+        final TextView value = valueText();
+        final LinearLayout dots = new LinearLayout(this);
         final int[] at = {c.index(st.get(c.key, c.def))};
-        final Runnable show = () -> value.setText("◀  " + T(c.names[at[0]]) + "  ▶");
-        show.run();
-        final View row = rowFrame(c.label, c.help, value);
+        final Runnable show = () -> {
+            value.setText(T(c.names[at[0]]).toUpperCase(Locale.ROOT));
+            showDots(dots, c.values.length, at[0]);
+        };
         final java.util.function.IntConsumer step = d -> {
             at[0] = (at[0] + d + c.values.length) % c.values.length;
             if (st.set(c.key, c.values[at[0]])) {
@@ -474,6 +721,8 @@ public final class LauncherActivity extends Activity {
                 recreate();
             }
         };
+        final View row = rowFrame(c.label, c.help, valueRow(value, dots, () -> step.accept(-1), () -> step.accept(1)));
+        show.run();
         row.setOnClickListener(v -> step.accept(1));
         row.setOnKeyListener((v, keyCode, e) -> {
             if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
@@ -575,10 +824,13 @@ public final class LauncherActivity extends Activity {
     }
 
     private View padRow(final Settings st, final int i) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
+        final TextView value = valueText();
+        value.setGravity(Gravity.CENTER);
+        value.setBackground(rounded(PILL, dp(28), dp(2), 0xFFB9A84A));
+        value.setPadding(dp(10), dp(8), dp(10), dp(8));
         value.setText(controlLabel(padControl(st, i)));   // (A, B, L1, ...: the same in both languages)
-        View row = rowFrame(PAD_LABELS[i], null, value);
+        View row = rowFrame(T(PAD_LABELS[i]), null, value);
+        row.setTag("pad:" + PAD_BUTTONS[i]);
         row.setOnClickListener(v -> capturePad(st, i));
         return row;
     }
@@ -645,13 +897,16 @@ public final class LauncherActivity extends Activity {
     }
 
     private View presetRow(final Settings st) {
-        final TextView value = text("", 14, ACCENT, true);
-        value.setPadding(dp(12), 0, 0, 0);
+        final TextView value = valueText();
+        final LinearLayout dots = new LinearLayout(this);
         final int now = presetNow(st);
-        value.setText("◀  " + T(PRESET_NAMES[now]) + "  ▶");
+        value.setText(T(PRESET_NAMES[now]).toUpperCase(Locale.ROOT));
+        showDots(dots, 3, now < 3 ? now : -1);
+        final Runnable[] go = new Runnable[2];
         View row = rowFrame("Predefinição gráfica",
             "Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
-            value);
+            valueRow(value, dots, () -> go[0].run(), () -> go[1].run()));
+        row.setTag("card:preset");
         final java.util.function.IntConsumer step = d -> {
             int next = now == 3 ? (d > 0 ? 0 : 2) : (now + d + 3) % 3;
             st.set(Settings.TEXTURE_FILTER, "bilinear");
@@ -662,6 +917,8 @@ public final class LauncherActivity extends Activity {
             Diag.log(this, "main", "graphics preset " + PRESET_NAMES[next]);
             showTab(0);
         };
+        go[0] = () -> step.accept(-1);
+        go[1] = () -> step.accept(1);
         row.setOnClickListener(v -> step.accept(1));
         row.setOnKeyListener((v, keyCode, e) -> {
             if (e.getAction() != KeyEvent.ACTION_DOWN) return false;
@@ -700,13 +957,18 @@ public final class LauncherActivity extends Activity {
         java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
         for (String[] a : ACHIEVEMENTS) {
             Long when = got.get(a[0]);
-            TextView state = text(when != null ? "✓ " + df.format(new java.util.Date(when * 1000)) : "—", 13, when != null ? GOOD : SUBTLE, true);
-            state.setPadding(dp(12), 0, 0, 0);
+            TextView state = valueText();
+            state.setText(when != null ? "✓  " + df.format(new java.util.Date(when * 1000)) : T("BLOQUEADA"));
+            state.setTextColor(when != null ? ACCENT : SUBTLE);
+            state.setGravity(Gravity.CENTER);
+            state.setBackground(rounded(PILL, dp(28), dp(2), when != null ? ACCENT : 0x80B9A84A));
+            state.setPadding(dp(10), dp(8), dp(10), dp(8));
             View row = rowFrame(a[1], a[2], state);
-            page.addView(row);
+            row.setTag("ach:" + a[0]);
+            add(row);
         }
         note("Só contam visitas jogando: carregar um save ou usar mods não desbloqueia nada.");
-        page.addView(actionRow("Zerar conquistas", "Apaga só as conquistas; saves e configurações não mudam", v ->
+        add(actionRow("Zerar conquistas", "Apaga só as conquistas; saves e configurações não mudam", v ->
             new AlertDialog.Builder(this)
                 .setTitle(T("Zerar conquistas?"))
                 .setMessage(T("Todas as conquistas voltam a bloqueadas. Os saves continuam."))
@@ -820,7 +1082,8 @@ public final class LauncherActivity extends Activity {
             return;
         }
         starting = true;
-        playButton.setText(T("Iniciando…"));
+        if (playButton instanceof FrameLayout && ((FrameLayout) playButton).getChildAt(0) instanceof TextView)
+            ((TextView) ((FrameLayout) playButton).getChildAt(0)).setText(T("Iniciando…"));
         playButton.setEnabled(false);
         Diag.log(this, "main", "starting the game (disc: " + disc[0] + ", " + r + ")");
         Intent i = new Intent(this, MainActivity.class);
