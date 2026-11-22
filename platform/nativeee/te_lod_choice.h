@@ -22,3 +22,15 @@ static inline uint32_t te_lod_distance(uint32_t distance, uint32_t percent) {
     if (percent <= 100) return distance;
     return (uint32_t)((uint64_t)distance * 10000u / ((uint64_t)percent * percent));
 }
+
+// The draw distance's choice (LodModelAt): WHETHER a model is drawn stays the game's own at every percent -- none where the
+// game draws none, never hidden where it draws one -- and above 100 only WHICH level changes, to the level the closer
+// distance picks (the same or finer). Drawing past the original farthest put detailed models over the scene's own baked
+// far versions and drew past where the depth range was meant to end: the title screen's background flickered at 2x - 4x
+// (Android Etapa C); hiding a far stand-in the closer distance would hide left a hole until its detailed twin took over.
+static inline int32_t te_lod_choose(const te_gfx_lod* lod, uint32_t distance, uint32_t percent) {
+    const int32_t original = te_lod_level_at(lod, distance);
+    if (original < 0 || percent <= 100) return original;
+    const int32_t finer = te_lod_level_at(lod, te_lod_distance(distance, percent));
+    return finer >= 0 && finer < original ? finer : original;
+}
