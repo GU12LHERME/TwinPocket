@@ -160,6 +160,13 @@ jobs:
           clang++ -std=c++17 -O1 -Wall -Wextra -Iplatform/nativeee/host tools/android/test_rumble_core.cpp -o "$RUNNER_TEMP/test_rumble_core"
           "$RUNNER_TEMP/test_rumble_core" 2>&1 | tee "$LOG_DIR/rumble-core.log"
 
+      - name: Launcher navigation (repeat, stick hysteresis, selection, tabs, START guard)
+        shell: bash
+        run: |
+          set -euo pipefail
+          javac -d "$RUNNER_TEMP/nav" android/game/app/src/main/java/com/twinsanityevolved/game/Nav.java tools/android/TestNav.java
+          java -cp "$RUNNER_TEMP/nav" com.twinsanityevolved.game.TestNav 2>&1 | tee "$LOG_DIR/launcher-nav.log"
+
       - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
         shell: bash
         run: |
