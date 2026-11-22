@@ -146,7 +146,7 @@ jobs:
           clang++ -std=c++17 -O1 -Wall -Wextra -I. -Iplatform/nativeee tools/android/test_lod_choice.cpp -o "$RUNNER_TEMP/test_lod_choice"
           "$RUNNER_TEMP/test_lod_choice" 2>&1 | tee "$LOG_DIR/lod-choice.log"
 
-      - name: Glyph texels (the menus' text under bilinear: no neighbouring column between words)
+      - name: Glyph texels (the menus' text under bilinear, no neighbouring column between words)
         shell: bash
         run: |
           set -euo pipefail
