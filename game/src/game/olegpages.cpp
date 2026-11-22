@@ -147,6 +147,8 @@ constexpr u32 ActionModOpen = 0x2000;
 // TwinsanityEvolved: an ActionItem's action for a platform setting's ACTION row (Platform::Graphics::DisplaySettingKind 1): the
 // base and the setting in bits 0..7
 constexpr u32 ActionPlatformSetting = 0x4000;
+// TwinsanityEvolved: SetDisplaySetting's choice on an action row that cancels its pending confirmation (0 presses it)
+constexpr u32 ActionRowCancel = 1;
 OlegPage* BuildModPage(u32 mod);
 constexpr u32 CentreScreenText = 0x11;
 constexpr u32 CentreScreenItem = 0x15;
@@ -858,6 +860,41 @@ static void SyncDisplaySettingRows(MenuPage* page, u32 player)
     }
 }
 
+// TwinsanityEvolved: the platform's action rows (restore defaults, return to launcher) -- a pending confirmation ("... press
+// again") or a finished one ("defaults restored") lasts only while its row stays selected: any other row selected, the page
+// left (B) or entered again cancels it (SetDisplaySetting's choice 1 on an action row: the platform's cancel), and each row's
+// label is read again every frame, so the original text is back at once
+static void SyncActionRows(MenuPage* page, u32 player, bool cancelAll)
+{
+    MenuItem* selected = nullptr;
+    if (!cancelAll && page->selections != nullptr)
+    {
+        selected = page->Item(page->selections[player]);
+    }
+
+    u32 settings = Platform::Graphics::DisplaySettingCount();
+    for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
+    {
+        if (Platform::Graphics::DisplaySettingKind(setting) != 1)
+        {
+            continue;
+        }
+
+        MenuItem* row = page->Find(DisplaySettingItem(setting));
+        if (row == nullptr)
+        {
+            continue;
+        }
+
+        if (row != selected)
+        {
+            Platform::Graphics::SetDisplaySetting(setting, ActionRowCancel);
+        }
+
+        Platform::Graphics::DisplaySettingLabel(setting, const_cast<char*>(row->text), DisplaySettingLabelSize);
+    }
+}
+
 void GraphicsOptionsPage::Entered(u32 player, u32)
 {
     // TwinsanityEvolved: the platform's own page (the same class) has no widescreen row
@@ -865,6 +902,9 @@ void GraphicsOptionsPage::Entered(u32 player, u32)
     {
         widescreen->SetFlag(player, g_WidescreenTv);
     }
+
+    // TwinsanityEvolved: no confirmation is carried into the page from a visit before
+    SyncActionRows(this, player, true);
 
     // TwinsanityEvolved: the platform rows show the platform's choices
     SyncDisplaySettingRows(this, player);
@@ -879,6 +919,9 @@ void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
         widescreenRow->GetFlag(player, &widescreen);
         g_WidescreenTv = widescreen;
     }
+
+    // TwinsanityEvolved: the action rows' confirmations follow the selection (cancelled off their row), their labels re-read
+    SyncActionRows(this, player, false);
 
     // TwinsanityEvolved: a stepped platform row is applied at once (the platform keeps it)
     u32 settings = Platform::Graphics::DisplaySettingCount();

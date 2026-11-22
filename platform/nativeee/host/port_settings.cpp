@@ -50,6 +50,7 @@ struct State {
 } g;
 
 constexpr uint64_t kConfirmBoundaries = 300;   // a second press within ~5 s confirms
+constexpr uint32_t kActionCancel = 1;          // an action row's SetDisplaySetting choice that cancels (0 presses)
 
 uint64_t Now() { return Services::Get().clock().BoundaryCount(); }
 bool Armed(uint32_t row) { return g.armed == row && Now() - g.armed_at <= kConfirmBoundaries; }
@@ -201,6 +202,14 @@ uint32_t Value(uint32_t row) {
 }
 
 void Set(uint32_t row, uint32_t choice) {
+    // an action row's choice 1: its confirmation cancelled -- the game asks every frame its row is not selected, and when the
+    // page is entered (olegpages.cpp SyncActionRows): the label is the row's own again at once. "returning to launcher"
+    // stays: the quit is already posted
+    if (Kind(row) == 1 && choice == kActionCancel) {
+        if (g.armed == row) g.armed = RowCount;
+        if (g.done == row && row != RowReturnToLauncher) g.done = RowCount;
+        return;
+    }
     if (choice >= Choices(row)) return;
     switch (row) {
     case RowAudioDriver:
