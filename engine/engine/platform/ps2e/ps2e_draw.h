@@ -511,7 +511,11 @@ typedef struct ps2e_draw_presentation {
     int scale;           /* the frame target's internal scale 1..4 (0 or 1 = the default; the capture stays the logical size) */
     int window_scale;    /* windowed: the window resized to frame * window_scale on the next pump (0 = leave it) */
     int texture_filter;  /* the draws' texture sampling: 0 = the title's own per-draw choice (TEX1), 1 = point, 2 = bilinear */
+    int anisotropy;      /* anisotropic filtering of the mipmapped textures: 0 = never set (the default), 1 = off, 2..16 (clamped
+                            to the driver's maximum: ps2e_draw_max_anisotropy) */
 } ps2e_draw_presentation;
+/* The driver's anisotropic filtering limit (1 = none: the extension is absent). */
+int ps2e_draw_max_anisotropy(const ps2e_draw* device);
 #define PS2E_DRAW_HAS_PRESENTATION 1   /* for consumers pinned across engine versions */
 void ps2e_draw_set_presentation(ps2e_draw* device, const ps2e_draw_presentation* presentation);
 void ps2e_draw_get_presentation(const ps2e_draw* device, ps2e_draw_presentation* out);

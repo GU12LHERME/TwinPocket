@@ -115,7 +115,11 @@ u32 g_SpeechLanguageWordOf[LanguagesMax];
 // vsync, display mode on the PC), one ChoiceItem each with the platform's labels, IDs from 0x20 (none of the page's)
 constexpr u32 DisplaySettingFirstItem = 0x20;
 constexpr u32 DisplaySettingLabelSize = 32;
-constexpr u32 DisplaySettingsMax = 16;   // IDs 0x20..0x2F
+constexpr u32 DisplaySettingsMax = 24;   // IDs 0x20..0x2F, then 0x60..0x67 (none of the pages' or the mods page's)
+inline u32 DisplaySettingItem(u32 setting)
+{
+    return setting < 16 ? DisplaySettingFirstItem + setting : 0x60 + (setting - 16);
+}
 // TwinsanityEvolved: the platform's own settings page (Platform::Graphics::DisplaySettingPage 1: the Android port's audio and
 // controls), a second graphic-options page in static storage holding only those rows, linked from the options page when the
 // platform names any; its link's ID none of the pages use
@@ -829,7 +833,7 @@ static void SyncDisplaySettingRows(MenuPage* page, u32 player)
     u32 settings = Platform::Graphics::DisplaySettingCount();
     for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
     {
-        MenuItem* row = page->Find(DisplaySettingFirstItem + setting);
+        MenuItem* row = page->Find(DisplaySettingItem(setting));
         if (row == nullptr)
         {
             continue;
@@ -880,7 +884,7 @@ void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
     u32 settings = Platform::Graphics::DisplaySettingCount();
     for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
     {
-        MenuItem* row = Find(DisplaySettingFirstItem + setting);
+        MenuItem* row = Find(DisplaySettingItem(setting));
         if (row == nullptr || Platform::Graphics::DisplaySettingKind(setting) == 1)
         {
             continue;
@@ -1175,7 +1179,7 @@ void AddDisplaySettingRows(MenuPage* owner, u32 page)
         // an action: one entry, the label its whole text (re-read after it is chosen)
         if (Platform::Graphics::DisplaySettingKind(setting) == 1)
         {
-            ActionItem* action = ActionItem::Construct(Allocate<ActionItem>(), 0, DisplaySettingFirstItem + setting,
+            ActionItem* action = ActionItem::Construct(Allocate<ActionItem>(), 0, DisplaySettingItem(setting),
                                                        ActionPlatformSetting | setting);
             auto* text = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
             Platform::Graphics::DisplaySettingLabel(setting, text, DisplaySettingLabelSize);
@@ -1184,7 +1188,7 @@ void AddDisplaySettingRows(MenuPage* owner, u32 page)
             continue;
         }
 
-        ChoiceItem* row = ChoiceItem::Construct(Allocate<ChoiceItem>(), 0, DisplaySettingFirstItem + setting, choices, 1,
+        ChoiceItem* row = ChoiceItem::Construct(Allocate<ChoiceItem>(), 0, DisplaySettingItem(setting), choices, 1,
                                                 static_cast<s32>(Platform::Graphics::DisplaySettingValue(setting)), MenuPlayers);
         auto* label = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
         Platform::Graphics::DisplaySettingLabel(setting, label, DisplaySettingLabelSize);

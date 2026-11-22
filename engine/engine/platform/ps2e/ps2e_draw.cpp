@@ -936,6 +936,14 @@ void ps2e_draw_begin_frame(ps2e_draw* d, const ps2e_draw_clear* clear) {
             MakeFrameTarget(*d, d->frame_w, d->frame_h);
         }
         d->applied.texture_filter = d->wanted.texture_filter;
+        // the anisotropy only when the presentation names one (0 = never set: the device keeps its own sampling)
+        if (d->wanted.anisotropy != d->applied.anisotropy && d->wanted.anisotropy > 0) {
+            const int max = d->device->MaxAnisotropy();
+            d->device->SetAnisotropy(std::min(d->wanted.anisotropy, max));
+            std::fprintf(stderr, "[ps2e_draw] anisotropic filtering %dx%s (the driver's maximum %dx)\n", std::min(d->wanted.anisotropy, max),
+                         d->wanted.anisotropy > max ? " (clamped)" : "", max);
+        }
+        d->applied.anisotropy = d->wanted.anisotropy;
     }
     d->device->BeginFrame();
     d->in_frame = true;
@@ -3163,8 +3171,10 @@ void Scanout(ps2e_draw* d, bool to_window) {
     }
     if (want.vsync != d->applied.vsync && d->context.IsCreated()) d->context.SetSwapInterval(want.vsync ? 1 : 0);
     const int filter_in_use = d->applied.texture_filter;   // the frame's draws were sampled with it; begin_frame moves it
+    const int anisotropy_in_use = d->applied.anisotropy;    // (the same: begin_frame applies a change)
     d->applied = want;
     d->applied.texture_filter = filter_in_use;
+    d->applied.anisotropy = anisotropy_in_use;
     render::ScanoutDesc sd;
     sd.source = d->color;
     sd.src = {0, 0, d->frame_w * d->scale, d->frame_h * d->scale};   // physical texels
@@ -3234,6 +3244,8 @@ void ps2e_draw_set_presentation(ps2e_draw* d, const ps2e_draw_presentation* p) {
     d->wanted = *p;
     d->wanted.scale = std::clamp(p->scale, 0, 4);
 }
+
+int ps2e_draw_max_anisotropy(const ps2e_draw* d) { return d && d->device ? d->device->MaxAnisotropy() : 1; }
 
 void ps2e_draw_get_presentation(const ps2e_draw* d, ps2e_draw_presentation* out) {
     if (!out) return;

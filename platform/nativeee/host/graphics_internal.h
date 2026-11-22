@@ -640,6 +640,8 @@ bool LowerPackedPacket(const std::vector<uint8_t>& packet, float offX, float off
 // the device's presentation (te_display.h): set now when the device exists, else kept for its creation; and
 // whether the run is headless (the frozen judges' captures: the frame's own pixels, no window changes).
 void SetPresentation(const ps2e_draw_presentation& presentation);
+// The driver's anisotropic filtering limit (1 = none or no device yet: ps2e_draw_max_anisotropy)
+int MaxAnisotropy();
 bool Headless();
 // The presenter's cadence (te_display.h Settings::frame_rate: 0 = 30 .. 4 = 240, 5 = uncapped): the render thread's
 // PresentPacer takes it at its next picture. Deterministic / synchronous runs present every picture whatever the value.

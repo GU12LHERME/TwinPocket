@@ -200,7 +200,13 @@ public:
         texture_filter_ = std::move(selection);
     }
     const TextureFilterSelection* TextureFilter() const { return texture_filter_.get(); }
-    int MaxAnisotropy() const { return max_anisotropy_; }
+    int MaxAnisotropy() const override { return max_anisotropy_; }
+    // Backend::SetAnisotropy: the title's filter kept, the anisotropy over the owned textures with a mip chain
+    // (GlDrawExecutor::EnhanceFilters); 1 or less drops the selection (the title's sampling, as before)
+    void SetAnisotropy(int anisotropy) override {
+        if (anisotropy <= 1) texture_filter_.reset();
+        else texture_filter_ = std::make_shared<TextureFilterSelection>(TextureFilter::Title, anisotropy);
+    }
     // Census of the enhancement: owned-texture draws seen and the draws whose
     // sampler the selection changed (the title's choice would have differed).
     struct TextureFilterCensus {

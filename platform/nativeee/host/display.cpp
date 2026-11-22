@@ -80,6 +80,24 @@ void Persist(const char* key, const std::string& value) {
         std::fprintf(stderr, "[twinsanityevolved] display: %s = %s not written to %s: %s\n", key, value.c_str(), path.c_str(), err.c_str());
 }
 
+// The anisotropy row's choices: off, then 2x / 4x / 8x / 16x up to the driver's maximum (Android only)
+constexpr int kAnisoLevels[] = {1, 2, 4, 8, 16};
+uint32_t AnisoChoices() {
+#if defined(__ANDROID__)
+    const int max = gfx::MaxAnisotropy();
+    uint32_t n = 0;
+    for (int a : kAnisoLevels) if (a <= max) ++n;
+    return n >= 2 ? n : 0;   // without the extension the row is not shown
+#else
+    return 0;
+#endif
+}
+uint32_t AnisoIndex(int anisotropy) {
+    uint32_t i = 0;
+    for (uint32_t k = 0; k < 5; ++k) if (kAnisoLevels[k] <= anisotropy) i = k;
+    return i;
+}
+
 }  // namespace
 
 void Configure(const Settings& settings) {
@@ -99,6 +117,8 @@ void Configure(const Settings& settings) {
                          "maximum)\n", g_settings.scale, g_settings.scale == 2 ? ": the frame drawn at four times the pixels of 1x" : "");
 #endif
     g_settings.texture_filter = std::clamp(g_settings.texture_filter, 0, 3);
+    g_settings.anisotropy = g_settings.anisotropy >= 16 ? 16 : g_settings.anisotropy >= 8 ? 8 : g_settings.anisotropy >= 4 ? 4
+                          : g_settings.anisotropy >= 2 ? 2 : 1;
     g_settings.fullscreen = std::clamp(g_settings.fullscreen, 0, 2);
     g_settings.offset_x = std::clamp(g_settings.offset_x, -256, 256);
     g_settings.offset_y = std::clamp(g_settings.offset_y, -256, 256);
@@ -149,6 +169,9 @@ void Apply() {
     p.scale = g_settings.scale;
     p.window_scale = 0;   // the window keeps its size (2x the frame at creation, fitted to the screen; the player resizes it)
     p.texture_filter = g_settings.texture_filter == 0 ? 0 : g_settings.texture_filter == 1 ? 1 : 2;
+#if defined(__ANDROID__)
+    p.anisotropy = g_settings.anisotropy;   // the Android row's (1 = off); the other lanes leave the device's sampling (0)
+#endif
     gfx::SetPresentation(p);
     gfx::SetInterpolation(g_settings.interp);
     gfx::SetFrameRate(g_settings.frame_rate);
@@ -177,9 +200,9 @@ void MoveDisplay(float x, float y) {
 }
 
 std::string Describe() {
-    char buf[320];
-    std::snprintf(buf, sizeof buf, "display: aspect %s, fit %d, scale %dx, texture filter %s, vsync %s%s, frame rate %s, %s, offset (%d, %d), fps counter %s, shadows on crates %s%s",
-                  kAspectKeys[g_settings.aspect], g_settings.fit, g_settings.scale, kFilterKeys[g_settings.texture_filter],
+    char buf[400];
+    std::snprintf(buf, sizeof buf, "display: aspect %s, fit %d, scale %dx, texture filter %s, anisotropy %dx, vsync %s%s, frame rate %s, %s, offset (%d, %d), fps counter %s, shadows on crates %s%s",
+                  kAspectKeys[g_settings.aspect], g_settings.fit, g_settings.scale, kFilterKeys[g_settings.texture_filter], g_settings.anisotropy,
                   EffectiveVSync() ? "on" : "off", Uncapped() && g_settings.vsync ? " (forced off: uncapped)" : "", FrameRateName(),
                   kFullscreenKeys[g_settings.fullscreen], g_settings.offset_x, g_settings.offset_y,
                   g_settings.fps_counter ? "on" : "off", g_settings.shadows_on_crates ? "on" : "off",
@@ -212,6 +235,7 @@ uint32_t Choices(uint32_t row) {
     case RowFpsCounter: return 2;
     case RowGameRate: return 2;
     case RowDrawDistance: return te::port_settings::DrawDistanceChoices();
+    case RowAnisotropy: return AnisoChoices();
     default: return 0;
     }
 }
@@ -255,6 +279,7 @@ std::string RowLabel(uint32_t row) {
     case RowFpsCounter: return MS(Id::PerfOverlay);   // "fps overlay": the engine's name for the same row
     case RowGameRate: return MS(Id::GameRate);
     case RowDrawDistance: return "draw distance";
+    case RowAnisotropy: return "anisotropic filter";
     default: return "";
     }
 }
@@ -293,6 +318,7 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     case RowFpsCounter: return choice == 0 ? MS(Id::Aniso1) /* "off" */ : "on";
     case RowGameRate: return choice == 0 ? MS(Id::GameRatePal) : MS(Id::GameRateSixty);
     case RowDrawDistance: return te::port_settings::DrawDistanceLabel(choice);
+    case RowAnisotropy: return choice == 0 ? std::string("off") : choice < 5 ? std::to_string(kAnisoLevels[choice]) + "x" : std::string();
     case RowDisplayMode: {
         static const Id ids[] = {Id::Windowed, Id::Fullscreen, Id::Borderless};
         return choice < 3 ? MS(ids[choice]) : "";
@@ -321,6 +347,7 @@ uint32_t Value(uint32_t row) {
     case RowFpsCounter: return g_settings.fps_counter ? 1u : 0u;
     case RowGameRate: return g_settings.game_hz == 50 ? 0u : 1u;
     case RowDrawDistance: return te::port_settings::DrawDistanceChoice();
+    case RowAnisotropy: return std::min(AnisoIndex(g_settings.anisotropy), AnisoChoices() ? AnisoChoices() - 1 : 0u);
     default: return 0;
     }
 }
@@ -370,6 +397,10 @@ void Set(uint32_t row, uint32_t choice) {
         std::fprintf(stderr, "[twinsanityevolved] display: game rate %d Hz from the next start (this run: %d Hz)\n",
                      g_settings.game_hz, g_settings.running_hz);
         return;
+    case RowAnisotropy:
+        g_settings.anisotropy = kAnisoLevels[choice];
+        Persist("video.anisotropy", std::to_string(g_settings.anisotropy));
+        break;
     case RowDrawDistance:   // written into the module's level-of-detail block at once (te_lod_policy.h)
         te::port_settings::SetDrawDistance(choice);
         return;

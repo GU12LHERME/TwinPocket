@@ -38,6 +38,7 @@ struct Settings {
                              // judges' captures), 1 4:3, 2 16:9, 3 16:10, 4 21:9, 5 32:9
     int fit = 1;             // video.fit_mode: 0 stretch, 1 fit (letterbox), 2 fill, 3 integer, 4 custom (= fit here)
     int scale = 1;           // video.scale: the frame target's internal scale 1..4 (0 = 1; the PS Vita 1..2: display.cpp)
+    int anisotropy = 1;      // video.anisotropy: 1 off (the default), 2 / 4 / 8 / 16 -- the Android row's (te_display.h RowAnisotropy)
     int texture_filter = kDefaultTextureFilter;  // video.texture_filter: 0 title, 1 point, 2 bilinear, 3 trilinear (bilinear here: ps2e_draw has no mip chain)
     bool vsync = kDefaultVSync;    // video.vsync (the port's default: off on the desktop -- its pacer times the presents; a windowed run may turn it on)
     int fullscreen = kDefaultFullscreen;   // video.fullscreen: 0 windowed, 1 fullscreen, 2 borderless
@@ -93,8 +94,10 @@ std::string Describe();
 
 // The seam's rows (Platform::Graphics::DisplaySetting*): the settings the page shows, in this order.
 // RowDrawDistance: the Android port's experimental draw distance (te_port_settings.h); no choices -- not shown -- elsewhere
+// RowAnisotropy: anisotropic filtering, on Android only (off / 2x / 4x / 8x / 16x up to the driver's maximum; hidden without the
+// extension)
 enum Row : uint32_t { RowAspect = 0, RowScale, RowTextureFilter, RowVSync, RowFrameRate, RowDisplayMode, RowFpsCounter, RowGameRate,
-                     RowDrawDistance, RowCount };
+                     RowDrawDistance, RowAnisotropy, RowCount };
 uint32_t Choices(uint32_t row);
 std::string RowLabel(uint32_t row);
 std::string ChoiceLabel(uint32_t row, uint32_t choice);

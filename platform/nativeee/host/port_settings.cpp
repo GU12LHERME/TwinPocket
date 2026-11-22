@@ -235,6 +235,7 @@ void Set(uint32_t row, uint32_t choice) {
         te::display::Set(te::display::RowTextureFilter, uint32_t(te::display::kDefaultTextureFilter));
         te::display::Set(te::display::RowScale, 0);
         te::display::Set(te::display::RowFpsCounter, 0);
+        te::display::Set(te::display::RowAnisotropy, 0);   // off (refused, and nothing to do, without the extension)
         std::fprintf(stderr, "[twinsanityevolved] android settings: the defaults restored\n");
         break;
     case RowReturnToLauncher:

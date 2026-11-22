@@ -29,6 +29,7 @@ final class Settings {
     static final String STICK_SENSITIVITY = "android.stick_sensitivity";
     static final String DRAW_DISTANCE = "android.draw_distance";
     static final String TEXTURE_FILTER = "video.texture_filter";
+    static final String ANISOTROPY = "video.anisotropy";
     static final String SCALE = "video.scale";
     static final String VSYNC = "video.vsync";
     static final String FRAME_RATE = "video.frame_rate";

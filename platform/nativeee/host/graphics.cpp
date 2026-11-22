@@ -6327,6 +6327,8 @@ void SetPresentation(const ps2e_draw_presentation& p) {
     if (g.dev) ps2e_draw_set_presentation(g.dev, &g.presentation);   // thread-safe: the pump / the next frame apply it
 }
 
+int MaxAnisotropy() { return g.dev ? ps2e_draw_max_anisotropy(g.dev) : 1; }
+
 bool Headless() {
     ReadOptions();
     return g.headless;

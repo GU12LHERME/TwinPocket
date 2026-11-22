@@ -431,6 +431,11 @@ public:
     // A backend that draws as it goes leaves them empty.
     virtual void BeginDrawRun() {}
     virtual void EndDrawRun() {}
+    // Anisotropic filtering of the sampled textures that have a mip chain (a player's enhancement; the title's own filter
+    // choice is kept): 1 = none. A backend without it ignores the call and answers 1. ps2e_draw calls SetAnisotropy only
+    // when its presentation asks for a value (the Android port's graphic options); nothing else changes by default.
+    virtual void SetAnisotropy(int anisotropy) { (void)anisotropy; }
+    virtual int MaxAnisotropy() const { return 1; }
     // A backend's own tuning switch by name (a diagnosis A/B; an unknown name is ignored). The GL backend on the Vita:
     // "draw_legacy" 1 = its per-draw call sequence as before the drawing thread's rework (both PS2 programs
     // bound per draw, every uniform sent to both at once, the masks reset after every draw), 0 = the current one.

@@ -395,6 +395,7 @@ int main(int argc, char** argv) {
                 display.fit = int(cfg.video.fit_mode);
                 display.scale = cfg.video.scale > 0 ? cfg.video.scale : 1;
                 display.texture_filter = int(cfg.video.texture_filter);
+                display.anisotropy = cfg.video.anisotropy;
                 display.vsync = cfg.video.vsync;
                 display.fullscreen = int(cfg.video.fullscreen);
                 display.offset_x = cfg.video.custom_offset_x;

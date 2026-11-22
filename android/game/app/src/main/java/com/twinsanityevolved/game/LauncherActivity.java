@@ -105,6 +105,9 @@ public final class LauncherActivity extends Activity {
     static final Choice[] GRAPHICS = {
         new Choice(Settings.TEXTURE_FILTER, "Filtro de texturas", "Bilinear corrige os brilhos quadrados (máscara do Aku Aku, cogumelos, cachoeira)",
             "bilinear", new String[] {"title", "point", "bilinear"}, new String[] {"Original (do jogo)", "Point (pixelado)", "Bilinear — recomendado"}),
+        new Choice(Settings.ANISOTROPY, "Filtragem anisotrópica",
+            "Texturas do chão e paredes mais nítidas em ângulo; limitada ao máximo do driver (o log diz o aplicado)",
+            "1", new String[] {"1", "2", "4", "8", "16"}, new String[] {"Desligada — padrão", "2x", "4x", "8x", "16x"}),
         new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
             "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
         new Choice(Settings.ASPECT, "Proporção da tela",
@@ -488,7 +491,7 @@ public final class LauncherActivity extends Activity {
     private void confirmRestore() {
         new AlertDialog.Builder(this)
             .setTitle("Restaurar configurações padrão?")
-            .setMessage("Widescreen 16:9, VSync ligado, filtro bilinear, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com "
+            .setMessage("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica desligada, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com "
                     + "buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas).")
             .setPositiveButton("Restaurar", (d, w) -> {
                 Settings st = new Settings(this);
