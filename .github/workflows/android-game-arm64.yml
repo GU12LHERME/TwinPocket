@@ -367,7 +367,7 @@ jobs:
           apk="android/game/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$apk"
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" | tee "$LOG_DIR/apk-badging.log"
-          grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/apk-badging.log"
+          grep -q "package: name='com.crashtwinsanity.android'" "$LOG_DIR/apk-badging.log"
           grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
           grep -q "launchable-activity: name='com.twinsanityevolved.game.LauncherActivity'" "$LOG_DIR/apk-badging.log"
           echo "PASS  the launcher icon opens LauncherActivity (Java only; the game runs in the :game process)" | tee -a "$LOG_DIR/libmain-evidence.txt"
