@@ -5,6 +5,7 @@
 // row, the warp target). The manifests (mods/<id>/mod.json) are embedded by CMake (TE_GEN/mods/mods_manifests.cpp)
 // and checked against the registrations.
 #include "te_mods.h"
+#include "te_achievements.h"
 
 #include <algorithm>
 #include <cstdio>
@@ -296,6 +297,7 @@ void OnBoundary(uint64_t boundary) {
             for (Entry& e : Entries()) if (e.enabled && e.mod.on_level_exit) e.mod.on_level_exit(ctx, g_last_chunk);
         if (!ctx.chunk.empty())
             for (Entry& e : Entries()) if (e.enabled && e.mod.on_level_enter) e.mod.on_level_enter(ctx, ctx.chunk);
+        te::achievements::OnArea(g_last_chunk, ctx.chunk, ctx.playing, boundary);   // the Android port's local achievements
         g_last_chunk = ctx.chunk;
     }
     g_have_player = have_player;

@@ -147,7 +147,7 @@ public final class LauncherActivity extends Activity {
     };
     static final Choice LANGUAGE = new Choice(Lang.KEY, "Idioma / Language", null, "auto", new String[] {"auto", "pt-BR", "en"},
         new String[] {"Automático (idioma do sistema)", "Português (Brasil)", "English"});
-    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Diagnóstico"};
+    static final String[] TAB_NAMES = {"Gráficos", "Áudio", "Controles", "Sistema", "Conquistas", "Diagnóstico"};
 
     private int dp(float v) {
         return (int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, v, getResources().getDisplayMetrics());
@@ -392,6 +392,9 @@ public final class LauncherActivity extends Activity {
                 note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
                         + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
                 break;
+            case 4:
+                achievementsPage();
+                break;
             default:
                 page.addView(actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", v -> buildReport(true)));
                 page.addView(actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", v -> buildReport(false)));
@@ -400,7 +403,7 @@ public final class LauncherActivity extends Activity {
                         "Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)", v -> {
                             prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
                             Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
-                            showTab(4);
+                            showTab(5);
                         }));
                 page.addView(actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", v -> startActivity(new Intent(this, ProbeActivity.class))));
                 page.addView(actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", v -> startSdlTest()));
@@ -664,6 +667,53 @@ public final class LauncherActivity extends Activity {
             return false;
         });
         return row;
+    }
+
+    // ---- local achievements (platform/nativeee/host/achievements.cpp; achievements.txt beside ps2r.ini) ----
+    static final String[][] ACHIEVEMENTS = {   // id, title, how
+        {"reach_island", "Explorador da ilha", "Volte à praia da ilha inicial vindo de outra área"},
+        {"reach_iceberg", "Recepção gelada", "Chegue ao laboratório do iceberg"},
+        {"reach_academy", "De volta às aulas", "Chegue ao pátio da academia"},
+        {"reach_other_island", "O outro lado", "Chegue à ilha do outro lado"},
+        {"reach_dimension", "Uma nova dimensão", "Chegue à décima dimensão"},
+    };
+
+    private File achievementsFile() {
+        return new File(new Settings(this).file().getParentFile(), "achievements.txt");
+    }
+
+    private void achievementsPage() {
+        java.util.Map<String, Long> got = new java.util.HashMap<>();
+        String text = Diag.readFile(achievementsFile(), 0);
+        if (text != null)
+            for (String line : text.split("\n")) {
+                int eq = line.indexOf('=');
+                if (eq <= 0 || line.startsWith("#")) continue;
+                try { got.put(line.substring(0, eq), Long.parseLong(line.substring(eq + 1).trim())); } catch (NumberFormatException ignored) {}
+            }
+        int count = 0;
+        for (String[] a : ACHIEVEMENTS) if (got.containsKey(a[0])) count++;
+        note(T("Conquistas locais do port (não são do RetroAchievements). Desbloqueadas: ") + count + " / " + ACHIEVEMENTS.length);
+        java.text.DateFormat df = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
+        for (String[] a : ACHIEVEMENTS) {
+            Long when = got.get(a[0]);
+            TextView state = text(when != null ? "✓ " + df.format(new java.util.Date(when * 1000)) : "—", 13, when != null ? GOOD : SUBTLE, true);
+            state.setPadding(dp(12), 0, 0, 0);
+            View row = rowFrame(a[1], a[2], state);
+            page.addView(row);
+        }
+        note("Só contam visitas jogando: carregar um save ou usar mods não desbloqueia nada.");
+        page.addView(actionRow("Zerar conquistas", "Apaga só as conquistas; saves e configurações não mudam", v ->
+            new AlertDialog.Builder(this)
+                .setTitle(T("Zerar conquistas?"))
+                .setMessage(T("Todas as conquistas voltam a bloqueadas. Os saves continuam."))
+                .setPositiveButton(T("Zerar"), (d, w) -> {
+                    boolean ok = !achievementsFile().exists() || achievementsFile().delete();
+                    Diag.log(this, "main", "achievements reset (" + (ok ? "done" : "NOT deleted") + ")");
+                    showTab(4);
+                })
+                .setNegativeButton(T("Cancelar"), null)
+                .show()));
     }
 
     private void confirmRestore() {
