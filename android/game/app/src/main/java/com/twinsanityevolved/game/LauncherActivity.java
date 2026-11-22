@@ -67,6 +67,7 @@ public final class LauncherActivity extends Activity {
         addButton(row2, "Compartilhar relatório", v -> buildReport(true));
         addButton(row2, "Copiar relatório", v -> buildReport(false));
         addButton(row2, "Áudio…", v -> audioOptions());
+        addButton(row2, "Gráficos (teste)…", v -> graphicsTests());
         addButton(row2, "Atualizar", v -> refresh());
         root.addView(row1);
         root.addView(row2);
@@ -156,6 +157,9 @@ public final class LauncherActivity extends Activity {
         }
         b.append("\nÁUDIO: buffer ").append(prefs().getInt("audio_buffer", 2048)).append(" frames, driver ")
          .append(prefs().getString("audio_driver", "auto")).append(" (botão \"Áudio…\")\n");
+        StringBuilder gt = new StringBuilder();
+        for (String[] t : GRAPHICS_TESTS) if (prefs().getBoolean(t[0], false)) gt.append(' ').append(t[1]);
+        b.append("GRÁFICOS (testes A/B): ").append(gt.length() > 0 ? gt.toString().trim() : "nenhum (padrão)").append('\n');
         b.append('\n').append("ÚLTIMAS EXECUÇÕES\n");
         b.append(describeStage("game", "  jogo / teste SDL"));
         b.append(describeStage("probe", "  diagnóstico"));
@@ -234,6 +238,34 @@ public final class LauncherActivity extends Activity {
                 refresh();
             })
             .setNegativeButton("Fechar", null)
+            .show();
+    }
+
+    // The graphics A/B switches for the visual-defect investigation (Etapa 1): each one is an engine switch the desktop
+    // port already has (README "TE_GFX_*"), off by default; turned on here it goes to the next game start as the
+    // environment (MainActivity.getArguments -> --te-env). Comparing screenshots with each on tells which path the defect
+    // is in before any shader is changed.
+    static final String[][] GRAPHICS_TESTS = {
+        {"gfx_particle_title", "TE_GFX_PARTICLE_SCALE=title", "Partículas/brilhos na resolução do PS2 (como no PS2)"},
+        {"gfx_ps2_full", "TE_GFX_PS2_FAST=0", "Programa PS2 completo (sem o programa rápido)"},
+        {"gfx_emitter_clamped", "TE_GFX_PARTICLE_UNCLAMPED=0", "Emissor de partículas com os clamps da VU"},
+        {"gfx_mip_tint", "TE_GFX_DIAG_MIP_TINT=1", "Diagnóstico: níveis de mipmap em magenta"},
+    };
+
+    private void graphicsTests() {
+        final String[] labels = new String[GRAPHICS_TESTS.length];
+        final boolean[] on = new boolean[GRAPHICS_TESTS.length];
+        for (int i = 0; i < GRAPHICS_TESTS.length; i++) {
+            labels[i] = GRAPHICS_TESTS[i][2];
+            on[i] = prefs().getBoolean(GRAPHICS_TESTS[i][0], false);
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("Gráficos — testes A/B (próximo início do jogo)")
+            .setMultiChoiceItems(labels, on, (d, which, checked) -> {
+                prefs().edit().putBoolean(GRAPHICS_TESTS[which][0], checked).apply();
+                Diag.log(this, "main", "graphics test " + GRAPHICS_TESTS[which][1] + " " + (checked ? "on" : "off"));
+            })
+            .setPositiveButton("OK", (d, w) -> refresh())
             .show();
     }
 
@@ -424,6 +456,11 @@ public final class LauncherActivity extends Activity {
                 }
                 b.append("\n===== CONTROLES (linhas de input do latest-game.log) =====\n").append(in.length() > 0 ? in : "(nenhuma)\n");
                 b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
+                StringBuilder gx = new StringBuilder();
+                for (String line : game.split("\n"))
+                    if (line.contains("[gl") || line.contains("display:") || line.contains("particles") || line.contains("TE_GFX"))
+                        gx.append(line).append('\n');
+                b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
             }
             String frames = Diag.symbolizeFrames(c, b.toString());
             if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);

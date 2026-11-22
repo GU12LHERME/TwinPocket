@@ -15,6 +15,7 @@
 
 #include "engine/render/backends/gl/gl_census.h"
 #include "engine/render/backends/gl/gl_draw_executor.h"
+#include "engine/render/backends/gl/gl_es_diagnostics.h"
 #include "engine/render/backends/gl/gl_fill_census.h"
 #include "engine/render/backends/gl/gl_gpu_lifetime.h"
 #include "engine/render/mesh_index.h"
@@ -82,6 +83,7 @@ bool GlDevice::Init(std::function<void()> swap) {
         device_name_ = std::string(r ? reinterpret_cast<const char*>(r) : "?") + " / OpenGL " +
                        (v ? reinterpret_cast<const char*>(v) : "?");
     }
+    InstallEsDiagnostics();   // the Android lane's driver messages and context summary (nothing elsewhere)
     shaders_.SetZeroToOneDepth(zero_to_one);
     shaders_.SetGsZ24Depth(settings_.gs_z24);
     if (!shaders_.Build(uniforms_)) return false;

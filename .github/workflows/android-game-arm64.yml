@@ -245,6 +245,7 @@ jobs:
           check "input: stick log (GamepadBackend::LogSticks)"              1    'GamepadBackend::LogSticks'
           check "audio: configurable device buffer (RequestedBufferFrames)" 1    'SdlAudioSink::RequestedBufferFrames'
           check "audio: device callback timing (SdlAudioSink::Stats)"      1    'SdlAudioSink::Stats'
+          check "graphics: OpenGL ES driver messages (InstallEsDiagnostics)" 1  'InstallEsDiagnostics'
           echo "== dynamic symbol table entries for the Java entry points (llvm-readelf --dyn-syms)" | tee -a "$ev"
           "$NDK_LLVM/llvm-readelf" --dyn-syms --wide "$so" | grep -E 'SDL_main|TeDiag|JNI_OnLoad' | tee -a "$ev" || echo "(none)" | tee -a "$ev"
           echo "== the same symbols in the full table (llvm-nm, any binding)" | tee -a "$ev"

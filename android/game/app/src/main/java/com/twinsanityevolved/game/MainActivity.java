@@ -59,6 +59,13 @@ public final class MainActivity extends SDLActivity {
         args.add("--te-env"); args.add("TE_AUDIO_BUFFER_FRAMES=" + buffer);
         if (!"auto".equals(driver)) { args.add("--te-env"); args.add("SDL_AUDIODRIVER=" + driver); }
         Diag.log(this, "game", "audio options: buffer " + buffer + " frames, driver " + driver);
+        for (String[] t : LauncherActivity.GRAPHICS_TESTS) {
+            if (prefs.getBoolean(t[0], false)) {
+                args.add("--te-env");
+                args.add(t[1]);
+                Diag.log(this, "game", "graphics test on: " + t[1]);
+            }
+        }
         return args.toArray(new String[0]);
     }
 
