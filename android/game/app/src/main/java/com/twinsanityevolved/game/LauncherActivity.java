@@ -387,6 +387,9 @@ public final class LauncherActivity extends Activity {
             case 3:
                 page.addView(choiceRow(st, LANGUAGE));
                 note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
+                page.addView(actionRow("Restaurar apenas gráficos",
+                    "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma, saves e conquistas ficam)",
+                    v -> confirmRestoreGraphics()));
                 page.addView(actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", v -> confirmRestore()));
                 note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
                 note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
@@ -714,6 +717,25 @@ public final class LauncherActivity extends Activity {
                 })
                 .setNegativeButton(T("Cancelar"), null)
                 .show()));
+    }
+
+    // Recovery: the graphic options alone back to the Android profile (a black screen or a failed start after a graphics
+    // change); the audio, the controls, the language, the ISO, the saves and the achievements are not touched
+    private void confirmRestoreGraphics() {
+        new AlertDialog.Builder(this)
+            .setTitle(T("Restaurar apenas gráficos?"))
+            .setMessage(T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."))
+            .setPositiveButton(T("Restaurar"), (d, w) -> {
+                Settings st = new Settings(this);
+                boolean ok = true;
+                for (Choice c : GRAPHICS) ok &= st.set(c.key, c.def);
+                ok &= st.set(Settings.FULLSCREEN, "fullscreen");
+                Diag.log(this, "main", "graphics restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
+                Toast.makeText(this, ok ? T("Gráficos restaurados") : T("Falha ao salvar em ") + st.file(), Toast.LENGTH_LONG).show();
+                showTab(currentTab);
+            })
+            .setNegativeButton(T("Cancelar"), null)
+            .show();
     }
 
     private void confirmRestore() {
