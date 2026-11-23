@@ -433,6 +433,17 @@ void Ring::BuildEdge(const Vector2* place, const Vector2* scale, u32 segments, u
         s32 segmentStart = span / static_cast<s32>(segments) * static_cast<s32>(segment) + startAngle;
         for (u32 point = 0; point <= steps; point++)
         {
+            // A segment's first point is the previous segment's last one: kept as that one exactly (the retail code computed
+            // it again from a t summed another way, a float-noise apart, and the strip's sliver triangles between the two
+            // copies could leave a crack across the ring when drawn above the PS2's resolution)
+            if (point == 0 && segment != 0)
+            {
+                *out = *(out - PointVertexes);
+                t = t + step;
+                out += PointVertexes;
+                continue;
+            }
+
             s32 angle = span * static_cast<s32>(point) / static_cast<s32>(points) + segmentStart;
             f32 cosine;
             f32 sine;

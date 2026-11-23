@@ -6633,13 +6633,20 @@ void ps2e_graphics_draw_strip(ps2e_u32 material, ps2e_s32 count, ps2e_u32 places
         for (int k = i - 2; k <= i; ++k) open.verts.push_back(Vertex(p[k].x + left, p[k].y + top, 0, 0, c[k]));
     ::CloseDraw(m.bucket);
 #else
+    // The places snapped to the GS's vertex grid (12.4 fixed point: 1/16 pixel), as the GS's XYZ register took them. The
+    // game's rings (the menus' discs) are strips whose neighbouring places can differ by float noise only; a sliver triangle
+    // between two such places can twist and leave a crack along a whole edge -- isolated background pixels in a line across
+    // the disc when drawn above 1x (which pixels fall in it changes with the resolution). The GS's 1/16 grid merged such
+    // places into one; the same grid does here (a shift of at most 1/32 GS pixel; shapes.cpp also keeps the rings' repeated
+    // segment points exact).
+    auto snap = [](float v) { return std::nearbyint(v * 16.0f) * 0.0625f; };
     Draw d;
     d.state = ::StateOf(m);
     d.state.texture = 0;
     d.verts.reserve(size_t(count - 2) * 3);
     for (int i = 2; i < count; ++i) {
         // a strip's triangle i: vertices i-2, i-1, i
-        for (int k = i - 2; k <= i; ++k) d.verts.push_back(Vertex(p[k].x + left, p[k].y + top, 0, 0, c[k]));
+        for (int k = i - 2; k <= i; ++k) d.verts.push_back(Vertex(snap(p[k].x + left), snap(p[k].y + top), 0, 0, c[k]));
     }
     ::Record(m.bucket, std::move(d));
 #endif
