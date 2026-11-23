@@ -1,7 +1,19 @@
-CRASH TWINSANITY — PORT NATIVO ANDROID (ARM64)
-Notas da versão 1.0.0 — 23/11/2026
+TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
+
+VERSÃO 1.3.0 — 23/11/2026
+- Nome padronizado: Twinsanity Pocket no app, no launcher, nos relatórios, nos logs
+  (marca "TwinsanityPocket" no logcat), nos arquivos gerados e no APK
+  (TwinsanityPocket.apk).
+- Botão de escolha da imagem do jogo agora se chama apenas "Selecionar" (aceita ISO ou CHD).
+- Orientação travada em paisagem: o launcher e o jogo não giram mais com o movimento do
+  aparelho, mesmo com a rotação automática do Android ligada.
+- Instale por cima: o identificador do app (com.crashtwinsanity.android) não mudou, então
+  saves, configurações e a ISO continuam onde estavam.
+
+--------------------------------------------------------------------------------
+Notas da versão 1.0.0 — 23/11/2026
 
 O QUE É
 - Port nativo do Crash Twinsanity (PS2) para Android ARM64. Não é emulação: o jogo roda
@@ -53,7 +65,7 @@ LIMITAÇÕES CONHECIDAS
 
 INSTALAÇÃO
 - Instale por cima da versão anterior: saves, configurações e a ISO são mantidos.
-- Primeira vez: abra o app, Jogar → Selecionar ISO ou CHD, escolha a sua imagem e aperte JOGAR.
+- Primeira vez: abra o app, Jogar → Selecionar, escolha a sua ISO ou CHD e aperte JOGAR.
 
 CRÉDITOS
 - Baseado em TwinsanityEvolved, NativeEE e twinsanity-reversed (licenças em Sistema →

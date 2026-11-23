@@ -10,7 +10,7 @@ public final class TestTools {
 
     public static void main(String[] a) {
         String log =
-            "[2026-11-23 10:00:00] TwinsanityEvolved native library loaded: process x:game\n"
+            "[2026-11-23 10:00:00] Twinsanity Pocket native library loaded: process x:game\n"
             + "[2026-11-23 10:00:01] [gl.es] GL_RENDERER Adreno (TM) 740\n"
             + "[2026-11-23 10:00:10] [te.gfx] pace: presents 1-600 at 59.9 fps, longest gap 20.1 ms, 3 of 599 gaps over a field; "
             + "a frame 16.69 ms = submit 2.00 + present 3.00 + the rest 11.69; builds 1.00 ms (waited on 0.10)\n"

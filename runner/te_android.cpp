@@ -4,7 +4,7 @@
 // libSDL2.so and libmain.so and calls SDL_main on its own thread. When SDL_main returns, SDLActivity finishes: the game's
 // window closes and the launcher (LauncherActivity, the app's own process) comes back with what this run reached.
 //
-// SDL_main here: the start-up stages and logs (te_android_diag.h: logcat tag TwinsanityEvolved + files/logs), the app's
+// SDL_main here: the start-up stages and logs (te_android_diag.h: logcat tag TwinsanityPocket + files/logs), the app's
 // folders, the disc image, then the runner's main() (runner/main.cpp compiled as te_runner_main in this lane).
 //   - No usable disc image: a message box says what to put where, and SDL_main returns without starting the game.
 //
@@ -102,7 +102,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
                    internal ? internal : "(none)");
     const std::string files = external && *external ? external : internal && *internal ? internal : "";
     if (files.empty()) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved",
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket",
                     std::string("O Android não informou a pasta do aplicativo (") + SDL_GetError() + "). O jogo não foi iniciado.");
         te_android_finished(3);
         return 3;
@@ -189,7 +189,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     std::string report;
     if (iso.empty() || !te::android::CheckDiscImage(iso, &report)) {
         const std::string why = iso.empty() ? how : report;
-        ShowMessage(SDL_MESSAGEBOX_WARNING, "TwinsanityEvolved - imagem do disco",
+        ShowMessage(SDL_MESSAGEBOX_WARNING, "Twinsanity Pocket - imagem do disco",
                     "Nenhuma imagem de disco utilizável foi encontrada, então o jogo não foi iniciado.\n\n"
                     "Volte ao inicializador, toque em \"Selecionar\" e escolha a SUA imagem do Crash Twinsanity "
                     "(PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) no gerenciador de arquivos.\n\nDetalhe: " + why);
@@ -247,7 +247,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     }, &start);
     pthread_attr_destroy(&attr);
     if (created != 0) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved", "Não foi possível criar a thread do jogo (erro " + std::to_string(created) + ").");
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket", "Não foi possível criar a thread do jogo (erro " + std::to_string(created) + ").");
         te_android_finished(4);
         return 4;
     }
@@ -256,7 +256,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     std::fflush(stdout);
     std::fflush(stderr);
     if (rc != 0)
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinsanityEvolved",
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket",
                     "O jogo terminou com o código " + std::to_string(rc) +
                         ". Volte ao inicializador e use \"Compartilhar relatório\" para enviar os logs.");
     te_android_finished(rc);

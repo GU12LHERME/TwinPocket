@@ -1,11 +1,12 @@
-# Android: the game APK (stage 1 of the Android plan)
+# Twinsanity Pocket (Android arm64-v8a)
 
-This project packages the **real** TwinsanityEvolved code for Android arm64-v8a: `libmain.so` holds the game module
-(the decompilation compiled to wasm32 and lowered to C by wasm2c, then compiled by the NDK), the NativeEE engine
-(configured for Android: the Linux target folder, the AArch64 fibers, OpenGL ES 3.2) and the runner, entered through
-`SDL_main` (`runner/te_android.cpp`). `libSDL2.so` is SDL `release-2.30.9`, the engine's pin.
+Twinsanity Pocket is the native Android port of Crash Twinsanity (PS2), built from the TwinsanityEvolved code (the
+decompilation compiled to wasm32 and lowered to C by wasm2c, then compiled by the NDK), the NativeEE engine (OpenGL ES
+3.2, OpenSL ES, AArch64 fibers) and the runner, entered through `SDL_main` (`runner/te_android.cpp`). `libSDL2.so` is
+SDL `release-2.30.9`, the engine's pin. Reference device: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13).
 
-The native code is built by CMake before Gradle (see `.github/workflows/android-game-arm64.yml`):
+The native code is built by CMake before Gradle (see `.github/workflows/android-game-arm64.yml`, which produces
+`TwinsanityPocket.apk` in the `twinsanity-pocket-arm64-<run>` artifact):
 
 ```sh
 tools/fetch_toolchain.sh                                   # wasi-sdk + wabt (the module's generator, on the build machine)
@@ -18,41 +19,48 @@ mkdir -p jni/arm64-v8a && cp build-android-arm64-game/libmain.so build-android-d
 gradle -p android/game -Psdl2SourceDir=<SDL2 source> -PnativeLibsDir=$PWD/jni assembleDebug
 ```
 
-No game data is in the APK or the repository: the game reads your own disc image at run time from the app's folder
-(`Android/data/com.twinsanityevolved.game/files/twinsanity.iso`, or the path in `disc-image.txt` there).
+## Identifiers that stay as they are
 
-Status: stage 1 is the build (every symbol resolved at link time). Running the game on a device -- the disc found, the
-module's frames advancing, then the picture (stage 3), the pads (4) and the sound (5) -- is not verified by this build.
-The smoke APKs in `android/sdl2-smoke` and `android/nativeee-smoke` stay as they were.
+The port's name changed (TwinsanityEvolved → Crash Twinsanity → Twinsanity Pocket); these did not, so updates install
+over the previous version and keep its saves, settings and disc image:
 
-## Diagnostic build
+- the application id `com.crashtwinsanity.android` (the app's data folders are named after it);
+- the Java package `com.twinsanityevolved.game` (the launcher's component name, which home screens keep for the icon,
+  and the JNI symbol `Java_com_twinsanityevolved_game_TeDiag_nativeProbe`);
+- the data paths: `files/game/` (ps2r.ini and the memory cards), `files/disc/twinsanity.iso|chd`, `files/logs/`,
+  the shared preferences `twinsanity`, and the runner's `<home>/.twinsanityevolved` lookup;
+- the signing: the APK is signed by Gradle's debug configuration on the CI runner (the workflow prints the
+  certificate's SHA-256 in `apk-signing.log`).
 
-The launcher icon opens **LauncherActivity** (Java only, no native code). It shows the disc image check and what the
-last runs reached, and has these buttons:
+`-PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)"` builds the migration APK
+(`TwinsanityPocket-migracao-id-antigo.apk`), installed over the first app id to export its saves.
 
-- **Selecionar ISO** -- Android's document picker (`ACTION_OPEN_DOCUMENT`, no storage permission): the chosen file is
-  copied through the ContentResolver into the app's private `files/disc/twinsanity.iso` (progress shown, free space
-  checked, size and ISO 9660 / SYSTEM.CNF verified), and the read grant is kept. The game gets that path (`--te-iso`).
-  A file another app put in `Android/data/<package>/files` can be unreadable to this app (EACCES on Android 11+);
-  the picker avoids that.
-- **Iniciar jogo** -- the game (MainActivity, SDL2, in the `:game` process). Without a usable disc image it explains
-  where to put it instead of starting.
-- **Diagnóstico (sem o jogo)** -- ProbeActivity in the `:probe` process: lists the installed native libraries, loads
-  `libSDL2.so` and `libmain.so`, then runs `TeDiag.nativeProbe` (engine fibers, storage, disc image, an OpenGL ES 3.2
-  context and the engine's shaders as shipped and as `#version 320 es`). No game, no SDL window.
-- **Teste SDL (sem o jogo)** -- MainActivity with `--android-sdl-test`: SDL window, GLES renderer, gamepad events for
-  10 s (B / Back ends it). No engine, no game.
-- **Compartilhar relatório** / **Copiar relatório** -- one text file (`files/logs/report.txt`) with the status, every
-  log below and this app's own logcat, through the share sheet (LogProvider) or the clipboard.
+No game data is in the APK or the repository: the player picks their own ISO or CHD with **Selecionar** (Android's
+document picker, no storage permission); it is copied into the app's private `files/disc/`.
 
-Logs (in `/data/data/com.twinsanityevolved.game/files/logs/`, private to the app):
+## The launcher
+
+`LauncherActivity` (Java only, the app's main process) has the tabs Jogar, Gráficos, Controles, Saves, Sistema and
+Ferramentas, navigated with a controller (XInput) or touch. **JOGAR** starts `MainActivity` (SDL2, the `:game`
+process); Ferramentas has the report, failures, performance, component checks, session history and the ZIP export.
+`ProbeActivity` (the `:probe` process) is the diagnostic without the game.
+
+Every activity is fixed in the device's standard landscape (`android:screenOrientation="landscape"`; `MainActivity`
+also overrides `SDLActivity.setOrientationBis`): the picture does not rotate with the device, whatever Android's
+auto-rotate setting says.
+
+## Logs
+
+In the app's private `files/logs/`:
 
 | file | written by | what |
 |---|---|---|
 | `stage-game.txt`, `stage-probe.txt` | native (`runner/te_android_diag.cpp`) | the last stage reached, synced: `running`, `crash <signal>`, `exited`, `finished` |
-| `latest-<process>.log`, `previous-<process>.log` | native | every stage, the runner's and engine's stdout / stderr, fatal signals |
+| `latest-<process>.log`, `previous-<process>.log` | native | every stage, the runner's and engine's stdout / stderr (`[twinsanity-pocket]` lines), fatal signals |
 | `java-<process>.log`, `java-crash-<process>.txt` | Java (`Diag`) | activity steps, library loading, uncaught exceptions |
-| `probe-result.txt` | ProbeActivity | the diagnostic, one line per step (written before each step runs) |
-| `logcat.txt`, `report.txt` | the launcher | this app's logcat at the time of the report; the combined report |
+| `probe-result.txt` | ProbeActivity | the diagnostic, one line per step |
+| `logcat.txt`, `report.txt`, `sessions.tsv` | the launcher | the app's logcat at report time, the combined report, the session history |
 
-Every line also goes to logcat with the tag `TwinsanityEvolved`.
+logcat tags: `TwinsanityPocket` (native and Java).
+
+The smoke APKs in `android/sdl2-smoke` and `android/nativeee-smoke` are separate development tests, not the port.

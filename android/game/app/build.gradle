@@ -21,8 +21,8 @@ android {
     compileSdk 35
 
     defaultConfig {
-        // -PappId=com.twinsanityevolved.game -PappLabel="Crash Twinsanity (antigo)": the migration build, installed over the
-        // old TwinsanityEvolved app to export its saves (CI builds it beside the main APK)
+        // -PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)": the migration build, installed over the
+        // old app (the first id, com.twinsanityevolved.game) to export its saves (CI builds it beside the main APK)
         applicationId(project.findProperty("appId") ?: "com.crashtwinsanity.android")
         manifestPlaceholders = [appLabel: (project.findProperty("appLabel") ?: "Twinsanity Pocket")]
         minSdk 24

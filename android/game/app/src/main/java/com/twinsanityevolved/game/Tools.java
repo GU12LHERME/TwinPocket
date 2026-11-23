@@ -135,7 +135,7 @@ final class Tools {
         String storage;
         try {
             File t = new File(c.getCacheDir(), "te-check.tmp");
-            byte[] data = "crash twinsanity storage check".getBytes(StandardCharsets.UTF_8);
+            byte[] data = "twinsanity pocket storage check".getBytes(StandardCharsets.UTF_8);
             try (java.io.FileOutputStream o = new java.io.FileOutputStream(t)) { o.write(data); o.getFD().sync(); }
             byte[] back = new byte[data.length];
             int n;

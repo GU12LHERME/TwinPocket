@@ -23,11 +23,11 @@ import java.util.Locale;
 /**
  * The Java half of the start-up diagnostics: the same logs folder as the native half (runner/te_android_diag.cpp:
  * files/logs, latest-&lt;process&gt;.log, stage-&lt;process&gt;.txt), the Java log lines (java-&lt;process&gt;.log, logcat tag
- * TwinsanityEvolved), an uncaught-exception record per process (java-crash-&lt;process&gt;.txt), the disc image lookup the
+ * TwinsanityPocket), an uncaught-exception record per process (java-crash-&lt;process&gt;.txt), the disc image lookup the
  * native side makes, and the helpers the launcher's report uses.
  */
 final class Diag {
-    static final String TAG = "CrashTwinsanity";
+    static final String TAG = "TwinsanityPocket";
 
     private Diag() {}
 

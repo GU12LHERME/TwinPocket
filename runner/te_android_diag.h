@@ -1,6 +1,6 @@
 // runner/te_android_diag.h -- the Android lane's start-up diagnostics (runner/te_android_diag.cpp).
 //
-// Every start-up stage is a line in logcat (tag TwinsanityEvolved) and in a log file in the app's private folder
+// Every start-up stage is a line in logcat (tag TwinsanityPocket) and in a log file in the app's private folder
 // (/data/data/<package>/files/logs/latest-<process>.log), and the last stage reached is kept in
 // files/logs/stage-<process>.txt, written synchronously: a process that dies without a word is located by that file,
 // and a fatal signal adds its own line to both. The launcher (android/game: LauncherActivity) shows them and shares them.

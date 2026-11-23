@@ -364,6 +364,9 @@ jobs:
             echo "MEASURE  libmain.so sections (built):"
             "$NDK_LLVM/llvm-size" -A "$BUILD_DIR/libmain.so" | awk 'NR>2 && $2>1000000 {printf "           %-22s %12d\n", $1, $2}'
           } | tee -a "$LOG_DIR/measurements.txt"
+          # whether the runner had a debug keystore before this build (otherwise Gradle makes a new one: a new certificate)
+          if [ -f "$HOME/.android/debug.keystore" ]; then echo "debug keystore before the build: present (from the runner image)"
+          else echo "debug keystore before the build: absent (Gradle creates one)"; fi | tee "$LOG_DIR/apk-signing-origin.log"
           gradle --no-daemon --stacktrace -p android/game assembleDebug \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
 
@@ -383,6 +386,20 @@ jobs:
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump xmltree "$apk" AndroidManifest.xml > "$LOG_DIR/apk-manifest.txt"
           grep -q ':game' "$LOG_DIR/apk-manifest.txt" && grep -q ':probe' "$LOG_DIR/apk-manifest.txt" && grep -q 'LogProvider' "$LOG_DIR/apk-manifest.txt"
           echo "PASS  manifest: MainActivity in :game, ProbeActivity in :probe, LogProvider" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          # the orientation: every activity in the fixed standard landscape (screenOrientation 0x0), none sensor-driven
+          # (sensorLandscape is 0x6)
+          n_land="$(grep -c 'screenOrientation(0x0101001e)=(type 0x10)0x0$' "$LOG_DIR/apk-manifest.txt" || true)"
+          n_other="$(grep 'screenOrientation(0x0101001e)' "$LOG_DIR/apk-manifest.txt" | grep -vc '=(type 0x10)0x0$' || true)"
+          if [ "$n_land" -ne 3 ] || [ "$n_other" -ne 0 ]; then
+            grep 'screenOrientation' "$LOG_DIR/apk-manifest.txt" || true
+            echo "FAIL  orientation: $n_land activities in fixed landscape (expected 3), $n_other otherwise"; exit 1
+          fi
+          echo "PASS  manifest: launcher, game and diagnostics fixed in landscape (no sensor rotation)" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          # the signing certificate (Gradle's debug configuration on this runner): printed so that two builds can be compared
+          # -- an update installs over the previous APK only when both carry the same certificate
+          if [ -f "$HOME/.android/debug.keystore" ]; then echo "debug keystore: $HOME/.android/debug.keystore" > "$LOG_DIR/apk-signing.log"; fi
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/apksigner" verify --print-certs "$apk" 2>&1 | tee -a "$LOG_DIR/apk-signing.log"
+          grep -q 'certificate SHA-256 digest' "$LOG_DIR/apk-signing.log"
           unzip -p "$apk" 'classes*.dex' > "$RUNNER_TEMP/classes.dex"
           for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag; do
             grep -aq "com/twinsanityevolved/game/$cls" "$RUNNER_TEMP/classes.dex" || { echo "FAIL  class $cls not in the dex"; exit 1; }
@@ -418,22 +435,22 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p android-game-out
-          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/CrashTwinsanity.apk
+          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/TwinsanityPocket.apk
           jni="$RUNNER_TEMP/jniLibs"   # the native libraries the main APK was packaged from
           test -s "$jni/arm64-v8a/libmain.so"
           gradle --no-daemon -p android/game assembleDebug \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" \
-            -PappId=com.twinsanityevolved.game -PappLabel="Crash Twinsanity (antigo)" 2>&1 | tail -5 | tee "$LOG_DIR/gradle-migration.log"
+            -PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)" 2>&1 | tail -5 | tee "$LOG_DIR/gradle-migration.log"
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging android/game/app/build/outputs/apk/debug/app-debug.apk | grep -E "^package:|application-label:" | tee -a "$LOG_DIR/gradle-migration.log"
           grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/gradle-migration.log"
-          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/CrashTwinsanity-migracao-id-antigo.apk
+          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/TwinsanityPocket-migracao-id-antigo.apk
           ls -la android-game-out
 
       - name: Upload APK, libmain.so and evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: android-game-arm64-${{ github.run_id }}-${{ github.run_attempt }}
+          name: twinsanity-pocket-arm64-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             android-game-out/
             build-android-arm64-game/libmain.so

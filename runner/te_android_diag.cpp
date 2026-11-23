@@ -40,7 +40,7 @@
 
 namespace {
 
-constexpr const char* kTag = "TwinsanityEvolved";
+constexpr const char* kTag = "TwinsanityPocket";
 
 char g_dir[512];          // files/logs
 char g_proc[64] = "main"; // the process's suffix (":game" -> "game", the main process "main")
@@ -204,7 +204,16 @@ void InstallSignalHandlers() {
     for (int s : kSignals) sigaction(s, &sa, &g_old[s]);
 }
 
-void LogPumpLine(const std::string& line) {
+// The shared code's lines start "[twinsanityevolved]" (the source project's name, kept on the other lanes); on Android
+// they read "[twinsanity-pocket]", the port's name, in logcat and in the log files.
+std::string PortPrefix(const std::string& line) {
+    static const char kOld[] = "[twinsanityevolved]";
+    if (line.compare(0, sizeof kOld - 1, kOld) != 0) return line;
+    return "[twinsanity-pocket]" + line.substr(sizeof kOld - 1);
+}
+
+void LogPumpLine(const std::string& raw) {
+    const std::string line = PortPrefix(raw);
     __android_log_write(ANDROID_LOG_INFO, kTag, line.c_str());
     if (g_log_fd >= 0) {
         std::string l = line;
@@ -268,7 +277,7 @@ __attribute__((constructor(101))) void EarlyInit() {
         std::snprintf(g_stage_path, sizeof g_stage_path, "%s/stage-%s.txt", dir.c_str(), g_proc);
     }
     InstallSignalHandlers();
-    te_android_log("TwinsanityEvolved native library loaded: process %s (pid %d), %s, Android %s (API %s), %s %s, page size %ld",
+    te_android_log("Twinsanity Pocket native library loaded: process %s (pid %d), %s, Android %s (API %s), %s %s, page size %ld",
                    cmdline, static_cast<int>(::getpid()), TimeStamp().c_str(), Prop("ro.build.version.release").c_str(),
                    Prop("ro.build.version.sdk").c_str(), Prop("ro.product.manufacturer").c_str(), Prop("ro.product.model").c_str(),
                    ::sysconf(_SC_PAGESIZE));
