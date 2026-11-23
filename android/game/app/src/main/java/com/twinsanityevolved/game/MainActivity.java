@@ -1,6 +1,12 @@
 package com.twinsanityevolved.game;
 
+import android.os.Build;
 import android.os.Bundle;
+import android.view.View;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowInsetsController;
+import android.view.WindowManager;
 
 import org.libsdl.app.SDLActivity;
 
@@ -18,7 +24,50 @@ public final class MainActivity extends SDLActivity {
         Diag.installCrashHandler(this, "game");
         Diag.log(this, "game", "MainActivity.onCreate (SDL test: " + isSdlTest() + ")");
         super.onCreate(savedInstanceState);
+        hideSystemBars();
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
+    }
+
+    // THE SYSTEM BARS (the RP6, 0.27.0: back from the recents screen the status bar and the navigation handle stayed over
+    // the game, and the first picture came at 1920x970 -- the window less the bars -- before the 1920x1080 one, a small
+    // picture in a corner then black while the surface was made again). SDL hides the bars only when the game asks for
+    // full screen at start and two seconds after the bars show; here they are hidden again before the window comes back
+    // (onResume, before SDL's) and whenever it regains focus, so the surface returns at the screen's size. The game is
+    // always full screen on Android (Settings.normalize); a swipe from the edge still shows the bars for a moment.
+    private void hideSystemBars() {
+        Window w = getWindow();
+        if (w == null) return;
+        if (Build.VERSION.SDK_INT >= 28) {
+            WindowManager.LayoutParams lp = w.getAttributes();
+            lp.layoutInDisplayCutoutMode = WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+            w.setAttributes(lp);
+        }
+        if (Build.VERSION.SDK_INT >= 30) {
+            w.setDecorFitsSystemWindows(false);
+            WindowInsetsController c = w.getInsetsController();
+            if (c != null) {
+                c.hide(WindowInsets.Type.systemBars());
+                c.setSystemBarsBehavior(WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
+            }
+        }
+        // (the flags SDL itself sets for full screen, so its own checks agree)
+        w.getDecorView().setSystemUiVisibility(View.SYSTEM_UI_FLAG_FULLSCREEN | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        w.addFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        w.clearFlags(WindowManager.LayoutParams.FLAG_FORCE_NOT_FULLSCREEN);
+    }
+
+    @Override
+    protected void onResume() {
+        hideSystemBars();   // before SDL resumes: the surface comes back at the screen's size
+        super.onResume();
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        if (hasFocus) hideSystemBars();
+        super.onWindowFocusChanged(hasFocus);
     }
 
     private boolean isSdlTest() {
