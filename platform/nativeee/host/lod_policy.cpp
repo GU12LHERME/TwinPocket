@@ -42,48 +42,6 @@ void SetPercent(uint32_t percent) {
 }
 
 namespace {
-// THE POP WATCH (a model drawn one picture, gone the next, back after: the RP6, 0.26.1, only above 100 %). Each field
-// boundary (about one picture) the counters' growth since the last: a field where a model was hidden by the setting or cut
-// as too near, or where fewer models were drawn while as many were looked up, is logged with its neighbour -- the first 80
-// of a run, so a report shows which choice made the pop. Reads only (the module's counters); nothing is drawn differently.
-struct FieldCounts { uint32_t lookups = 0, drawn = 0, hidden = 0, cutNear = 0, cutFar = 0, past = 0; };
-te_gfx_lod_policy g_field{};   // the counters at the last boundary
-FieldCounts g_prevField{};
-bool g_fieldPrimed = false;
-int g_popLines = 0;
-uint64_t g_fieldIndex = 0;
-
-void WatchPops(const te_gfx_lod_policy& p, bool front) {
-    te_gfx_lod_policy now;
-    std::memcpy(&now, &p, sizeof now);
-    g_fieldIndex++;
-    if (!g_fieldPrimed || front || now.percent <= 100) {
-        g_field = now;
-        g_prevField = {};
-        g_fieldPrimed = true;
-        return;
-    }
-    FieldCounts c;
-    c.lookups = now.lookups - g_field.lookups;
-    for (int i = 0; i < 4; ++i) c.drawn += now.chosen[i] - g_field.chosen[i];
-    c.hidden = now.hidden_near - g_field.hidden_near;
-    c.cutNear = now.cut_near - g_field.cut_near;
-    c.cutFar = now.cut_far - g_field.cut_far;
-    c.past = now.drawn_past_cut - g_field.drawn_past_cut;
-    g_field = now;
-    const FieldCounts& b = g_prevField;
-    const bool fewer = b.lookups > 0 && c.lookups + 2 >= b.lookups && c.drawn + 3 <= b.drawn;
-    if ((c.hidden > 0 || c.cutNear > 0 || fewer) && g_popLines < 80) {
-        g_popLines++;
-        std::fprintf(stderr,
-                     "[te.gfx] lod pop: field %llu at %u %%: looked up %u, drawn %u, stand-ins hidden %u, cut as too near %u, cut as too "
-                     "far %u, drawn past the cut %u (the field before: looked up %u, drawn %u, hidden %u, too near %u, too far %u, past %u)%s\n",
-                     (unsigned long long)g_fieldIndex, now.percent, c.lookups, c.drawn, c.hidden, c.cutNear, c.cutFar, c.past, b.lookups,
-                     b.drawn, b.hidden, b.cutNear, b.cutFar, b.past, g_popLines == 80 ? " -- the last pop line of this run" : "");
-    }
-    g_prevField = c;
-}
-
 void OnBoundary(uint64_t) {
     unsigned state = 0, last = 0, next = 0;
     const bool front = te::harness::ReadGameState(&state, &last, &next) && (state == 6 || state == 7 || state == 8 || state == 20);
@@ -93,10 +51,8 @@ void OnBoundary(uint64_t) {
             std::fprintf(stderr, "[te.gfx] lod: %s -- draw distance %u %%\n", front ? "the title / main menu: the game's own distance"
                                                                                   : "out of the title: the setting's distance", Effective());
     }
-    if (te_gfx_lod_policy* p = Block()) {
+    if (te_gfx_lod_policy* p = Block())
         if (p->percent != Effective()) p->percent = Effective();
-        WatchPops(*p, front);
-    }
 }
 }  // namespace
 
