@@ -87,18 +87,26 @@ std::string CensusLine(uint64_t first, uint64_t last, double presents) {
     double chosen[4];
     for (int i = 0; i < 4; ++i) chosen[i] = double(now.chosen[i] - g_last.chosen[i]) / presents;
     const double lookups = d(&te_gfx_lod_policy::lookups);
+    // the rare choices also as the window's totals: a model hidden for a single present (a pop) is 1/600 per present, which
+    // the averages above print as 0
+    const auto total = [&](uint32_t te_gfx_lod_policy::*field) { return (unsigned long long)(now.*field - g_last.*field); };
+    const unsigned long long t_stand = total(&te_gfx_lod_policy::near_limited), t_hidden = total(&te_gfx_lod_policy::hidden_near),
+                             t_near = total(&te_gfx_lod_policy::cut_near), t_far = total(&te_gfx_lod_policy::cut_far),
+                             t_past = total(&te_gfx_lod_policy::drawn_past_cut);
     g_last = now;
     if (lookups <= 0) return "";
-    char buf[700];
+    char buf[900];
     std::snprintf(buf, sizeof buf,
                   "[te.gfx] lod: presents %llu-%llu at draw distance %u %%, per present: %.0f models with levels (%.0f with 2+ levels, "
                   "%.0f far stand-ins); drawn at level 0 (finest) %.0f, 1 %.0f, 2 %.0f, 3 %.0f; none past the farthest %.0f, nearer "
                   "than the nearest %.0f; the setting's doing: %.0f finer than the game's choice, %.0f drawn past its cut, %.0f "
-                  "stand-ins hidden; finest drawn up to %.1f units, any level up to %.1f units\n",
+                  "stand-ins hidden; finest drawn up to %.1f units, any level up to %.1f units; window totals: far stand-ins %llu, "
+                  "stand-ins hidden %llu, cut as too near %llu, cut as too far %llu, drawn past the cut %llu\n",
                   (unsigned long long)first, (unsigned long long)last, now.percent, lookups, d(&te_gfx_lod_policy::multi_level),
                   d(&te_gfx_lod_policy::near_limited), chosen[0], chosen[1], chosen[2], chosen[3], d(&te_gfx_lod_policy::cut_far),
                   d(&te_gfx_lod_policy::cut_near), d(&te_gfx_lod_policy::finer), d(&te_gfx_lod_policy::drawn_past_cut),
-                  d(&te_gfx_lod_policy::hidden_near), Units(now.reach_finest), Units(now.reach_drawn));
+                  d(&te_gfx_lod_policy::hidden_near), Units(now.reach_finest), Units(now.reach_drawn), t_stand, t_hidden, t_near, t_far,
+                  t_past);
     return buf;
 }
 
