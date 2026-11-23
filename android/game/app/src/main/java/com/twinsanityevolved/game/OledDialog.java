@@ -93,6 +93,19 @@ final class OledDialog extends Dialog {
         return d;
     }
 
+    // A long text's scroller (the Ferramentas tab's viewers): up / down scroll it, left / right still pick the buttons
+    private android.widget.ScrollView scrollTarget;
+
+    void setScrollTarget(android.widget.ScrollView v) {
+        scrollTarget = v;
+    }
+
+    private boolean scroll(int delta) {
+        if (scrollTarget == null) return false;
+        scrollTarget.smoothScrollBy(0, delta * dp(140));
+        return true;
+    }
+
     void setKeyInterceptor(KeyInterceptor k) {
         interceptor = k;
     }
@@ -192,6 +205,11 @@ final class OledDialog extends Dialog {
         int code = e.getKeyCode();
         if (code == KeyEvent.KEYCODE_VOLUME_UP || code == KeyEvent.KEYCODE_VOLUME_DOWN || code == KeyEvent.KEYCODE_VOLUME_MUTE)
             return super.dispatchKeyEvent(e);
+        if (scrollTarget != null && e.getAction() == KeyEvent.ACTION_DOWN
+                && (code == KeyEvent.KEYCODE_DPAD_UP || code == KeyEvent.KEYCODE_DPAD_DOWN)) {
+            scroll(code == KeyEvent.KEYCODE_DPAD_UP ? -1 : 1);   // a held direction keeps scrolling
+            return true;
+        }
         if (e.getAction() != KeyEvent.ACTION_DOWN || e.getRepeatCount() != 0) return true;
         switch (code) {
             case KeyEvent.KEYCODE_DPAD_LEFT:
@@ -226,6 +244,7 @@ final class OledDialog extends Dialog {
             int d = Nav.stickDir(x, y, stickDir);
             if (d != stickDir) {
                 stickDir = d;
+                if ((d == Nav.UP || d == Nav.DOWN) && scroll(d == Nav.UP ? -1 : 1)) return true;
                 if (d == Nav.LEFT || d == Nav.UP) step(-1);
                 else if (d == Nav.RIGHT || d == Nav.DOWN) step(1);
             }
