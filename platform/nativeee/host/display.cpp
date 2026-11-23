@@ -319,7 +319,7 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
     switch (row) {
     case RowAspect: {
 #if defined(__ANDROID__)
-        return choice == 0 ? "original (4:3)" : choice == 1 ? "wide (16:9)" : "";
+        return choice == 0 ? "4:3" : choice == 1 ? "16:9" : "";   // short: the graphic options ring is narrow
 #endif
         static const Id ids[] = {Id::AspectAuto, Id::AspectNormal, Id::AspectWide, Id::AspectWideTen, Id::AspectUltraWide,
                                  Id::AspectSuperWide};
@@ -524,9 +524,15 @@ void ps2e_graphics_set_display_setting(ps2e_s32 setting, ps2e_s32 choice) {
     else te::display::Set(static_cast<uint32_t>(setting), static_cast<uint32_t>(choice));
 }
 
-// Platform::Graphics::DisplaySettingKind: a choice row (0) or an action (1: te_port_settings.h's restore defaults)
+// Platform::Graphics::DisplaySettingKind: a choice row (0), an action (1: te_port_settings.h's restore defaults), or
+// (Android) the shape row the game's widescreen option follows (2: choice 0 = 4:3, 1 = 16:9; olegpages.cpp keeps the
+// two in step -- 4:3 with the option on squeezed a 16:9 picture, 16:9 with it off stretched a 4:3 one)
 ps2e_s32 ps2e_graphics_display_setting_kind(ps2e_s32 setting) {
-    return IsPortRow(setting) ? static_cast<ps2e_s32>(te::port_settings::Kind(PortRow(setting))) : 0;
+    if (IsPortRow(setting)) return static_cast<ps2e_s32>(te::port_settings::Kind(PortRow(setting)));
+#if defined(__ANDROID__)
+    if (setting == static_cast<ps2e_s32>(te::display::RowAspect)) return 2;
+#endif
+    return 0;
 }
 
 // Platform::Graphics::DisplaySettingPage / DisplaySettingPageTitle: which page a row is on, and the platform page's title

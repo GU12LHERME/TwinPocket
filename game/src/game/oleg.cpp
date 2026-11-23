@@ -1528,8 +1528,16 @@ void OLEG::StartUp(PadButtons* pad, Font* font, Font* menuFont, SoundTable* fron
     options.titleAlignment = TextAlignment::Centred;
     options.itemAlignment = TextAlignment::Centred;
     options.itemsPlace = {0.0f, Rounded(0.314)};
-    options.manyItemsScale = {0.625f, 0.75f};
+    // TwinsanityEvolved: the retail size for six lines or fewer (the fewItems values = retail's), smaller from there to
+    // nine: the graphic options page with the platform's rows (nine lines) drew its 0.75-high glyphs on 0.05 lines --
+    // each line over the next -- and its longest line past the ring (the RP6, 1.0.0). At nine lines the glyphs are 0.6
+    // high (a gap between lines) and 0.5 wide (the longest line inside the ring); the spacing, and so the block's height
+    // and place, as retail's.
+    options.fewItemsScale = {0.625f, 0.75f};
+    options.fewItemsSpacing = ListSpacing;
+    options.manyItemsScale = {0.5f, 0.6f};
     options.manyItemsSpacing = ListSpacing;
+    options.windowStart = 6;
     // TwinsanityEvolved: a window of nine lines around the selection -- the pages the platform adds (the mods' level
     // list) hold more than the ring shows; retail's pages (nine lines at most) draw as before
     options.windowSize = 9;
