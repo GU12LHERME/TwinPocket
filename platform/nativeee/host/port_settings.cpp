@@ -160,8 +160,8 @@ std::string Title() { return Count() ? "android settings" : ""; }
 
 uint32_t Choices(uint32_t row) {
     switch (row) {
-    case RowAudioDriver: return kDrivers;
-    case RowAudioBuffer: return kBuffers;
+    case RowAudioDriver: return 0;   // not shown: OpenSL ES and 2048 frames always (runner/te_android.cpp)
+    case RowAudioBuffer: return 0;
     case RowStickDeadzone: return kDeadzoneCount;
     case RowStickSensitivity: return kSensitivityCount;
     case RowRestoreDefaults: return 1;   // an action (Kind 1): one entry

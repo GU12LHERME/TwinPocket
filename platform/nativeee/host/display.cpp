@@ -129,6 +129,9 @@ void Configure(const Settings& settings) {
     g_settings.aspect = std::clamp(g_settings.aspect, 0, kAspects - 1);
     g_settings.fit = std::clamp(g_settings.fit, 0, 4);
     g_settings.scale = std::clamp(g_settings.scale, 1, 4);
+#if defined(__ANDROID__)
+    g_settings.texture_filter = 2;   // bilinear, the only filter Android offers (a ps2r.ini's title / point is read as it)
+#endif
 #if defined(__vita__)
     // a ps2r.ini naming 3x or 4x (a computer's settings copied over, or an earlier version's row) is read as 2x; the file
     // keeps its value until the row is changed
@@ -242,7 +245,11 @@ uint32_t Choices(uint32_t row) {
     case RowAspect: return uint32_t(kAspects);
 #endif
     case RowScale: return uint32_t(kMaxScale);   // 1x .. 4x (the Vita: 1x, 2x)
+#if defined(__ANDROID__)
+    case RowTextureFilter: return 0;   // not shown: bilinear always (Configure)
+#else
     case RowTextureFilter: return 3;
+#endif
     case RowVSync: return 2;
 #if defined(__vita__)
     case RowFrameRate: return 3;   // auto (60/30), 60, 30: the tick lock (te_tick_lock.h)

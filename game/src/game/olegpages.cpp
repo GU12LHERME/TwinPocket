@@ -1503,7 +1503,12 @@ OptionsPage* OptionsPage::Construct(OptionsPage* page, MenuPage* parent)
                                                    MenuPlayers);
     BackItem* graphicsBack = BackItem::Construct(Allocate<BackItem>(), BackText, SubPageBackItem, page, MenuPlayers);
     graphics.Add(centre);
-    graphics.Add(widescreen);
+    // TwinsanityEvolved: no widescreen row where the platform's shape row decides it (Android: 4:3 off, 16:9 on --
+    // SyncWidescreenWithShape); the option itself is kept and saved as before
+    if (WideShapeSetting() < 0)
+    {
+        graphics.Add(widescreen);
+    }
     // TwinsanityEvolved: the platform's display settings as rows, labelled by the platform (the graphic options' own: page 0)
     AddDisplaySettingRows(&graphics, 0);
     graphics.Add(graphicsBack);

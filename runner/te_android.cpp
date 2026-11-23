@@ -7,8 +7,6 @@
 // SDL_main here: the start-up stages and logs (te_android_diag.h: logcat tag TwinsanityEvolved + files/logs), the app's
 // folders, the disc image, then the runner's main() (runner/main.cpp compiled as te_runner_main in this lane).
 //   - No usable disc image: a message box says what to put where, and SDL_main returns without starting the game.
-//   - "--android-sdl-test" (the launcher's "SDL test" button): an SDL window, a GLES renderer and the gamepad events for a
-//     few seconds, without the game -- the Android interface, EGL and the pads tested apart from the engine.
 //
 // The folders: the app-specific external storage directory (SDL_AndroidGetExternalStoragePath:
 // /storage/emulated/0/Android/data/<package>/files) is HOME and the working directory, so the runner's own lookups
@@ -86,72 +84,6 @@ void ShowMessage(Uint32 flags, const char* title, const std::string& text) {
         te_android_log("SDL_ShowSimpleMessageBox failed: %s", SDL_GetError());
 }
 
-// The launcher's SDL test: a window, a GLES-backed SDL renderer, gamepad events; no engine, no game.
-int SdlTest() {
-    TE_ANDROID_STAGE("sdl test: SDL_Init(VIDEO | GAMECONTROLLER | EVENTS)");
-    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_GAMECONTROLLER | SDL_INIT_EVENTS) != 0) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket - SDL test", std::string("SDL_Init failed: ") + SDL_GetError());
-        return 1;
-    }
-    TE_ANDROID_STAGE("sdl test: SDL_CreateWindow");
-    SDL_Window* w = SDL_CreateWindow("Twinsanity Pocket SDL test", 0, 0, 0, 0, SDL_WINDOW_FULLSCREEN_DESKTOP);
-    if (!w) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket - SDL test", std::string("SDL_CreateWindow failed: ") + SDL_GetError());
-        return 1;
-    }
-    TE_ANDROID_STAGE("sdl test: SDL_CreateRenderer (OpenGL ES)");
-    SDL_Renderer* r = SDL_CreateRenderer(w, -1, SDL_RENDERER_ACCELERATED | SDL_RENDERER_PRESENTVSYNC);
-    if (!r) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket - SDL test", std::string("SDL_CreateRenderer failed: ") + SDL_GetError());
-        return 1;
-    }
-    SDL_RendererInfo info{};
-    SDL_GetRendererInfo(r, &info);
-    int ww = 0, wh = 0;
-    SDL_GetWindowSize(w, &ww, &wh);
-    te_android_log("sdl test: renderer %s, window %dx%d, %d joysticks", info.name, ww, wh, SDL_NumJoysticks());
-    for (int i = 0; i < SDL_NumJoysticks(); ++i) {
-        if (SDL_IsGameController(i) && SDL_GameControllerOpen(i))
-            te_android_log("sdl test: game controller %d: %s", i, SDL_GameControllerNameForIndex(i));
-        else
-            te_android_log("sdl test: joystick %d (no controller mapping): %s", i, SDL_JoystickNameForIndex(i));
-    }
-    TE_ANDROID_STAGE("sdl test: drawing (10 s; B / Back ends it)");
-    const Uint32 start = SDL_GetTicks();
-    int presses = 0;
-    bool run = true;
-    Uint8 shade = 40;
-    while (run && SDL_GetTicks() - start < 10000) {
-        SDL_Event e;
-        while (SDL_PollEvent(&e)) {
-            if (e.type == SDL_QUIT) run = false;
-            if (e.type == SDL_CONTROLLERBUTTONDOWN) {
-                ++presses;
-                te_android_log("sdl test: button %s",
-                               SDL_GameControllerGetStringForButton(static_cast<SDL_GameControllerButton>(e.cbutton.button)));
-                if (e.cbutton.button == SDL_CONTROLLER_BUTTON_B || e.cbutton.button == SDL_CONTROLLER_BUTTON_BACK) run = false;
-                shade = static_cast<Uint8>(shade + 50);
-            }
-            if (e.type == SDL_KEYDOWN) {
-                te_android_log("sdl test: key %s", SDL_GetKeyName(e.key.keysym.sym));
-                if (e.key.keysym.sym == SDLK_AC_BACK) run = false;
-            }
-        }
-        const Uint32 t = SDL_GetTicks() - start;
-        SDL_SetRenderDrawColor(r, 20, static_cast<Uint8>(60 + (t / 20) % 120), shade, 255);
-        SDL_RenderClear(r);
-        SDL_Rect bar{0, wh - 40, static_cast<int>(static_cast<long>(ww) * t / 10000), 40};
-        SDL_SetRenderDrawColor(r, 240, 160, 30, 255);
-        SDL_RenderFillRect(r, &bar);
-        SDL_RenderPresent(r);
-    }
-    te_android_log("sdl test: done, %d button presses", presses);
-    SDL_DestroyRenderer(r);
-    SDL_DestroyWindow(w);
-    SDL_Quit();
-    return 0;
-}
-
 }  // namespace
 
 extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** argv) {
@@ -162,15 +94,6 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     // generic pad mapping read as the left stick (engine/platform/sdl/input/gamepad_backend.cpp IsSensor)
     SDL_SetHint(SDL_HINT_ACCELEROMETER_AS_JOYSTICK, "0");
     for (int i = 0; i < argc; ++i) te_android_log("argv[%d] = %s", i, argv[i] ? argv[i] : "(null)");
-
-    bool sdl_test = false;
-    for (int i = 1; i < argc; ++i)
-        if (argv[i] && std::strcmp(argv[i], "--android-sdl-test") == 0) sdl_test = true;
-    if (sdl_test) {
-        const int rc = SdlTest();
-        te_android_finished(rc);
-        return rc;
-    }
 
     TE_ANDROID_STAGE("app folders (SDL_AndroidGetExternalStoragePath)");
     const char* external = SDL_AndroidGetExternalStoragePath();
@@ -239,13 +162,10 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
             std::ifstream in(settings, std::ios::binary);
             if (in) text.assign(std::istreambuf_iterator<char>(in), {});
         }
-        std::string driver = "openslES", buffer = "2048", v;
-        if (ps2r::SettingsFile::GetFromText(text, "android.audio_driver", &v) &&
-            (v == "openslES" || v == "aaudio" || v == "android" || v == "auto"))
-            driver = v;
-        if (ps2r::SettingsFile::GetFromText(text, "android.audio_buffer", &v) && (v == "1024" || v == "2048" || v == "4096"))
-            buffer = v;
-        if (driver != "auto") ::setenv("SDL_AUDIODRIVER", driver.c_str(), 0);
+        // OpenSL ES with 2048-frame buffers, always (the one validated on the RP6; the launcher's audio tab and the
+        // android settings' audio rows are gone): a ps2r.ini's older android.audio_driver / audio_buffer are not read
+        const std::string driver = "openslES", buffer = "2048";
+        ::setenv("SDL_AUDIODRIVER", driver.c_str(), 0);
         ::setenv("TE_AUDIO_BUFFER_FRAMES", buffer.c_str(), 0);
         te_android_log("settings file: %s (%s); audio driver %s, buffer %s frames (SDL_AUDIODRIVER=%s, TE_AUDIO_BUFFER_FRAMES=%s)",
                        settings.c_str(), text.empty() ? "not there yet: the defaults" : "read", driver.c_str(), buffer.c_str(),
