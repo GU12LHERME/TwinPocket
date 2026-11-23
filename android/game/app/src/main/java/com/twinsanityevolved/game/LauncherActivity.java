@@ -293,7 +293,7 @@ public final class LauncherActivity extends Activity {
         retireCustomIcon();
         Lang.init(this);
         Haptics.refresh(this);
-        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);   // fixed (the manifest's "landscape")
         getWindow().setStatusBarColor(BG);
         getWindow().setNavigationBarColor(BG);
         getWindow().getDecorView().setBackgroundColor(BG);

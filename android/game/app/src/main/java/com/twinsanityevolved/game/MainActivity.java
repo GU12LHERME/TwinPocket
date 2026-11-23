@@ -1,5 +1,6 @@
 package com.twinsanityevolved.game;
 
+import android.content.pm.ActivityInfo;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -22,9 +23,19 @@ public final class MainActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         Diag.installCrashHandler(this, "game");
         Diag.log(this, "game", "MainActivity.onCreate");
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         super.onCreate(savedInstanceState);
         hideSystemBars();
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
+    }
+
+    // THE ORIENTATION: fixed in the device's standard landscape, as the manifest says. SDL asks for one when the game's
+    // window is made (SDLActivity.setOrientation from libSDL2.so): with no SDL_HINT_ORIENTATIONS and a fixed-size window
+    // it picks SENSOR_LANDSCAPE, which turns the picture over with the device. Here every such request keeps LANDSCAPE.
+    @Override
+    public void setOrientationBis(int w, int h, boolean resizable, String hint) {
+        if (getRequestedOrientation() != ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+            setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
     }
 
     // THE SYSTEM BARS (the RP6, 0.27.0: back from the recents screen the status bar and the navigation handle stayed over
