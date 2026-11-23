@@ -51,15 +51,27 @@ final class Settings {
         return file;
     }
 
+    // The file's lines as last read or written by this object, and the file's size and time then: a tab's rows (a dozen
+    // get()s, the preset row's five more after every change) read the file once instead of once per value. The game may
+    // write the file meanwhile (its menus): a size or time that changed reads it again.
+    private List<String> cached;
+    private long cachedTime = -1, cachedSize = -1;
+
     private List<String> lines() {
+        long time = file.lastModified(), size = file.length();
+        if (cached != null && time == cachedTime && size == cachedSize) return cached;
         List<String> out = new ArrayList<>();
         String text = Diag.readFile(file, 0);
-        if (text == null || text.isEmpty()) return out;
-        String[] parts = text.split("\n", -1);
-        for (int i = 0; i < parts.length; i++) {
-            if (i == parts.length - 1 && parts[i].isEmpty()) break;   // the final newline
-            out.add(parts[i]);
+        if (text != null && !text.isEmpty()) {
+            String[] parts = text.split("\n", -1);
+            for (int i = 0; i < parts.length; i++) {
+                if (i == parts.length - 1 && parts[i].isEmpty()) break;   // the final newline
+                out.add(parts[i]);
+            }
         }
+        cached = out;
+        cachedTime = time;
+        cachedSize = size;
         return out;
     }
 
@@ -111,7 +123,7 @@ final class Settings {
 
     /** Writes `key = value` (its line replaced in place, or appended). False when the file could not be written. */
     boolean set(String key, String value) {
-        List<String> lines = lines();
+        List<String> lines = new ArrayList<>(lines());   // the cache is replaced only once the file is written
         String[] section = {""};
         boolean done = false;
         for (int i = 0; i < lines.size(); i++) {
@@ -137,9 +149,17 @@ final class Settings {
             out.write(b.toString().getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
         } catch (Exception e) {
+            cached = null;
             return false;
         }
-        return tmp.renameTo(file);
+        if (!tmp.renameTo(file)) {
+            cached = null;
+            return false;
+        }
+        cached = lines;
+        cachedTime = file.lastModified();
+        cachedSize = file.length();
+        return true;
     }
 
     /**
