@@ -175,6 +175,14 @@ final class Settings {
         else if ("150".equals(dd) || "200".equals(dd)) set(DRAW_DISTANCE, "medium");
         else if ("300".equals(dd)) set(DRAW_DISTANCE, "long");
         else if ("max".equals(dd) || "extreme".equals(dd) || "ultra".equals(dd)) set(DRAW_DISTANCE, "long");   // 4x left in 0.27.0
+        // 1.2.0: the texture filter is bilinear and the audio OpenSL ES with 2048 frames, always (the options are gone):
+        // older files say so too, so the launcher, the reports and the game read the same values
+        String filter = get(TEXTURE_FILTER, null);
+        if (filter != null && !filter.equals("bilinear")) set(TEXTURE_FILTER, "bilinear");
+        String driver = get(AUDIO_DRIVER, null);
+        if (driver != null && !driver.equals("openslES")) set(AUDIO_DRIVER, "openslES");
+        String buffer = get(AUDIO_BUFFER, null);
+        if (buffer != null && !buffer.equals("2048")) set(AUDIO_BUFFER, "2048");
         String aspect = get(ASPECT, null);
         if ("auto".equals(aspect)) set(ASPECT, "4:3");
         else if ("16:10".equals(aspect) || "21:9".equals(aspect) || "32:9".equals(aspect)) set(ASPECT, "16:9");
@@ -184,20 +192,8 @@ final class Settings {
         if (window != null && !window.equals("fullscreen")) set(FULLSCREEN, "fullscreen");
     }
 
-    /**
-     * Once: the launcher's earlier audio options (SharedPreferences, versions up to 0.2.0) moved into ps2r.ini, when the
-     * file names no audio driver yet -- so a player's choice survives the move to the shared file.
-     */
+    /** Every launch: the file's values put into the launcher's ranges (normalize). */
     void migrate(SharedPreferences prefs) {
         normalize();
-        if (prefs.getBoolean("settings_migrated", false)) return;
-        String driver = prefs.getString("audio_driver", null);
-        if (driver != null && !has(AUDIO_DRIVER)
-                && (driver.equals("openslES") || driver.equals("aaudio") || driver.equals("android") || driver.equals("auto")))
-            set(AUDIO_DRIVER, driver);
-        int buffer = prefs.getInt("audio_buffer", 0);
-        if (buffer != 0 && !has(AUDIO_BUFFER) && (buffer == 1024 || buffer == 2048 || buffer == 4096))
-            set(AUDIO_BUFFER, Integer.toString(buffer));
-        prefs.edit().putBoolean("settings_migrated", true).apply();
     }
 }

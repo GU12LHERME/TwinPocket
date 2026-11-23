@@ -183,7 +183,7 @@ final class Tools {
             b.append("Áudio           ").append(outs == 0 ? "FALHA" : "OK").append("  ").append(outs >= 0 ? outs + " saída(s), " : "")
              .append(au.getProperty(AudioManager.PROPERTY_OUTPUT_SAMPLE_RATE)).append(" Hz, bloco de ")
              .append(au.getProperty(AudioManager.PROPERTY_OUTPUT_FRAMES_PER_BUFFER)).append(" frames, driver escolhido ")
-             .append(st.get(Settings.AUDIO_DRIVER, LauncherActivity.DEFAULT_AUDIO_DRIVER)).append('\n');
+             .append("OpenSL ES (fixo)").append('\n');
         }
 
         // controls and vibration

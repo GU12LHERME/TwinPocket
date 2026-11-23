@@ -16,13 +16,12 @@ import org.libsdl.app.SDLActivity;
  * here ends this process only: the launcher, in the app's main process, shows what the run reached.
  */
 public final class MainActivity extends SDLActivity {
-    static final String EXTRA_SDL_TEST = "com.crashtwinsanity.android.SDL_TEST";
     static final String EXTRA_ISO = "com.crashtwinsanity.android.ISO";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         Diag.installCrashHandler(this, "game");
-        Diag.log(this, "game", "MainActivity.onCreate (SDL test: " + isSdlTest() + ")");
+        Diag.log(this, "game", "MainActivity.onCreate");
         super.onCreate(savedInstanceState);
         hideSystemBars();
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
@@ -70,10 +69,6 @@ public final class MainActivity extends SDLActivity {
         super.onWindowFocusChanged(hasFocus);
     }
 
-    private boolean isSdlTest() {
-        return getIntent() != null && getIntent().getBooleanExtra(EXTRA_SDL_TEST, false);
-    }
-
     @Override
     protected String[] getLibraries() {
         return new String[] {"SDL2", "main"};
@@ -95,7 +90,6 @@ public final class MainActivity extends SDLActivity {
 
     @Override
     protected String[] getArguments() {
-        if (isSdlTest()) return new String[] {"--android-sdl-test"};
         // the disc image the launcher checked (runner/te_android.cpp: --te-iso, taken off before the runner's arguments)
         String iso = getIntent() != null ? getIntent().getStringExtra(EXTRA_ISO) : null;
         Diag.log(this, "game", "disc image for the game: " + (iso != null ? iso : "(none from the launcher: the native lookup decides)"));
@@ -105,8 +99,7 @@ public final class MainActivity extends SDLActivity {
         // runner/te_android.cpp reads before SDL starts: nothing to pass here
         android.content.SharedPreferences prefs = getSharedPreferences("twinsanity", MODE_PRIVATE);
         Settings settings = new Settings(this);
-        Diag.log(this, "game", "settings file " + settings.file() + ": audio driver "
-                + settings.get(Settings.AUDIO_DRIVER, "openslES (default)") + ", buffer " + settings.get(Settings.AUDIO_BUFFER, "2048 (default)"));
+        Diag.log(this, "game", "settings file " + settings.file() + " (audio: OpenSL ES, 2048 frames)");
         if (prefs.getBoolean("diagnostic_mode", false)) {
             for (String e : LauncherActivity.DIAGNOSTIC_ENV) { args.add("--te-env"); args.add(e); }
             Diag.log(this, "game", "diagnostic mode on");

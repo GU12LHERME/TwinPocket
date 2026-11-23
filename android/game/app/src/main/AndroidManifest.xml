@@ -41,15 +41,6 @@
             android:screenOrientation="sensorLandscape"
             android:theme="@android:style/Theme.Black.NoTitleBar.Fullscreen" />
 
-        <!-- The custom home-screen icon's target: opens the app as its own icon does (a game in progress kept). -->
-        <activity
-            android:name="com.twinsanityevolved.game.IconShortcutActivity"
-            android:excludeFromRecents="true"
-            android:exported="true"
-            android:noHistory="true"
-            android:taskAffinity=""
-            android:theme="@android:style/Theme.NoDisplay" />
-
         <!-- The diagnostic mode: loads the native libraries and runs the probe without the game, in its own process. -->
         <activity
             android:name="com.twinsanityevolved.game.ProbeActivity"

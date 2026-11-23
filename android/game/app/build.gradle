@@ -42,7 +42,6 @@ android {
     sourceSets {
         main {
             java.srcDir "${sdl2SourceDir}/android-project/app/src/main/java"
-            res.srcDir "${sdl2SourceDir}/android-project/app/src/main/res"
             jniLibs.srcDirs = [nativeLibsDir]
         }
     }

@@ -49,9 +49,9 @@ import static com.twinsanityevolved.game.Lang.T;
 /**
  * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A console-style menu for a
  * handheld's OLED screen: pure black, white text, the selected row framed in white, no gradient or glow (one short fade
- * on a tab change). Seven tabs between LB / RB: Jogar (the disc image, its state, JOGAR), Gráficos, Áudio, Controles,
- * Saves, Sistema (language, restoring, the app) and Ferramentas (reports, the ZIP, performance, failures, the session
- * history, the checks, the diagnostic mode). The rows show a name and a value; what the selected row does is in the
+ * on a tab change). Six tabs between LB / RB: Jogar (the disc image, its state, JOGAR), Gráficos, Controles, Saves,
+ * Sistema (language, restoring, the app) and Ferramentas (reports, the ZIP, performance, failures, the session history,
+ * the checks, the diagnostic mode). The audio is OpenSL ES and the texture filter bilinear, always (no options). The rows show a name and a value; what the selected row does is in the
  * detail pane on the right, and the legend lists only the buttons that do something on it.
  *
  * The settings are the game's own, in ps2r.ini (Settings.java): the game's menus (Options > graphic options, Options >
@@ -68,7 +68,6 @@ public final class LauncherActivity extends Activity {
     private static final int REQUEST_PICK_ISO = 41;
     private static final int REQUEST_EXPORT_SAVES = 42;
     private static final int REQUEST_IMPORT_SAVES = 43;
-    private static final int REQUEST_ICON_IMAGE = 44;
     private static final int REQUEST_EXPORT_TOOLS = 45;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
@@ -78,9 +77,8 @@ public final class LauncherActivity extends Activity {
     // the palette: OLED black, white, a neutral grey
     static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A;
 
-    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SAVES = 4, TAB_SYSTEM = 5,
-        TAB_TOOLS = 6;
-    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Saves", "Sistema", "Ferramentas"};
+    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_CONTROLS = 2, TAB_SAVES = 3, TAB_SYSTEM = 4, TAB_TOOLS = 5;
+    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Controles", "Saves", "Sistema", "Ferramentas"};
 
     // the screen
     private LinearLayout page;
@@ -130,7 +128,6 @@ public final class LauncherActivity extends Activity {
 
     // The audio driver a game starts with when the player chose none: OpenSL ES -- the one that played cleanly on the
     // Retroid Pocket 6 (SDL's own order, AAudio first, crackled there). Every driver stays selectable.
-    static final String DEFAULT_AUDIO_DRIVER = "openslES";
 
     // Diagnostic mode (off by default): the next game start logs the GPU driver's messages (TE_DIAG_GL=1) and arms the
     // L3 + R3 draw capture (TE_DIAG_CAPTURE=1), logs the sticks (TE_INPUT_LOG=1) and the game's vibration commands
@@ -159,8 +156,6 @@ public final class LauncherActivity extends Activity {
     }
 
     static final Choice[] GRAPHICS = {
-        new Choice(Settings.TEXTURE_FILTER, "Filtro de texturas", "Bilinear corrige os brilhos quadrados (máscara do Aku Aku, cogumelos, cachoeira)",
-            "bilinear", new String[] {"title", "point", "bilinear"}, new String[] {"Original (do jogo)", "Point (pixelado)", "Bilinear — recomendado"}),
         new Choice(Settings.ANISOTROPY, "Filtragem anisotrópica",
             "Texturas do chão e paredes mais nítidas em ângulo; limitada ao máximo do driver (o log diz o aplicado)",
             "1", new String[] {"1", "2", "4", "8", "16"}, new String[] {"Desligada — padrão", "2x", "4x", "8x", "16x"}),
@@ -173,7 +168,7 @@ public final class LauncherActivity extends Activity {
         new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
             "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
         new Choice(Settings.ASPECT, "Proporção da tela",
-            "Widescreen com a opção widescreen do jogo ligada (Opções → Opções gráficas, fica no save) é o widescreen verdadeiro; desligada, a imagem 4:3 fica esticada",
+            "16:9 liga o widescreen do jogo (imagem mais larga, sem esticar); 4:3 é a imagem original. O jogo acompanha sozinho",
             "16:9", new String[] {"4:3", "16:9"}, new String[] {"Original (4:3)", "Widescreen (16:9) — padrão"}),
         new Choice(Settings.FRAME_RATE, "Taxa de quadros", "Quantos quadros são mostrados por segundo; a velocidade do jogo não muda",
             "60", new String[] {"30", "60"}, new String[] {"30 FPS", "60 FPS — padrão"}),
@@ -185,13 +180,6 @@ public final class LauncherActivity extends Activity {
             "Mantém os modelos detalhados por mais distância, só entre os que o jogo já carregou. Exige mais da GPU",
             "original", new String[] {"original", "medium", "long"},
             new String[] {"Original (1x)", "Média (2x)", "Longa (3x)"}),
-    };
-    static final Choice[] AUDIO = {
-        new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",
-            DEFAULT_AUDIO_DRIVER, new String[] {"openslES", "aaudio", "android", "auto"},
-            new String[] {"OpenSL ES — recomendado", "AAudio", "AudioTrack (Java)", "Automático (ordem do SDL)"}),
-        new Choice(Settings.AUDIO_BUFFER, "Tamanho do buffer", "Maior: mais estável, com um pouco mais de atraso (vale no próximo início)",
-            "2048", new String[] {"1024", "2048", "4096"}, new String[] {"1024 (21 ms)", "2048 (43 ms) — padrão", "4096 (85 ms)"}),
     };
     static final Choice[] CONTROLS = {
         new Choice(Settings.STICK_DEADZONE, "Zona morta dos analógicos", "Quanto do centro do analógico é ignorado",
@@ -278,6 +266,18 @@ public final class LauncherActivity extends Activity {
         return t;
     }
 
+    // 1.2.0 dropped the custom icon: a shortcut pinned by an earlier version pointed at an activity that is gone; it is
+    // disabled (greyed on the home screen, with a word why) rather than left to fail. Once a launch, quick and silent.
+    private void retireCustomIcon() {
+        if (Build.VERSION.SDK_INT < 25 || prefs().getBoolean("custom_icon_retired", false)) return;
+        try {
+            android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
+            if (sm != null) sm.disableShortcuts(java.util.Collections.singletonList("custom_icon"), T("O ícone personalizado foi removido"));
+        } catch (Exception ignored) {
+        }
+        prefs().edit().putBoolean("custom_icon_retired", true).apply();
+    }
+
     private View line() {
         View v = new View(this);
         v.setBackgroundColor(LINE);
@@ -290,6 +290,7 @@ public final class LauncherActivity extends Activity {
         super.onCreate(savedInstanceState);
         Diag.installCrashHandler(this, "main");
         new Settings(this).migrate(prefs());
+        retireCustomIcon();
         Lang.init(this);
         Haptics.refresh(this);
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE);
@@ -389,7 +390,14 @@ public final class LauncherActivity extends Activity {
 
         setContentView(root);
         root.requestFocus();
-        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, prefs().getInt("launcher_tab", TAB_PLAY)));
+        int savedTab = prefs().getInt("launcher_tab", TAB_PLAY);
+        if (!prefs().getBoolean("tabs_without_audio", false)) {
+            // 1.2.0 dropped the Áudio tab (index 2): the tab last shown by an earlier version moved one place back
+            final int[] moved = {0, 1, 1, 2, 3, 4, 5};
+            if (savedTab >= 0 && savedTab < moved.length) savedTab = moved[savedTab];
+            prefs().edit().putBoolean("tabs_without_audio", true).putInt("launcher_tab", savedTab).apply();
+        }
+        currentTab = Math.max(0, Math.min(TAB_NAMES.length - 1, savedTab));
         showTab(currentTab);
     }
 
@@ -712,13 +720,7 @@ public final class LauncherActivity extends Activity {
                 choiceRows(st, GRAPHICS, Settings.SCALE, Settings.ASPECT, Settings.FRAME_RATE, Settings.VSYNC, Settings.FPS_COUNTER);
                 section("QUALIDADE");
                 presetItem = presetRow(st);
-                choiceRows(st, GRAPHICS, Settings.TEXTURE_FILTER, Settings.ANISOTROPY, Settings.FXAA, Settings.DITHERING, Settings.DRAW_DISTANCE);
-                break;
-            case TAB_AUDIO:
-                tabAbout = T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
-                        + T("Driver e buffer também estão no jogo: Opções → android settings.");
-                section("SAÍDA DE ÁUDIO");
-                for (Choice c : AUDIO) choiceRow(st, c);
+                choiceRows(st, GRAPHICS, Settings.ANISOTROPY, Settings.FXAA, Settings.DITHERING, Settings.DRAW_DISTANCE);
                 break;
             case TAB_CONTROLS:
                 tabAbout = "Os analógicos mudam na hora, também pelo jogo (Opções → android settings).";
@@ -807,7 +809,6 @@ public final class LauncherActivity extends Activity {
             this::confirmRestoreGraphics);
         actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", this::confirmRestore);
         section("APLICATIVO");
-        actionRow("Ícone personalizado", "Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", this::chooseIconImage);
         actionRow("Licenças de código aberto", "Os projetos em que este port se baseia e as suas licenças", () -> dialog(T("Licenças de código aberto"),
             T("Este port usa código de projetos de código aberto, cujas licenças pedem que o aviso de copyright acompanhe as cópias:\n\n")
                 + "• TwinsanityEvolved — MIT License, Copyright (c) 2026 the TwinsanityEvolved contributors\n"
@@ -863,7 +864,6 @@ public final class LauncherActivity extends Activity {
             this::runChecks);
         actionRow("Teste do ambiente", "Carrega as bibliotecas nativas e testa fibers, armazenamento, imagem do disco e OpenGL ES, sem o jogo.",
             () -> startActivity(new Intent(this, ProbeActivity.class)));
-        actionRow("Teste do SDL", "Abre a janela, o controle e o áudio do SDL sem a ISO.", this::startSdlTest);
         section("OPÇÕES");
         final boolean diag = prefs().getBoolean("diagnostic_mode", false);
         Item mode = row("Modo diagnóstico", "Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
@@ -1057,81 +1057,6 @@ public final class LauncherActivity extends Activity {
                 when.format(new java.util.Date(sv.modified)), false);
             it.help = T("A apaga este save (um backup automático é feito antes).\n\n") + it.help;
             it.onA = () -> confirmDeleteSave(sv);
-        }
-    }
-
-    // ---- the custom icon: a pinned home-screen shortcut with the player's picture (ShortcutManager). Android gives an app
-    // no way to change its own icon in the app list to an arbitrary picture; a pinned shortcut is the supported way, and
-    // picking again updates the shortcut already pinned. The picture is cropped to a square and handed to the launcher.
-    private static final String ICON_SHORTCUT = "custom_icon";
-
-    private void chooseIconImage() {
-        if (Build.VERSION.SDK_INT < 26) {
-            dialog(T("Ícone personalizado"), T("Precisa do Android 8 ou mais novo."), null, new String[] {T("OK")}, 0, 0, null);
-            return;
-        }
-        android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
-        if (sm == null || !sm.isRequestPinShortcutSupported()) {
-            dialog(T("Ícone personalizado"), T("A tela inicial deste aparelho não aceita atalhos fixados. Troque de launcher (ex.: o padrão do Android) e tente de novo."),
-                null, new String[] {T("OK")}, 0, 0, null);
-            return;
-        }
-        Intent i = new Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*");
-        launchPicker(i, REQUEST_ICON_IMAGE);
-    }
-
-    private void makeIconShortcut(final Uri uri) {
-        io.execute(() -> {
-            android.graphics.Bitmap icon = null;
-            String err = null;
-            try {
-                android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
-                o.inJustDecodeBounds = true;
-                try (InputStream in = getContentResolver().openInputStream(uri)) { android.graphics.BitmapFactory.decodeStream(in, null, o); }
-                int sample = 1;
-                while (Math.min(o.outWidth, o.outHeight) / (sample * 2) >= 432) sample *= 2;
-                o = new android.graphics.BitmapFactory.Options();
-                o.inSampleSize = sample;
-                android.graphics.Bitmap b;
-                try (InputStream in = getContentResolver().openInputStream(uri)) { b = android.graphics.BitmapFactory.decodeStream(in, null, o); }
-                if (b == null) throw new java.io.IOException(T("não é uma imagem que o Android consiga abrir"));
-                int side = Math.min(b.getWidth(), b.getHeight());
-                android.graphics.Bitmap square = android.graphics.Bitmap.createBitmap(b, (b.getWidth() - side) / 2, (b.getHeight() - side) / 2, side, side);
-                icon = android.graphics.Bitmap.createScaledBitmap(square, 432, 432, true);
-            } catch (Exception e) {
-                err = e.getMessage();
-            }
-            final android.graphics.Bitmap made = icon;
-            final String why = err;
-            runOnUiThread(() -> pinIconShortcut(made, why));
-        });
-    }
-
-    private void pinIconShortcut(android.graphics.Bitmap bitmap, String err) {
-        if (bitmap == null || Build.VERSION.SDK_INT < 26) {
-            Toast.makeText(this, T("Não foi possível usar a imagem: ") + err, Toast.LENGTH_LONG).show();
-            return;
-        }
-        try {
-            android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
-            // (through IconShortcutActivity: a pinned shortcut is started with CLEAR_TASK, which would end a game in progress)
-            Intent open = new Intent(this, IconShortcutActivity.class).setAction(Intent.ACTION_MAIN);
-            android.content.pm.ShortcutInfo info = new android.content.pm.ShortcutInfo.Builder(this, ICON_SHORTCUT)
-                .setShortLabel(getApplicationInfo().loadLabel(getPackageManager()).toString())
-                .setIcon(android.graphics.drawable.Icon.createWithAdaptiveBitmap(bitmap))
-                .setIntent(open)
-                .build();
-            boolean pinned = false;
-            for (android.content.pm.ShortcutInfo s : sm.getPinnedShortcuts()) pinned |= ICON_SHORTCUT.equals(s.getId());
-            if (pinned) {
-                sm.updateShortcuts(java.util.Collections.singletonList(info));
-                Toast.makeText(this, T("Ícone do atalho atualizado"), Toast.LENGTH_LONG).show();
-            } else {
-                sm.requestPinShortcut(info, null);   // the home screen asks the player to place it
-            }
-            Diag.log(this, "main", "custom icon: shortcut " + (pinned ? "updated" : "requested"));
-        } catch (Exception e) {
-            Toast.makeText(this, T("Não foi possível criar o atalho: ") + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
@@ -1471,7 +1396,7 @@ public final class LauncherActivity extends Activity {
 
     private int presetNow(Settings st) {
         for (int i = 0; i < PRESETS.length; i++) {
-            if (st.get(Settings.SCALE, "1").equals(PRESETS[i][2]) && st.get(Settings.TEXTURE_FILTER, "bilinear").equals("bilinear") && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
+            if (st.get(Settings.SCALE, "1").equals(PRESETS[i][2]) && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
                     && st.get(Settings.DRAW_DISTANCE, "original").equals(PRESETS[i][1]) && st.get(Settings.FXAA, "off").equals("off")
                     && st.get(Settings.DITHERING, "off").equals("off"))
                 return i;
@@ -1488,7 +1413,6 @@ public final class LauncherActivity extends Activity {
             int now = presetNow(st);
             int next = now == 3 ? (d > 0 ? 0 : 2) : (now + d + 3) % 3;
             st.set(Settings.SCALE, PRESETS[next][2]);
-            st.set(Settings.TEXTURE_FILTER, "bilinear");
             st.set(Settings.ANISOTROPY, PRESETS[next][0]);
             st.set(Settings.DRAW_DISTANCE, PRESETS[next][1]);
             st.set(Settings.FXAA, "off");
@@ -1517,13 +1441,13 @@ public final class LauncherActivity extends Activity {
 
     private void confirmRestore() {
         dialog(T("Restaurar configurações padrão?"),
-            T("Widescreen 16:9, VSync ligado, filtro bilinear, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, OpenSL ES com ")
-                + T("buffer 2048, analógicos no padrão. A ISO e os saves não mudam; a opção widescreen do jogo fica no save (Opções → Opções gráficas)."),
+            T("Proporção 16:9, VSync ligado, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, ")
+                + T("analógicos no padrão. A ISO e os saves não mudam."),
             null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
                 if (w != 0) return;
                 Settings st = new Settings(this);
                 boolean ok = true;
-                for (Choice[] group : new Choice[][] {GRAPHICS, AUDIO, CONTROLS})
+                for (Choice[] group : new Choice[][] {GRAPHICS, CONTROLS})
                     for (Choice c : group) ok &= st.set(c.key, c.def);
                 Haptics.refresh(this);
                 Diag.log(this, "main", "settings restored to the defaults (" + (ok ? "written" : "NOT all written") + ")");
@@ -1643,13 +1567,6 @@ public final class LauncherActivity extends Activity {
         startActivity(i);
     }
 
-    private void startSdlTest() {
-        Diag.log(this, "main", "starting the SDL test (no game)");
-        Intent i = new Intent(this, MainActivity.class);
-        i.putExtra(MainActivity.EXTRA_SDL_TEST, true);
-        startActivity(i);
-    }
-
     private String describeStage(String proc, String label) {
         File f = new File(Diag.logsDir(this), "stage-" + proc + ".txt");
         String s = Diag.readFile(f, 2000);
@@ -1706,8 +1623,7 @@ public final class LauncherActivity extends Activity {
                  .append("  imagem pelo seletor do Android para o seu armazenamento privado, sem pedir permissões de armazenamento.\n");
         }
         Settings st = new Settings(this);
-        b.append("\nÁUDIO: buffer ").append(st.get(Settings.AUDIO_BUFFER, "2048")).append(" frames, driver ")
-         .append(st.get(Settings.AUDIO_DRIVER, DEFAULT_AUDIO_DRIVER)).append(" (").append(st.file()).append(")\n");
+        b.append("\nÁUDIO: OpenSL ES, buffer 2048 frames (").append(st.file()).append(")\n");
         b.append("MODO DIAGNÓSTICO: ").append(prefs().getBoolean("diagnostic_mode", false) ? "ligado" : "desligado").append('\n');
         b.append('\n').append("ÚLTIMAS EXECUÇÕES\n");
         b.append(describeStage("game", "  jogo / teste SDL"));
@@ -1754,11 +1670,6 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
-        if (requestCode == REQUEST_ICON_IMAGE) {
-            pickerOpen = false;
-            if (resultCode == RESULT_OK && data != null && data.getData() != null) makeIconShortcut(data.getData());
-            return;
-        }
         if (requestCode == REQUEST_EXPORT_TOOLS) {
             pickerOpen = false;
             if (resultCode == RESULT_OK && data != null && data.getData() != null) exportTools(data.getData());
