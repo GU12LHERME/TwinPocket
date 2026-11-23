@@ -207,6 +207,7 @@ void DrawShaped(Font* game, const Font* language, const TextItem* item, TextPack
             }
 
             Material* material = font->materials[page]->material;
+            const u32 spaceIndex = GameGlyphIndex(game, ' ');
             s32 quads = 0;
             f32 y = cursor.y;
             for (s32 line = 0; line < g_Laid.lineCount; line++)
@@ -226,7 +227,11 @@ void DrawShaped(Font* game, const Font* language, const TextItem* item, TextPack
                     const Vector4& glyph = g_MetricsFonts[shaped.font]->glyphs[shaped.index];
                     f32 right = glyphX + glyph.z * size.x;
                     f32 bottom = lineY + glyph.w * size.y;
-                    if (shaped.font == which && static_cast<s32>(GlyphPage(glyph)) == page + 1)
+                    // the game font's space: nothing to draw, only its advance -- its quad sampled the font page's columns
+                    // next to the space's cell, a thin vertical line between the words under a filtered sampler (the
+                    // half-texel inset of te_glyph_texels.h made it fainter, not gone; the RP6, 0.25.1)
+                    const bool space = shaped.font == te::text::kFontGame && static_cast<u32>(shaped.index) == spaceIndex;
+                    if (!space && shaped.font == which && static_cast<s32>(GlyphPage(glyph)) == page + 1)
                     {
                         te_gfx_text_quad& quad = g_Quads[quads++];
                         quad.x0 = glyphX;

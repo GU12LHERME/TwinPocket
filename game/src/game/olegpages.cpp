@@ -469,6 +469,47 @@ MenuPage* ActionItem::Activate(u32 player, MenuPage* page)
     return MenuItem::Activate(player, page);
 }
 
+// TwinsanityEvolved: the platform's "return to launcher" action (Android: android settings' last row) on the main menu
+// too, after Options -- the same row (its id, its two-press confirmation, its label); nothing where the platform has none
+static void SyncActionRows(MenuPage* page, u32 player, bool cancelAll);
+static void AddReturnToLauncherRow(MenuPage* owner)
+{
+    u32 settings = Platform::Graphics::DisplaySettingCount();
+    for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
+    {
+        if (Platform::Graphics::DisplaySettingKind(setting) != 1 || Platform::Graphics::DisplaySettingPage(setting) != 1)
+        {
+            continue;
+        }
+
+        char label[DisplaySettingLabelSize];
+        Platform::Graphics::DisplaySettingLabel(setting, label, DisplaySettingLabelSize);
+        const char want[] = "return to launcher";
+        bool match = true;
+        for (u32 i = 0; i + 1 < sizeof(want); i++)
+        {
+            if (label[i] != want[i])
+            {
+                match = false;
+                break;
+            }
+        }
+
+        if (!match)
+        {
+            continue;
+        }
+
+        ActionItem* action = ActionItem::Construct(Allocate<ActionItem>(), 0, DisplaySettingItem(setting),
+                                                   ActionPlatformSetting | setting);
+        auto* text = static_cast<char*>(MemoryAllocate2(DisplaySettingLabelSize));
+        Platform::Graphics::DisplaySettingLabel(setting, text, DisplaySettingLabelSize);
+        action->text = text;
+        owner->Add(action);
+        return;
+    }
+}
+
 MainMenuPage* MainMenuPage::Construct(MainMenuPage* page)
 {
     OlegPage::Construct(page, MainMenuTitle, &g_ResumePage);
@@ -484,6 +525,7 @@ MainMenuPage* MainMenuPage::Construct(MainMenuPage* page)
     page->Add(newGame);
     page->Add(loadGame);
     page->Add(options);
+    AddReturnToLauncherRow(page);
     return page;
 }
 
@@ -495,8 +537,10 @@ void MainMenuPage::Destroy(u32 flags)
     MenuPage::Destroy(flags);
 }
 
-void MainMenuPage::Frame(u32, MenuInput*, MenuSounds*)
+void MainMenuPage::Frame(u32 player, MenuInput*, MenuSounds*)
 {
+    // TwinsanityEvolved: the return-to-launcher row's confirmation follows the selection (as on android settings)
+    SyncActionRows(this, player, false);
 }
 
 ScreenPositionPage* ScreenPositionPage::Construct(ScreenPositionPage* page, MenuPage* parent)

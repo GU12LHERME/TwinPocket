@@ -1172,6 +1172,11 @@ int AppLifecycleWatch(void*, SDL_Event* e) {
         case SDL_APP_DIDENTERFOREGROUND:
             if (g.surface_lost.load(std::memory_order_acquire)) {
                 PostRender([] {
+                    // released first: SDL_GL_MakeCurrent returns at once when the thread already has this window and
+                    // context ("already current" by SDL's own bookkeeping) -- the rebind alone never reached EGL and the
+                    // context stayed on the destroyed surface (0.25.1). Released, the bind goes to eglMakeCurrent with the
+                    // window's new surface, as SDL's own restore does on its pumping thread.
+                    ps2e_draw_bind_thread(g.dev, 0);
                     const bool bound = ps2e_draw_bind_thread(g.dev, 1) != 0;
                     g.surface_lost.store(false, std::memory_order_release);
                     std::fprintf(stderr, "[te.gfx] the app back in the foreground: the render thread's context on the new surface %s "
