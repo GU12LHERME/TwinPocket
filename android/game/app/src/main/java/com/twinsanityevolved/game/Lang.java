@@ -272,6 +272,21 @@ final class Lang {
         e("desligado", "off");
         e("Registra as mensagens da GPU e os analógicos e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
           "Logs the GPU's messages and the sticks and lets L3 + R3 capture a frame (leave it off to play)");
+        e("Relatório de diagnóstico", "Diagnostic report");
+        e("Os logs da última execução: compartilhar como arquivo de texto ou copiar", "The last run's logs: share as a text file or copy");
+        e("Compartilhar envia um arquivo de texto; copiar põe o mesmo texto na área de transferência.",
+          "Share sends a text file; copy puts the same text on the clipboard.");
+        e("Compartilhar", "Share");
+        e("Copiar", "Copy");
+        e("Testes sem o jogo", "Tests without the game");
+        e("Bibliotecas nativas e ambiente, ou janela, controle e áudio do SDL, sem a ISO",
+          "Native libraries and environment, or SDL's window, controller and audio, without the ISO");
+        e("Ambiente: carrega as bibliotecas nativas e testa o aparelho. SDL: abre a janela, o controle e o áudio sem a ISO.",
+          "Environment: loads the native libraries and tests the device. SDL: opens the window, the controller and the audio without the ISO.");
+        e("Ambiente", "Environment");
+        e("A última execução terminou de forma inesperada. Veja Sistema → Relatório de diagnóstico.",
+          "The last run ended unexpectedly. See System → Diagnostic report.");
+        e("A última execução travou. Veja Sistema → Relatório de diagnóstico.", "The last run crashed. See System → Diagnostic report.");
         e("Diagnóstico sem o jogo", "Diagnostics without the game");
         e("Carrega as bibliotecas nativas e testa o ambiente", "Loads the native libraries and tests the environment");
         e("Teste do SDL sem o jogo", "SDL test without the game");

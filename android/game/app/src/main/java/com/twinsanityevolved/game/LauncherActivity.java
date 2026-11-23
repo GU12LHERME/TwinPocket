@@ -687,8 +687,12 @@ public final class LauncherActivity extends Activity {
             this::confirmRestoreGraphics);
         actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", this::confirmRestore);
         section("DIAGNÓSTICO");
-        actionRow("Compartilhar relatório", "Um arquivo de texto com os logs da última execução", () -> buildReport(true));
-        actionRow("Copiar relatório", "O mesmo relatório para a área de transferência", () -> buildReport(false));
+        actionRow("Relatório de diagnóstico", "Os logs da última execução: compartilhar como arquivo de texto ou copiar",
+            () -> dialog(T("Relatório de diagnóstico"), T("Compartilhar envia um arquivo de texto; copiar põe o mesmo texto na área de transferência."),
+                null, new String[] {T("Compartilhar"), T("Copiar"), T("Cancelar")}, 0, 2, w -> {
+                    if (w == 0) buildReport(true);
+                    else if (w == 1) buildReport(false);
+                }));
         final boolean diag = prefs().getBoolean("diagnostic_mode", false);
         Item mode = row("Modo diagnóstico", "Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
                 T(diag ? "Ligado" : "Desligado"), false);
@@ -697,8 +701,12 @@ public final class LauncherActivity extends Activity {
             Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
             rebuild();
         };
-        actionRow("Diagnóstico sem o jogo", "Carrega as bibliotecas nativas e testa o ambiente", () -> startActivity(new Intent(this, ProbeActivity.class)));
-        actionRow("Teste do SDL sem o jogo", "Abre a janela, o controle e o áudio sem a ISO", this::startSdlTest);
+        actionRow("Testes sem o jogo", "Bibliotecas nativas e ambiente, ou janela, controle e áudio do SDL, sem a ISO",
+            () -> dialog(T("Testes sem o jogo"), T("Ambiente: carrega as bibliotecas nativas e testa o aparelho. SDL: abre a janela, o controle e o áudio sem a ISO."),
+                null, new String[] {T("Ambiente"), T("SDL"), T("Cancelar")}, 0, 2, w -> {
+                    if (w == 0) startActivity(new Intent(this, ProbeActivity.class));
+                    else if (w == 1) startSdlTest();
+                }));
         section("APLICATIVO");
         actionRow("Ícone personalizado", "Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", this::chooseIconImage);
         actionRow("Licenças de código aberto", "Os projetos em que este port se baseia e as suas licenças", () -> dialog(T("Licenças de código aberto"),
@@ -1319,9 +1327,9 @@ public final class LauncherActivity extends Activity {
         s = s.trim();
         if (s.startsWith("running")) {
             if (Diag.processAlive(this, "game")) return new String[] {"O jogo está em execução.", null};
-            return new String[] {"A última execução terminou de forma inesperada. Veja Sistema → Compartilhar relatório.", "bad"};
+            return new String[] {"A última execução terminou de forma inesperada. Veja Sistema → Relatório de diagnóstico.", "bad"};
         }
-        if (s.startsWith("crash")) return new String[] {"A última execução travou. Veja Sistema → Compartilhar relatório.", "bad"};
+        if (s.startsWith("crash")) return new String[] {"A última execução travou. Veja Sistema → Relatório de diagnóstico.", "bad"};
         return new String[] {"A última execução terminou normalmente.", null};
     }
 
