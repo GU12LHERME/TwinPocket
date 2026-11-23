@@ -2,6 +2,15 @@ TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
 
+VERSÃO 1.5.0 — 23/11/2026
+- Identificador novo: com.twinsanitypocket.android, com assinatura fixa. A partir desta
+  versão toda atualização instala por cima, mantendo saves, configurações e a ISO.
+- Por ser um app novo para o Android, a 1.5.0 aparece ao lado da versão antiga:
+    1. no app antigo: Saves → Exportar (gera um .zip com os saves);
+    2. instale a 1.5.0, abra, Saves → Importar e escolha o .zip;
+    3. Jogar → Selecionar a ISO ou o CHD de novo e ajuste os gráficos;
+    4. confirme que está tudo certo e só então desinstale o app antigo.
+
 VERSÃO 1.4.0 — 23/11/2026
 - Relatório de desempenho ampliado (Ferramentas → Desempenho, relatório completo e
   histórico de sessões), com mínimo, média e máximo:

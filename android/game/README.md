@@ -19,21 +19,25 @@ mkdir -p jni/arm64-v8a && cp build-android-arm64-game/libmain.so build-android-d
 gradle -p android/game -Psdl2SourceDir=<SDL2 source> -PnativeLibsDir=$PWD/jni assembleDebug
 ```
 
-## Identifiers that stay as they are
+## Identity, signing and updates
 
-The port's name changed (TwinsanityEvolved → Crash Twinsanity → Twinsanity Pocket); these did not, so updates install
-over the previous version and keep its saves, settings and disc image:
+Since 1.5.0 the application id is `com.twinsanitypocket.android` and every APK is signed with one fixed key, so each new
+version installs over the previous one and keeps its saves, settings and disc image. The earlier ids
+(`com.twinsanityevolved.game`, then `com.crashtwinsanity.android`) were signed by a throw-away key per CI run; to Android
+they are other apps: their saves come over with Saves → Exportar in the old app and Saves → Importar in this one.
 
-- the application id `com.crashtwinsanity.android` (the app's data folders are named after it);
+The key lives only in the repository's Actions secrets `TP_KEYSTORE_B64` (the PKCS12 keystore, base64) and
+`TP_KEYSTORE_PASSWORD` (alias `twinsanitypocket`); `build.gradle` signs with it when `TP_KEYSTORE` names the file, and the
+workflow refuses an APK whose certificate is not SHA-256 `0b8284df…21820fac`. A local build without the key is signed with
+Gradle's debug key (it will not install over a CI build). Losing the key means the next version cannot update the
+installed one: keep the owner's backup of the keystore.
+
+What else stays as it was:
+
 - the Java package `com.twinsanityevolved.game` (the launcher's component name, which home screens keep for the icon,
   and the JNI symbol `Java_com_twinsanityevolved_game_TeDiag_nativeProbe`);
 - the data paths: `files/game/` (ps2r.ini and the memory cards), `files/disc/twinsanity.iso|chd`, `files/logs/`,
   the shared preferences `twinsanity`, and the runner's `<home>/.twinsanityevolved` lookup;
-- the signing: the APK is signed by Gradle's debug configuration on the CI runner (the workflow prints the
-  certificate's SHA-256 in `apk-signing.log`).
-
-`-PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)"` builds the migration APK
-(`TwinsanityPocket-migracao-id-antigo.apk`), installed over the first app id to export its saves.
 
 No game data is in the APK or the repository: the player picks their own ISO or CHD with **Selecionar** (Android's
 document picker, no storage permission); it is copied into the app's private `files/disc/`.

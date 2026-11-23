@@ -351,6 +351,10 @@ jobs:
 
       - name: Package the APK (android/game)
         shell: bash
+        env:
+          # the fixed signing key (since 1.5.0): repository secrets, never in the tree (build.gradle: signingConfigs.pocket)
+          TP_KEYSTORE_B64: ${{ secrets.TP_KEYSTORE_B64 }}
+          TP_KEYSTORE_PASSWORD: ${{ secrets.TP_KEYSTORE_PASSWORD }}
         run: |
           set -euo pipefail
           jni="$RUNNER_TEMP/jniLibs"
@@ -371,11 +375,18 @@ jobs:
             echo "MEASURE  libmain.so sections (built):"
             "$NDK_LLVM/llvm-size" -A "$BUILD_DIR/libmain.so" | awk 'NR>2 && $2>1000000 {printf "           %-22s %12d\n", $1, $2}'
           } | tee -a "$LOG_DIR/measurements.txt"
-          # whether the runner had a debug keystore before this build (otherwise Gradle makes a new one: a new certificate)
-          if [ -f "$HOME/.android/debug.keystore" ]; then echo "debug keystore before the build: present (from the runner image)"
-          else echo "debug keystore before the build: absent (Gradle creates one)"; fi | tee "$LOG_DIR/apk-signing-origin.log"
+          # THE SIGNING KEY: written from the secrets for this build only (outside the tree and the uploaded files). Without
+          # them the build stops: an APK signed by a runner's throw-away key would not install over the previous one.
+          if [ -z "${TP_KEYSTORE_B64:-}" ] || [ -z "${TP_KEYSTORE_PASSWORD:-}" ]; then
+            echo "FAIL  the signing secrets TP_KEYSTORE_B64 / TP_KEYSTORE_PASSWORD are not set in the repository (Settings -> Secrets and variables -> Actions)"
+            exit 1
+          fi
+          export TP_KEYSTORE="$RUNNER_TEMP/twinsanity-pocket.keystore"
+          printf '%s' "$TP_KEYSTORE_B64" | base64 -d > "$TP_KEYSTORE"
+          test -s "$TP_KEYSTORE"
           gradle --no-daemon --stacktrace -p android/game assembleDebug \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
+          rm -f "$TP_KEYSTORE"
 
       - name: Verify the APK (package, native code, no game data)
         shell: bash
@@ -384,7 +395,7 @@ jobs:
           apk="android/game/app/build/outputs/apk/debug/app-debug.apk"
           test -s "$apk"
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" | tee "$LOG_DIR/apk-badging.log"
-          grep -q "package: name='com.crashtwinsanity.android'" "$LOG_DIR/apk-badging.log"
+          grep -q "package: name='com.twinsanitypocket.android'" "$LOG_DIR/apk-badging.log"
           grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
           grep -q "launchable-activity: name='com.twinsanityevolved.game.LauncherActivity'" "$LOG_DIR/apk-badging.log"
           grep -q "application-label:'Twinsanity Pocket'" "$LOG_DIR/apk-badging.log"
@@ -402,11 +413,15 @@ jobs:
             echo "FAIL  orientation: $n_land activities in fixed landscape (expected 3), $n_other otherwise"; exit 1
           fi
           echo "PASS  manifest: launcher, game and diagnostics fixed in landscape (no sensor rotation)" | tee -a "$LOG_DIR/libmain-evidence.txt"
-          # the signing certificate (Gradle's debug configuration on this runner): printed so that two builds can be compared
-          # -- an update installs over the previous APK only when both carry the same certificate
-          if [ -f "$HOME/.android/debug.keystore" ]; then echo "debug keystore: $HOME/.android/debug.keystore" > "$LOG_DIR/apk-signing.log"; fi
-          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/apksigner" verify --print-certs "$apk" 2>&1 | tee -a "$LOG_DIR/apk-signing.log"
-          grep -q 'certificate SHA-256 digest' "$LOG_DIR/apk-signing.log"
+          # the signing certificate: the fixed key's, and no other -- an update installs over the previous APK only when both
+          # carry the same certificate (the key made on 2026-11-23 for 1.5.0; its SHA-256 below)
+          expected_cert="0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac"
+          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/apksigner" verify --print-certs "$apk" 2>&1 | tee "$LOG_DIR/apk-signing.log"
+          if grep -q "certificate SHA-256 digest: $expected_cert" "$LOG_DIR/apk-signing.log"; then
+            echo "PASS  signed with the fixed Twinsanity Pocket key (SHA-256 $expected_cert): installs over 1.5.0 and later" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          else
+            echo "FAIL  the APK is not signed with the fixed key (expected SHA-256 $expected_cert)"; exit 1
+          fi
           unzip -p "$apk" 'classes*.dex' > "$RUNNER_TEMP/classes.dex"
           for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag Telemetry; do
             grep -aq "com/twinsanityevolved/game/$cls" "$RUNNER_TEMP/classes.dex" || { echo "FAIL  class $cls not in the dex"; exit 1; }
@@ -437,20 +452,12 @@ jobs:
           fi
           sha256sum "$apk" | tee "$LOG_DIR/apk-sha256.txt"
 
-      - name: Package the migration APK (the old app id, to export the old app's saves)
+      - name: Collect the APK
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p android-game-out
           cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/TwinsanityPocket.apk
-          jni="$RUNNER_TEMP/jniLibs"   # the native libraries the main APK was packaged from
-          test -s "$jni/arm64-v8a/libmain.so"
-          gradle --no-daemon -p android/game assembleDebug \
-            -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" \
-            -PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)" 2>&1 | tail -5 | tee "$LOG_DIR/gradle-migration.log"
-          "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging android/game/app/build/outputs/apk/debug/app-debug.apk | grep -E "^package:|application-label:" | tee -a "$LOG_DIR/gradle-migration.log"
-          grep -q "package: name='com.twinsanityevolved.game'" "$LOG_DIR/gradle-migration.log"
-          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/TwinsanityPocket-migracao-id-antigo.apk
           ls -la android-game-out
 
       - name: Upload APK, libmain.so and evidence

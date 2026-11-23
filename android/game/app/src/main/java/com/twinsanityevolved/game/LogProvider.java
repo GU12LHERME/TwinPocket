@@ -16,7 +16,7 @@ import java.io.FileNotFoundException;
  * granted per share through FLAG_GRANT_READ_URI_PERMISSION. Not exported: nothing else can open it unasked.
  */
 public final class LogProvider extends ContentProvider {
-    // the manifest's ${applicationId}.logs: the app id of this build (the main one or the migration build)
+    // the manifest's ${applicationId}.logs: the app id of this build
     static Uri uriFor(android.content.Context c, String name) {
         return Uri.parse("content://" + c.getPackageName() + ".logs/" + name);
     }

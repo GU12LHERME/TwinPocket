@@ -21,16 +21,38 @@ android {
     compileSdk 35
 
     defaultConfig {
-        // -PappId=com.twinsanityevolved.game -PappLabel="Twinsanity Pocket (antigo)": the migration build, installed over the
-        // old app (the first id, com.twinsanityevolved.game) to export its saves (CI builds it beside the main APK)
-        applicationId(project.findProperty("appId") ?: "com.crashtwinsanity.android")
-        manifestPlaceholders = [appLabel: (project.findProperty("appLabel") ?: "Twinsanity Pocket")]
+        // the application id since 1.5.0 (before: com.crashtwinsanity.android, and com.twinsanityevolved.game before that --
+        // other apps to Android: their saves come over through Saves -> Exportar / Importar)
+        applicationId "com.twinsanitypocket.android"
+        manifestPlaceholders = [appLabel: "Twinsanity Pocket"]
         minSdk 24
         targetSdk 33
         versionCode 55
         versionName "1.4.0"
         ndk {
             abiFilters "arm64-v8a"
+        }
+    }
+
+    // THE SIGNING KEY (since 1.5.0): one fixed key, so that every new APK installs over the previous one (Android refuses an
+    // update signed by another certificate). The key never enters the repository: CI writes it from the repository's
+    // secrets (TP_KEYSTORE_B64, TP_KEYSTORE_PASSWORD) to a file and names it here with TP_KEYSTORE; the workflow checks the
+    // APK's certificate against the key's SHA-256. Without TP_KEYSTORE (a local build) Gradle's own debug key signs.
+    def tpKeystore = System.getenv("TP_KEYSTORE")
+    signingConfigs {
+        if (tpKeystore != null && !tpKeystore.isEmpty()) {
+            pocket {
+                storeFile file(tpKeystore)
+                storePassword System.getenv("TP_KEYSTORE_PASSWORD")
+                keyAlias "twinsanitypocket"
+                keyPassword System.getenv("TP_KEYSTORE_PASSWORD")
+                storeType "pkcs12"
+            }
+        }
+    }
+    buildTypes {
+        debug {
+            if (tpKeystore != null && !tpKeystore.isEmpty()) signingConfig signingConfigs.pocket
         }
     }
 

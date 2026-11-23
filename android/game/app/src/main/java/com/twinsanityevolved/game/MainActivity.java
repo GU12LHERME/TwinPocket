@@ -17,7 +17,7 @@ import org.libsdl.app.SDLActivity;
  * here ends this process only: the launcher, in the app's main process, shows what the run reached.
  */
 public final class MainActivity extends SDLActivity {
-    static final String EXTRA_ISO = "com.crashtwinsanity.android.ISO";
+    static final String EXTRA_ISO = "com.twinsanitypocket.android.ISO";
     // the power / heat / refresh sampler (Telemetry.java): runs while the game is in front, every 10 s
     private Telemetry telemetry;
 
