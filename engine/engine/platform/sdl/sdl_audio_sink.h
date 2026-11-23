@@ -46,6 +46,14 @@ public:
     void SetPaused(bool paused);
     bool Paused() const { return device_ != 0 && paused_; }
 
+    // Muted (any thread; the Android app in the background): the device keeps running but hands the speakers silence --
+    // the first muted buffer fades the live audio out, the ring is still pulled (nothing stale piles up in it), and the
+    // device's own queue fills with silence instead of keeping the last real buffers (a pause kept them: back in front
+    // they played first, ~40-80 ms of audio from before the pause, then a gap). Unmuted, silence goes on until the ring
+    // holds a whole buffer of new audio (no tail pad of old audio), which comes in with a short fade.
+    void SetMuted(bool muted) { muted_.store(muted, std::memory_order_release); }
+    bool Muted() const { return muted_.load(std::memory_order_acquire); }
+
     bool Running() const;
 
     // A listener of every buffer handed to the device (interleaved stereo float, `frames` frames), called on the device
@@ -83,6 +91,8 @@ private:
     uint32_t       device_        = 0;        // SDL_AudioDeviceID; 0 = closed
     bool           audio_subsystem_ = false;  // SDL_INIT_AUDIO held by this sink
     bool           paused_ = false;
+    std::atomic<bool> muted_{false};
+    int            mute_state_ = 0;         // the device thread's own: 0 playing, 1 muted (faded out), 2 waiting for new audio
     AudioPullRing* ring_          = nullptr;
     Tap            tap_           = nullptr;
     void*          tap_user_      = nullptr;

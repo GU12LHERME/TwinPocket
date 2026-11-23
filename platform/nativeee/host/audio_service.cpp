@@ -34,10 +34,12 @@ bool g_lifecycle_watch = false;
 int AudioLifecycleWatch(void*, SDL_Event* e) {
     ps2r::platform::sdl::SdlAudioSink* sink = g_lifecycle_sink.load(std::memory_order_acquire);
     if (!sink) return 0;
+    // muted, not paused (sdl_audio_sink.h SetMuted): a pause kept the device's last real buffers queued, and back in front
+    // they played first -- ~40-80 ms of audio from before the pause, then a gap (the RP6, 0.27.0)
     if (e->type == SDL_APP_WILLENTERBACKGROUND || e->type == SDL_APP_DIDENTERBACKGROUND) {
-        sink->SetPaused(true);
+        sink->SetMuted(true);
     } else if (e->type == SDL_APP_DIDENTERFOREGROUND) {
-        sink->SetPaused(false);
+        sink->SetMuted(false);
     }
     return 0;
 }

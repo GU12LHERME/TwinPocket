@@ -3,7 +3,9 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <chrono>
+#include <cstring>
 #include <cstdio>
 #include <cstdlib>
 
@@ -71,7 +73,34 @@ void SdlAudioSink::Callback(void* userdata, uint8_t* stream, int len) {
     }
     self->last_callback_ns_ = t0;
     if (self->refill_) self->refill_(self->refill_user_, frames);   // the owner's wall-clocked producer, if any
-    self->ring_->Pull(out, frames);
+    const int samples = frames * AudioPullRing::kChannels;
+    if (self->muted_.load(std::memory_order_acquire)) {
+        self->ring_->Pull(out, frames);   // still drained: what the game makes meanwhile is not kept for later
+        if (self->mute_state_ == 0) {     // the first muted buffer: the live audio faded out over it (no click)
+            for (int i = 0; i < frames; ++i) {
+                const float g = 1.0f - float(i + 1) / float(frames);
+                for (int c = 0; c < AudioPullRing::kChannels; ++c) out[i * AudioPullRing::kChannels + c] *= g;
+            }
+        } else {
+            std::memset(out, 0, static_cast<size_t>(samples) * sizeof(float));
+        }
+        self->mute_state_ = 1;
+    } else if (self->mute_state_ != 0) {
+        if (self->ring_->Available() < frames) {   // back, but no whole buffer of new audio yet: silence, not an old pad
+            std::memset(out, 0, static_cast<size_t>(samples) * sizeof(float));
+            self->mute_state_ = 2;
+        } else {
+            self->ring_->Pull(out, frames);
+            const int ramp = std::min(frames, std::max(1, self->got_freq_ / 100));   // ~10 ms fade in
+            for (int i = 0; i < ramp; ++i) {
+                const float g = float(i + 1) / float(ramp);
+                for (int c = 0; c < AudioPullRing::kChannels; ++c) out[i * AudioPullRing::kChannels + c] *= g;
+            }
+            self->mute_state_ = 0;
+        }
+    } else {
+        self->ring_->Pull(out, frames);
+    }
     if (self->tap_) self->tap_(self->tap_user_, out, frames);
     const uint64_t cb_us = (NowNs() - t0) / 1000;
     if (cb_us > self->max_callback_us_.load(std::memory_order_relaxed)) self->max_callback_us_.store(uint32_t(cb_us), std::memory_order_relaxed);
