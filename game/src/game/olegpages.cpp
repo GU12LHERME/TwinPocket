@@ -922,12 +922,49 @@ static void SyncActionRows(MenuPage* page, u32 player, bool cancelAll)
     }
 }
 
+// TwinsanityEvolved: the platform's shape row the game's widescreen option follows (DisplaySettingKind 2: choice 0 4:3,
+// 1 16:9; the Android port), or -1. The two drawn apart distorted the picture (4:3 with the option on: a squeezed 16:9
+// picture; 16:9 with it off: a stretched 4:3 one), so the shape decides the option everywhere (SyncWidescreenWithShape,
+// each frame) and the option's row, stepped, decides the shape (GraphicsOptionsPage::Frame).
+static s32 WideShapeSetting()
+{
+    static s32 found = -2;
+    if (found == -2)
+    {
+        found = -1;
+        u32 settings = Platform::Graphics::DisplaySettingCount();
+        for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
+        {
+            if (Platform::Graphics::DisplaySettingKind(setting) == 2)
+            {
+                found = static_cast<s32>(setting);
+                break;
+            }
+        }
+    }
+
+    return found;
+}
+
+extern "C++" void SyncWidescreenWithShape()
+{
+    s32 shape = WideShapeSetting();
+    if (shape >= 0)
+    {
+        g_WidescreenTv = Platform::Graphics::DisplaySettingValue(static_cast<u32>(shape)) == 1 ? 1 : 0;
+    }
+}
+
+static u8 g_WidescreenRowShown = 0;
+
 void GraphicsOptionsPage::Entered(u32 player, u32)
 {
+    SyncWidescreenWithShape();
     // TwinsanityEvolved: the platform's own page (the same class) has no widescreen row
     if (MenuItem* widescreen = Find(WidescreenItem))
     {
         widescreen->SetFlag(player, g_WidescreenTv);
+        g_WidescreenRowShown = g_WidescreenTv;
     }
 
     // TwinsanityEvolved: no confirmation is carried into the page from a visit before
@@ -945,6 +982,15 @@ void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
         u8 widescreen;
         widescreenRow->GetFlag(player, &widescreen);
         g_WidescreenTv = widescreen;
+        // TwinsanityEvolved: the option stepped -- the platform's shape follows (16:9 on, 4:3 off) and its row shows it
+        s32 shape = WideShapeSetting();
+        if (shape >= 0 && widescreen != g_WidescreenRowShown)
+        {
+            Platform::Graphics::SetDisplaySetting(static_cast<u32>(shape), widescreen != 0 ? 1u : 0u);
+            SyncDisplaySettingRows(this, player);
+        }
+
+        g_WidescreenRowShown = widescreen;
     }
 
     // TwinsanityEvolved: the action rows' confirmations follow the selection (cancelled off their row), their labels re-read
@@ -967,6 +1013,17 @@ void GraphicsOptionsPage::Frame(u32 player, MenuInput*, MenuSounds*)
             Platform::Graphics::SetDisplaySetting(setting, static_cast<u32>(choice));
             // TwinsanityEvolved: the platform's answer back into every row (a refused value, a dependent row's names)
             SyncDisplaySettingRows(this, player);
+            // TwinsanityEvolved: the shape stepped -- the game's widescreen option follows, and its row shows it
+            if (static_cast<s32>(setting) == WideShapeSetting())
+            {
+                SyncWidescreenWithShape();
+                if (MenuItem* widescreenRow = Find(WidescreenItem))
+                {
+                    widescreenRow->SetFlag(player, g_WidescreenTv);
+                }
+
+                g_WidescreenRowShown = g_WidescreenTv;
+            }
         }
     }
 }

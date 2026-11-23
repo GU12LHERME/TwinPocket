@@ -17,6 +17,8 @@
 #include "game/view.h"
 #include "platform/graphics.h"
 
+void SyncWidescreenWithShape();   // olegpages.cpp
+
 namespace
 {
 // A width over 4:3's
@@ -57,6 +59,9 @@ void ToPixels(Vector2* value)
 
 void StartNextFrame(bool fromInterrupt)
 {
+    // TwinsanityEvolved: the game's widescreen option as the platform's shape says (olegpages.cpp: the launcher, a restored
+    // save or the options page may have changed either)
+    SyncWidescreenWithShape();
     Platform::Graphics::WaitSent();
     Platform::Graphics::SubmitBuckets(fromInterrupt);
 }
