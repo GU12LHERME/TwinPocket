@@ -555,6 +555,16 @@ std::string JStr(JNIEnv* env, jstring s) {
 
 }  // namespace
 
+// TeDiag.nativeLog: a line from Java (the game process's Telemetry sampler, every 10 s) in the game's log, beside the
+// native census lines it is read with
+extern "C" JNIEXPORT void JNICALL Java_com_twinsanityevolved_game_TeDiag_nativeLog(JNIEnv* env, jclass, jstring line) {
+    if (!env || !line) return;
+    const char* text = env->GetStringUTFChars(line, nullptr);
+    if (!text) return;
+    te_android_log("%s", text);
+    env->ReleaseStringUTFChars(line, text);
+}
+
 extern "C" JNIEXPORT jstring JNICALL Java_com_twinsanityevolved_game_TeDiag_nativeProbe(JNIEnv* env, jclass, jstring files_dir,
                                                                                          jstring external_dir) {
     g_probe.clear();

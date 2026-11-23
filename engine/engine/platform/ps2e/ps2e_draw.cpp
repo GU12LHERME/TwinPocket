@@ -3350,6 +3350,19 @@ size_t ps2e_draw_gpu_timer_lines(ps2e_draw* d, double wall_ms, char* out, size_t
     return n;
 }
 
+void ps2e_draw_set_frame_gpu(ps2e_draw* d, int every) {
+    if (d && d->device) d->device->SetOption("frame_gpu", every);
+}
+
+size_t ps2e_draw_frame_gpu_line(ps2e_draw* d, char* out, size_t capacity) {
+    if (!d || !d->device || !out || !capacity) return 0;
+    const std::string line = d->device->FrameGpuLine();
+    const size_t n = std::min(line.size(), capacity - 1);
+    std::memcpy(out, line.data(), n);
+    out[n] = 0;
+    return n;
+}
+
 const char* ps2e_draw_renderer(const ps2e_draw* d) { return d ? d->renderer.c_str() : ""; }
 
 void ps2e_draw_target_size(const ps2e_draw* d, int* w, int* h, int* scale) {

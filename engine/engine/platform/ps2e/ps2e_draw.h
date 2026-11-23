@@ -552,6 +552,10 @@ void ps2e_draw_set_gpu_timers(ps2e_draw* device, int mode);
 int ps2e_draw_gpu_timers_on(const ps2e_draw* device);
 void ps2e_draw_gpu_phase(ps2e_draw* device, int phase);
 size_t ps2e_draw_gpu_timer_lines(ps2e_draw* device, double wall_ms_per_frame, char* out, size_t capacity);
+/* The frame's GPU time (light: one timer query around a whole frame, on 1 frame in `every`; 0 off): set on the drawing
+ * thread's device, and the census window's line ("[te.gfx] gpu frame: ...", or once "unavailable"; 0 bytes when off). */
+void ps2e_draw_set_frame_gpu(ps2e_draw* device, int every);
+size_t ps2e_draw_frame_gpu_line(ps2e_draw* device, char* out, size_t capacity);
 /* The GPU and driver the device draws with, e.g. "Apple M4 / OpenGL 4.1 Metal - 90.5" ("" when not known), and the frame
  * target's physical size and scale as it stands (the internal scale is applied at a frame's start). */
 const char* ps2e_draw_renderer(const ps2e_draw* device);

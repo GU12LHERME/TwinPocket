@@ -1305,6 +1305,14 @@ bool EnsureDevice() {
 #endif
     std::fprintf(stderr, "[te.gfx] %s\n", te::display::Describe().c_str());
     if (g.gpu_timers) ps2e_draw_set_gpu_timers(g.dev, g.gpu_timers);   // (no GL call: the queries are made at the first frame)
+#if defined(__ANDROID__)
+    {
+        // the frame's GPU time for the launcher's performance report: one timer query around 1 frame in 4, read back
+        // later (never waited for); TE_GFX_FRAME_GPU=0 off, =N 1 frame in N. Off by itself while the phase timer runs.
+        const long every = std::getenv("TE_GFX_FRAME_GPU") ? EnvLong("TE_GFX_FRAME_GPU", 4) : 4;
+        ps2e_draw_set_frame_gpu(g.dev, int(std::clamp(every, 0L, 600L)));
+    }
+#endif
     if (te::prof::DrawBenchWanted()) te::prof::DrawBench(g.dev);   // TE_PROF_BENCH=2: before any frame (the GL thread is this one)
     // TE_GFX_MESH_TEXSWAP=0: a mesh draw that differs from the one before in its texture only takes the full path; =1 the
     // short path for a texture change only; 2 (the default) also when the alpha test / mipmapping differ
@@ -4659,6 +4667,59 @@ struct Pace {
 };
 Pace g_pace;
 
+#if defined(__ANDROID__)
+// THE FRAME TIMES of a census window (the Android port's performance report): every gap between two presents in a 0.1 ms
+// histogram up to 100 ms (longer gaps in the last bucket, their exact length in the max), with the sum and the sum of
+// squares -- the average, the minimum and maximum, the median / 95th / 99th percentiles, the jitter (the standard
+// deviation) and the gaps over 1.5x and 2.5x the median (a late frame at the window's own cadence, at 30 as at 60).
+// A present's cost: one increment and three additions; the line is made once a window.
+struct FrameTimes {
+    static constexpr int kBuckets = 1000;
+    uint32_t hist[kBuckets] = {};
+    uint64_t n = 0;
+    double sum = 0, sum2 = 0, min = 0, max = 0;
+    void Note(double ms) {
+        const int b = std::clamp(int(ms * 10.0), 0, kBuckets - 1);
+        ++hist[b];
+        if (n == 0 || ms < min) min = ms;
+        if (n == 0 || ms > max) max = ms;
+        sum += ms;
+        sum2 += ms * ms;
+        ++n;
+    }
+    // the gap below which `share` of the gaps fall (a bucket's centre)
+    double Percentile(double share) const {
+        const uint64_t want = uint64_t(std::ceil(share * double(n)));
+        uint64_t seen = 0;
+        for (int b = 0; b < kBuckets; ++b) {
+            seen += hist[b];
+            if (seen >= want && seen > 0) return b == kBuckets - 1 ? max : (double(b) + 0.5) / 10.0;
+        }
+        return max;
+    }
+    uint64_t Over(double ms) const {
+        uint64_t c = 0;
+        for (int b = std::clamp(int(std::ceil(ms * 10.0)), 0, kBuckets); b < kBuckets; ++b) c += hist[b];
+        return c;
+    }
+    std::string Line(uint64_t first, uint64_t last) const {
+        if (n == 0) return std::string();
+        const double avg = sum / double(n);
+        const double sd = std::sqrt(std::max(0.0, sum2 / double(n) - avg * avg));
+        const double p50 = Percentile(0.50);
+        char buf[400];
+        std::snprintf(buf, sizeof buf,
+                      "[te.android] frames: presents %llu-%llu: frame time avg %.2f ms, min %.2f, max %.2f, p50 %.2f, p95 %.2f, "
+                      "p99 %.2f, jitter %.2f ms; %llu over 1.5x and %llu over 2.5x the median, of %llu\n",
+                      (unsigned long long)first, (unsigned long long)last, avg, min, max, p50, Percentile(0.95),
+                      Percentile(0.99), sd, (unsigned long long)Over(p50 * 1.5), (unsigned long long)Over(p50 * 2.5),
+                      (unsigned long long)n);
+        return buf;
+    }
+};
+FrameTimes g_frame_times;
+#endif
+
 // TE_GFX_SCALE_AB=N (diagnosis): the internal scale switched between the configured one and 1 every N presents (the
 // configured first), each switch logged -- a 1x / Nx comparison whose windows share the machine's load. The target is
 // re-made at each switch (taken at the next frame's start: ps2e_draw_begin_frame).
@@ -4698,6 +4759,9 @@ void NotePace(uint64_t presents) {
         g_pace.last = now;
         g_pace.submit_ms += g.last_submit_ms;
         g_pace.present_ms += g.last_present_ms;
+#if defined(__ANDROID__)
+        g_frame_times.Note(gap);
+#endif
     }
     ++g_pace.frames;
     if (g.summary_every > 0 && presents % uint64_t(g.summary_every) == 0 && g_pace.frames > 1) {
@@ -4757,6 +4821,17 @@ void NotePace(uint64_t presents) {
             }
             last_cpu_s = cpu_s;
             last_wall = wall;
+            // the window's frame times, the GPU's time of a frame (sampled) and the graphic settings it was measured with:
+            // the launcher's performance report and session history (ToolsCore)
+            const uint64_t first = presents - g_pace.frames + 1;
+            std::fputs(g_frame_times.Line(first, presents).c_str(), stderr);
+            g_frame_times = FrameTimes{};
+            if (g.dev) {
+                static char gpu_line[400];
+                if (ps2e_draw_frame_gpu_line(g.dev, gpu_line, sizeof gpu_line)) std::fputs(gpu_line, stderr);
+            }
+            std::fprintf(stderr, "[te.android] config: presents %llu-%llu: %s\n", (unsigned long long)first,
+                         (unsigned long long)presents, te::display::PerfConfig().c_str());
         }
 #endif
         {

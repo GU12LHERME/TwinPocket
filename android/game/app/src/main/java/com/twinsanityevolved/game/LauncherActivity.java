@@ -854,10 +854,10 @@ public final class LauncherActivity extends Activity {
                     .putExtra(Intent.EXTRA_TITLE, name), REQUEST_EXPORT_TOOLS);
             });
         section("ANÁLISE");
-        actionRow("Desempenho", "FPS, tempo de quadro, pior engasgo, CPU e memória da última execução, a cada ~10 segundos de jogo (o jogo já mede; nada é ligado a mais).",
+        actionRow("Desempenho", "FPS, tempo e ritmo dos quadros, GPU, CPU, memória, temperatura, consumo e tela da última execução: mínimo, média e máximo, com as configurações usadas.",
             this::showPerformance);
         actionRow("Falhas e travamentos", "Como terminou a última execução e as linhas de erro, travamento e encerramento dos logs.", this::showFailures);
-        actionRow("Histórico de sessões", "As últimas " + Tools.KEEP_SESSIONS + " sessões com versão, duração, FPS, CPU, memória e configurações: para comparar versões e achar regressões.",
+        actionRow("Histórico de sessões", "As últimas " + Tools.KEEP_SESSIONS + " sessões com versão, duração, FPS, ritmo dos quadros, GPU, temperatura, consumo e configurações: para comparar versões e configurações.",
             this::showSessions);
         section("TESTES");
         actionRow("Verificar componentes", "Armazenamento, configurações, imagem do disco, biblioteca nativa, gráficos, áudio, controles, vibração e memória, em poucos segundos.",
@@ -919,10 +919,7 @@ public final class LauncherActivity extends Activity {
             String table = Tools.performanceText(s);
             final String body = table == null
                 ? T("Nenhuma medida ainda: jogue pelo menos 10 segundos e volte aqui.")
-                : T("Média ") + ToolsCore.num(s.avg(ToolsCore.FPS), 1) + " FPS · " + T("mínima ") + ToolsCore.num(s.min(ToolsCore.FPS), 1)
-                    + " FPS · " + T("quadro ") + ToolsCore.num(s.avg(ToolsCore.FRAME_MS), 2) + " ms · " + T("pior engasgo ")
-                    + ToolsCore.num(s.max(ToolsCore.GAP_MS), 1) + " ms\nCPU " + ToolsCore.num(s.avg(ToolsCore.CPU), 0) + T("% de um núcleo · memória máxima ")
-                    + ToolsCore.num(s.max(ToolsCore.MEMORY), 0) + " MB\n\n" + table;
+                : (s.start != null ? s.start + " · " + ToolsCore.duration(ToolsCore.seconds(s.start, s.end)) + "\n\n" : "") + table;
             runOnUiThread(() -> textDialog(T("Desempenho da última execução"), body, true));
         });
     }
@@ -965,15 +962,21 @@ public final class LauncherActivity extends Activity {
             StringBuilder b = new StringBuilder();
             if (rows.isEmpty()) b.append(T("Nenhuma sessão registrada ainda: as sessões entram aqui depois de jogar."));
             else {
-                b.append(String.format(Locale.US, "%-16s %-8s %-10s %-9s %-6s %-6s %-5s %-6s %s\n", T("início"), T("versão"), T("duração"),
-                    T("fim"), "FPS", "min", "CPU", "MB", T("config.")));
+                // (a line older than the 1.4.0 report has no p95 / GPU / temperature / power columns: "—")
+                String fmt = "%-16s %-8s %-10s %-9s %-6s %-6s %-6s %-6s %-5s %-6s %-6s %-6s %s\n";
+                b.append(String.format(Locale.US, fmt, T("início"), T("versão"), T("duração"), T("fim"), "FPS", "min", "p95", "GPU",
+                    "CPU", "MB", "°C", "W", T("config.")));
                 for (int i = rows.size() - 1; i >= 0; i--) {
                     String[] f = rows.get(i);
                     long secs = -1;
                     try { secs = Long.parseLong(f[2]); } catch (NumberFormatException ignored) {}
-                    b.append(String.format(Locale.US, "%-16s %-8s %-10s %-9s %-6s %-6s %-5s %-6s %s\n",
-                        f[0].length() >= 16 ? f[0].substring(0, 16) : f[0], f[1], ToolsCore.duration(secs), f[3], f[4], f[5], f[8], f[9],
-                        f[10] + "x " + f[11] + "fps " + f[13]));
+                    String preset = ToolsCore.col(f, ToolsCore.COL_PRESET);
+                    String config = (preset.equals("—") || preset.equals("?") ? "" : preset + " ") + f[10] + "x "
+                        + (ToolsCore.col(f, ToolsCore.COL_ANISO).equals("—") ? "" : "af" + ToolsCore.col(f, ToolsCore.COL_ANISO) + " ")
+                        + f[11] + "fps " + f[13];
+                    b.append(String.format(Locale.US, fmt, f[0].length() >= 16 ? f[0].substring(0, 16) : f[0], f[1], ToolsCore.duration(secs),
+                        f[3], f[4], f[5], ToolsCore.col(f, ToolsCore.COL_P95), ToolsCore.col(f, ToolsCore.COL_GPU), f[8], f[9],
+                        ToolsCore.col(f, ToolsCore.COL_TEMP_MAX), ToolsCore.col(f, ToolsCore.COL_WATTS), config));
                 }
             }
             final String body = b.toString();
@@ -1511,6 +1514,8 @@ public final class LauncherActivity extends Activity {
                  .append(")  ·  ").append(T("quadro ")).append(ToolsCore.num(s.avg(ToolsCore.FRAME_MS), 2)).append(" ms  ·  ")
                  .append(T("pior ")).append(ToolsCore.num(s.max(ToolsCore.GAP_MS), 1)).append(" ms")
                  .append("\nCPU ").append(ToolsCore.num(s.avg(ToolsCore.CPU), 0)).append(T("% de um núcleo  ·  memória ")).append(ToolsCore.num(s.max(ToolsCore.MEMORY), 0)).append(" MB");
+                if (s.avg(ToolsCore.GPU_AVG) >= 0) b.append("  ·  GPU ").append(ToolsCore.num(s.avg(ToolsCore.GPU_AVG), 2)).append(" ms");
+                if (s.powerMax(ToolsCore.TEMP) >= 0) b.append("  ·  ").append(ToolsCore.num(s.powerMax(ToolsCore.TEMP), 1)).append(T(" °C máx."));
             } else if (s.start != null) {
                 b.append("\n").append(T("Sem medidas de desempenho (menos de 10 s de jogo)."));
             }
@@ -1875,13 +1880,15 @@ public final class LauncherActivity extends Activity {
                         || line.contains("te.gfx.capture") || line.contains("te.gfx.submit"))
                     gx.append(line).append('\n');
                 if (line.contains("[te.gfx] pace") || line.contains("[te.gfx] lod") || line.contains("[te.android] perf") || line.contains("android settings:")
+                        || line.contains("[te.android] frames") || line.contains("[te.gfx] gpu frame") || line.contains("[te.android] config")
+                        || line.contains("[te.android] power")
                         || line.contains("] display: aspect"))
                     pf.append(line).append('\n');
             }
             b.append("\n===== CONTROLES (linhas de input do latest-game.log) =====\n").append(in.length() > 0 ? in : "(nenhuma)\n");
             b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
             b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
-            b.append("\n===== DESEMPENHO (fps, tempo de quadro, CPU, memória, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");
+            b.append("\n===== DESEMPENHO (fps, quadros, GPU, CPU, memória, energia, temperatura, tela, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");
         }
         String frames = Diag.symbolizeFrames(c, b.toString());
         if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);

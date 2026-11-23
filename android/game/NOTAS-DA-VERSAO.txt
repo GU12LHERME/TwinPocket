@@ -2,6 +2,17 @@ TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
 
+VERSÃO 1.4.0 — 23/11/2026
+- Relatório de desempenho ampliado (Ferramentas → Desempenho, relatório completo e
+  histórico de sessões), com mínimo, média e máximo:
+    tempo de quadro e ritmo (p50, p95, p99, jitter e quadros atrasados);
+    tempo da GPU por quadro (medido em 1 de cada 4 quadros, sem esperar a GPU);
+    temperatura da bateria, corrente, consumo estimado (só na bateria) e estado térmico;
+    frequência de atualização da tela;
+    configuração gráfica usada em cada trecho de ~10 s da sessão.
+- O que o aparelho não informa aparece como "indisponível".
+- Nenhuma otimização de jogo nesta versão: gráficos, velocidade e jogabilidade iguais.
+
 VERSÃO 1.3.0 — 23/11/2026
 - Nome padronizado: Twinsanity Pocket no app, no launcher, nos relatórios, nos logs
   (marca "TwinsanityPocket" no logcat), nos arquivos gerados e no APK

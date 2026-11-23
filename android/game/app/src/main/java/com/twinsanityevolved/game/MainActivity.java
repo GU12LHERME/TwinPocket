@@ -18,6 +18,8 @@ import org.libsdl.app.SDLActivity;
  */
 public final class MainActivity extends SDLActivity {
     static final String EXTRA_ISO = "com.crashtwinsanity.android.ISO";
+    // the power / heat / refresh sampler (Telemetry.java): runs while the game is in front, every 10 s
+    private Telemetry telemetry;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -26,6 +28,7 @@ public final class MainActivity extends SDLActivity {
         setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
         super.onCreate(savedInstanceState);
         hideSystemBars();
+        if (!mBrokenLibraries) telemetry = new Telemetry(this);
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
     }
 
@@ -72,6 +75,13 @@ public final class MainActivity extends SDLActivity {
     protected void onResume() {
         hideSystemBars();   // before SDL resumes: the surface comes back at the screen's size
         super.onResume();
+        if (telemetry != null) telemetry.start();
+    }
+
+    @Override
+    protected void onPause() {
+        if (telemetry != null) telemetry.stop();   // (minimised: the game is paused, its samples would not be play)
+        super.onPause();
     }
 
     @Override
@@ -121,6 +131,7 @@ public final class MainActivity extends SDLActivity {
     @Override
     protected void onDestroy() {
         Diag.log(this, "game", "MainActivity.onDestroy (finishing " + isFinishing() + ")");
+        if (telemetry != null) telemetry.stop();
         super.onDestroy();
         if (isFinishing()) {
             // a fresh process for the next start: the engine's and SDL's native state are not made to start twice

@@ -5,4 +5,7 @@ final class TeDiag {
     private TeDiag() {}
 
     static native String nativeProbe(String filesDir, String externalFilesDir);
+
+    /** One line in the game's own log (logcat and files/logs/latest-game.log, time-stamped): Telemetry's samples. */
+    static native void nativeLog(String line);
 }

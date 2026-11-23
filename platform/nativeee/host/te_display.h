@@ -91,6 +91,10 @@ void Apply();
 float WidescreenAspect();
 // One line for the log.
 std::string Describe();
+// The graphic settings a performance window was measured with, in the stable words the launcher's session history reads
+// ("preset quality, scale 4x, anisotropy 16x, draw distance long, aspect 16:9, frame rate 60, vsync on"; the Android
+// port's [te.android] config line).
+std::string PerfConfig();
 
 // The seam's rows (Platform::Graphics::DisplaySetting*): the settings the page shows, in this order.
 // RowDrawDistance: the Android port's experimental draw distance (te_port_settings.h); no choices -- not shown -- elsewhere

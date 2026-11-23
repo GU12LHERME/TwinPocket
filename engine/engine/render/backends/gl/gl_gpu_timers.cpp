@@ -32,6 +32,10 @@ void GlGpuTimers::Break(uint64_t) {}
 void GlGpuTimers::EndFrame(uint64_t) {}
 void GlGpuTimers::Settle(uint64_t) {}
 std::string GlGpuTimers::Lines(double) { return std::string(); }
+void GlFrameGpuTime::Begin(bool) {}
+void GlFrameGpuTime::End() {}
+void GlFrameGpuTime::Harvest() {}
+std::string GlFrameGpuTime::Line() { return std::string(); }
 uint32_t GlGpuTimers::TakeQuery(std::vector<uint32_t>&, size_t&) { return 0; }
 void GlGpuTimers::BeginTime() {}
 void GlGpuTimers::EndTime() {}
@@ -320,6 +324,121 @@ std::string GlGpuTimers::Lines(double wall_ms) {
     win_swap_ = 0;
     win_frames_ = win_dropped_ = win_cpu_frames_ = 0;
     return out;
+}
+
+// ---- the frame's GPU time ----------------------------------------------------------------------------------------------
+namespace {
+bool TimerQueriesAvailable() {
+#if defined(__ANDROID__)
+    // ES 3.2 has no timer query of its own: EXT_disjoint_timer_query's (and its glGetQueryObjectui64vEXT, gl_android.h)
+    GLint count = 0;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &count);
+    bool ext = false;
+    for (GLint i = 0; i < count && !ext; ++i) {
+        const char* name = reinterpret_cast<const char*>(glGetStringi(GL_EXTENSIONS, static_cast<GLuint>(i)));
+        ext = name && std::strcmp(name, "GL_EXT_disjoint_timer_query") == 0;
+    }
+    return ext && eglGetProcAddress("glGetQueryObjectui64vEXT") != nullptr;
+#else
+    return true;   // the desktop's GL 4.1 core: ARB_timer_query is core since 3.3
+#endif
+}
+#if defined(__ANDROID__)
+#ifndef GL_GPU_DISJOINT_EXT
+#define GL_GPU_DISJOINT_EXT 0x8FBB
+#endif
+// the driver's disjoint flag (read and cleared by the query): a result spanning it is not a time
+bool Disjoint() {
+    GLint d = 0;
+    glGetIntegerv(GL_GPU_DISJOINT_EXT, &d);
+    return d != 0;
+}
+#else
+bool Disjoint() { return false; }
+#endif
+}  // namespace
+
+void GlFrameGpuTime::Begin(bool blocked) {
+    if (every_ <= 0 || open_ || blocked) return;
+    if (available_ < 0) {
+        available_ = TimerQueriesAvailable() ? 1 : 0;
+        if (available_) {
+            for (Slot& s : ring_) glGenQueries(1, &s.query);
+            Disjoint();   // (clears a flag left from before the first sample)
+        }
+    }
+    if (!available_) return;
+    if (frames_++ % uint64_t(every_) != 0) return;
+    Harvest();
+    // a free slot: one not pending; else the oldest pending one is given up (its result never came: counted)
+    int pick = -1, oldest = -1;
+    for (int i = 0; i < kRing; ++i) {
+        if (!ring_[i].pending) { pick = i; break; }
+        if (oldest < 0 || ring_[i].age > ring_[oldest].age) oldest = i;
+    }
+    if (pick < 0) {
+        pick = oldest;
+        ring_[pick].pending = false;
+        ++dropped_;
+    }
+    for (Slot& s : ring_) if (s.pending) ++s.age;
+    glBeginQuery(GL_TIME_ELAPSED, ring_[pick].query);
+    open_ = true;
+    open_slot_ = pick;
+}
+
+void GlFrameGpuTime::End() {
+    if (!open_) return;
+    glEndQuery(GL_TIME_ELAPSED);
+    ring_[open_slot_].pending = true;
+    ring_[open_slot_].age = 0;
+    open_ = false;
+    open_slot_ = -1;
+}
+
+void GlFrameGpuTime::Harvest() {
+    const bool disjoint = Disjoint();
+    for (Slot& s : ring_) {
+        if (!s.pending) continue;
+        GLuint ready = 0;
+        glGetQueryObjectuiv(s.query, GL_QUERY_RESULT_AVAILABLE, &ready);
+        if (!ready) continue;
+        GLuint64 ns = 0;
+        glGetQueryObjectui64v(s.query, GL_QUERY_RESULT, &ns);
+        s.pending = false;
+        if (disjoint || ns == 0) {
+            ++disjoint_;
+            continue;
+        }
+        const double ms = double(ns) / 1e6;
+        if (n_ == 0 || ms < min_) min_ = ms;
+        if (n_ == 0 || ms > max_) max_ = ms;
+        sum_ += ms;
+        ++n_;
+    }
+}
+
+std::string GlFrameGpuTime::Line() {
+    if (every_ <= 0) return std::string();
+    char buf[320];
+    if (available_ == 0) {
+        if (said_unavailable_) return std::string();
+        said_unavailable_ = true;
+        return "[te.gfx] gpu frame: unavailable (the driver has no timer query: EXT_disjoint_timer_query)\n";
+    }
+    if (available_ < 0) return std::string();
+    if (n_ == 0) {
+        std::snprintf(buf, sizeof buf, "[te.gfx] gpu frame: no sample this window (dropped %llu, disjoint %llu)\n",
+                      (unsigned long long)dropped_, (unsigned long long)disjoint_);
+    } else {
+        std::snprintf(buf, sizeof buf,
+                      "[te.gfx] gpu frame: avg %.2f ms, min %.2f, max %.2f over %llu frames (1 in %d sampled; dropped %llu, disjoint %llu)\n",
+                      sum_ / double(n_), min_, max_, (unsigned long long)n_, every_, (unsigned long long)dropped_,
+                      (unsigned long long)disjoint_);
+    }
+    n_ = dropped_ = disjoint_ = 0;
+    sum_ = min_ = max_ = 0;
+    return buf;
 }
 #endif
 

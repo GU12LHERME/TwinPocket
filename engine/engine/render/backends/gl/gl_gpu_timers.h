@@ -121,5 +121,42 @@ private:
     uint64_t win_frames_ = 0, win_dropped_ = 0, win_cpu_frames_ = 0;
 };
 
+// THE FRAME'S GPU TIME (the Android port's performance report; light enough to stay on): ONE GL_TIME_ELAPSED query around
+// a whole frame (from its first draw to its scanout, before the swap), on 1 frame in `every`, read back frames later when
+// the driver says it is available -- never waited for (a result not in after kRing samples is dropped and counted). No
+// query boundary inside the frame, so a tile-based GPU (the Adreno) keeps its render passes as they are. A result the
+// driver marks disjoint (GL_GPU_DISJOINT_EXT: a clock change, a power event) is dropped. Off while the phase timer runs
+// (both use GL_TIME_ELAPSED, which does not nest); unavailable without EXT_disjoint_timer_query / ARB_timer_query (the
+// line says so once). The Vita: a no-op.
+class GlFrameGpuTime {
+public:
+    void SetEvery(int every) { every_ = every < 0 ? 0 : every; }
+    bool On() const { return every_ > 0 && available_ != 0; }
+    // the frame's first draw / its scanout drawn (the drawing thread, the context current); `blocked`: the phase timer is on
+    void Begin(bool blocked);
+    void End();
+    // the census window's line ("" when off), the window reset
+    std::string Line();
+
+private:
+    static constexpr int kRing = 6;
+    struct Slot {
+        uint32_t query = 0;
+        bool pending = false;
+        int age = 0;   // samples begun since this one ended
+    };
+    void Harvest();
+    int every_ = 0;
+    int available_ = -1;   // -1 not checked yet, 0 no timer queries, 1 yes
+    bool said_unavailable_ = false;
+    bool open_ = false;
+    int open_slot_ = -1;
+    uint64_t frames_ = 0;
+    Slot ring_[kRing];
+    // the window's figures (ms)
+    uint64_t n_ = 0, dropped_ = 0, disjoint_ = 0;
+    double sum_ = 0, min_ = 0, max_ = 0;
+};
+
 }  // namespace render
 }  // namespace ps2r

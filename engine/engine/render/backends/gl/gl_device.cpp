@@ -2153,7 +2153,8 @@ void GlDevice::Present(const ScanoutDesc& desc) {
         state_.UseProgram(0);
         state_.Enable(GL_DEPTH_TEST);
     }
-    // the frame's GPU phases end with its scanout (a capture's read-back below is not timed)
+    // the frame's GPU phases end with its scanout (a capture's read-back below is not timed); so does its GPU time
+    frame_gpu_.End();
     gpu_timers_.EndFrame(TimerWork());
     presented_w_ = presented_h_ = 0;
     if (capture) {
@@ -2296,6 +2297,7 @@ void GlDevice::SetOption(const char* name, int value) {
             std::fprintf(stderr, "[gl] GPU phase timer on: %s (%s GPU)\n", gpu_timers_.ModeName(),
                          tile_based ? "a tile-based" : "an immediate-mode");
     }
+    if (std::strcmp(name, "frame_gpu") == 0) frame_gpu_.SetEvery(value);   // (no GL call: the queries are made at a frame)
 }
 
 uint64_t GlDevice::TimerWork() const { return Census().gl_draws + timer_work_; }
@@ -2316,6 +2318,7 @@ void GlDevice::BeginFrame() {
         c.gpu_ab_arms[1] = "indexed";
     }
 #endif
+    frame_gpu_.Begin(gpu_timers_.On());
     BeginDrawRun();
 }
 void GlDevice::EndFrame() { EndDrawRun(); }

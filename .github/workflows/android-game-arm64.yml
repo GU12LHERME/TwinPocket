@@ -335,6 +335,13 @@ jobs:
           n="$(grep -cE ' T (SDL_main|Java_com_twinsanityevolved_game_TeDiag_nativeProbe)$' "$LOG_DIR/libmain-dynamic-defined.txt" || true)"
           if [ "$n" -eq 2 ]; then echo "PASS  exported to Java (dynamic symbols): SDL_main and TeDiag.nativeProbe" | tee -a "$ev"
           else echo "FAIL  $n of SDL_main / TeDiag.nativeProbe exported" | tee -a "$ev"; fail=1; fi
+          if grep -qE ' T Java_com_twinsanityevolved_game_TeDiag_nativeLog$' "$LOG_DIR/libmain-dynamic-defined.txt"; then
+            echo "PASS  exported to Java: TeDiag.nativeLog (the telemetry samples into the game's log)" | tee -a "$ev"
+          else echo "FAIL  TeDiag.nativeLog not exported" | tee -a "$ev"; fail=1; fi
+          if grep -q 'gpu frame: avg' "$LOG_DIR/libmain-strings.txt" && grep -q 'frames: presents' "$LOG_DIR/libmain-strings.txt" \
+             && grep -q 'config: presents' "$LOG_DIR/libmain-strings.txt"; then
+            echo "PASS  performance report lines linked (frame times, the frame's GPU time, the settings)" | tee -a "$ev"
+          else echo "FAIL  the performance report's lines are not in libmain.so" | tee -a "$ev"; fail=1; fi
           if grep -q 'init_array' <("$NDK_LLVM/llvm-readelf" -S "$so"); then echo "PASS  .init_array present (the early diagnostics constructor)" | tee -a "$ev"; fi
           echo "== engine namespaces linked (symbol count per ps2r:: namespace)" | tee -a "$ev"
           grep -oE 'ps2r::[a-z0-9_]+' "$LOG_DIR/libmain-symbols.txt" | sort | uniq -c | sort -rn | tee -a "$ev"
@@ -401,10 +408,10 @@ jobs:
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/apksigner" verify --print-certs "$apk" 2>&1 | tee -a "$LOG_DIR/apk-signing.log"
           grep -q 'certificate SHA-256 digest' "$LOG_DIR/apk-signing.log"
           unzip -p "$apk" 'classes*.dex' > "$RUNNER_TEMP/classes.dex"
-          for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag; do
+          for cls in LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag Telemetry; do
             grep -aq "com/twinsanityevolved/game/$cls" "$RUNNER_TEMP/classes.dex" || { echo "FAIL  class $cls not in the dex"; exit 1; }
           done
-          echo "PASS  dex: LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag" | tee -a "$LOG_DIR/libmain-evidence.txt"
+          echo "PASS  dex: LauncherActivity ProbeActivity MainActivity LogProvider Diag TeDiag Telemetry" | tee -a "$LOG_DIR/libmain-evidence.txt"
           unzip -l "$apk" | tee "$LOG_DIR/apk-contents.log"
           x="$RUNNER_TEMP/apk-x"
           rm -rf "$x"; mkdir -p "$x"; unzip -q "$apk" -d "$x"

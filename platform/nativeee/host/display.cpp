@@ -226,6 +226,18 @@ void MoveDisplay(float x, float y) {
     Persist("video.custom_offset_y", std::to_string(oy));
 }
 
+std::string PerfConfig() {
+    static const char* const kPresetKeys[] = {"original", "balanced", "quality", "custom"};
+    static const char* const kDistanceKeys[] = {"original", "medium", "long", "max", "extreme", "ultra"};
+    const uint32_t distance = te::port_settings::DrawDistanceChoice();
+    char buf[240];
+    std::snprintf(buf, sizeof buf, "preset %s, scale %dx, anisotropy %dx, draw distance %s, aspect %s, frame rate %s, vsync %s",
+                  kPresetKeys[std::min<uint32_t>(PresetNow(), 3u)], g_settings.scale, AnisoClamped(g_settings.anisotropy),
+                  distance < 6 ? kDistanceKeys[distance] : "?", kAspectKeys[std::clamp(g_settings.aspect, 0, kAspects - 1)],
+                  FrameRateName(), EffectiveVSync() ? "on" : "off");
+    return buf;
+}
+
 std::string Describe() {
     char buf[400];
     std::snprintf(buf, sizeof buf, "display: aspect %s, fit %d, scale %dx, texture filter %s, anisotropy %dx, vsync %s%s, frame rate %s, %s, offset (%d, %d), fps counter %s, shadows on crates %s%s",

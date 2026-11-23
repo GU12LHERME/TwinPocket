@@ -171,6 +171,7 @@ public:
     }
     std::string GpuTimerLines(double wall_ms) override { return gpu_timers_.Lines(wall_ms); }
     bool GpuTimersOn() const override { return gpu_timers_.On(); }
+    std::string FrameGpuLine() override { return frame_gpu_.Line(); }
     std::string DeviceName() const override { return device_name_; }
 
     // Binds GL_FRAMEBUFFER to the colour surface's fbo with `depth` attached
@@ -227,6 +228,7 @@ private:
     uint64_t TimerWork() const;
     static void TimerFramebufferChanged(void* self);
     GlGpuTimers gpu_timers_;
+    GlFrameGpuTime frame_gpu_;   // the frame's GPU time, 1 frame in N ("frame_gpu"; the Android port's performance report)
     uint64_t timer_work_ = 0;
     std::string device_name_;   // "renderer / OpenGL version" (Init)
 

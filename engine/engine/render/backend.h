@@ -452,6 +452,9 @@ public:
     virtual void NoteGpuFill(int, double, uint32_t) {}
     virtual std::string GpuTimerLines(double) { return std::string(); }
     virtual bool GpuTimersOn() const { return false; }
+    // The frame's GPU time (option "frame_gpu" = sample 1 frame in N, 0 off; the GL backend's GlFrameGpuTime): the census
+    // window's line ("" when off)
+    virtual std::string FrameGpuLine() { return std::string(); }
     // The GPU and driver the backend draws with ("" when not known): the start-up line names it.
     virtual std::string DeviceName() const { return std::string(); }
 };

@@ -262,15 +262,76 @@ final class Tools {
     }
 
     // ---- the text shown -----------------------------------------------------------------------------------------------
+    /** The last run's performance: the summary (min / average / max), the settings, then one row per ~10 s window and per
+     *  telemetry sample. null when the run has no measurement yet. Plain Java on purpose (ToolsCore's figures). */
     static String performanceText(ToolsCore.Summary s) {
-        if (s.count() == 0) return null;
+        if (s.count() == 0 && s.power.isEmpty()) return null;
         StringBuilder b = new StringBuilder();
-        b.append(String.format(Locale.US, "%-8s %-8s %-10s %-10s %-8s %-8s\n", "janela", "FPS", "quadro ms", "pior ms", "CPU %", "mem MB"));
-        int i = 1;
-        for (ToolsCore.Window w : s.windows) {
-            b.append(String.format(Locale.US, "%-8d %-8s %-10s %-10s %-8s %-8s\n", i++, ToolsCore.num(w.fps, 1), ToolsCore.num(w.frameMs, 2),
-                ToolsCore.num(w.longestGapMs, 1), ToolsCore.num(w.cpuOneCore, 0), ToolsCore.num(w.peakMb, 0)));
+        b.append(Lang.T("RESUMO (mín / média / máx)")).append('\n');
+        row3(b, Lang.T("FPS"), s.min(ToolsCore.FPS), s.avg(ToolsCore.FPS), s.max(ToolsCore.FPS), 1, "");
+        row3(b, Lang.T("Tempo de quadro"), s.min(ToolsCore.FT_MIN), s.avg(ToolsCore.FRAME_MS), s.max(ToolsCore.GAP_MS), 2, " ms");
+        if (s.avg(ToolsCore.FT_P95) >= 0) {
+            b.append(String.format(Locale.US, "  %-22s p50 %s · p95 %s · p99 %s ms · jitter %s ms\n", Lang.T("Frame pacing"),
+                ToolsCore.num(s.avg(ToolsCore.FT_P50), 2), ToolsCore.num(s.avg(ToolsCore.FT_P95), 2), ToolsCore.num(s.max(ToolsCore.FT_P99), 2),
+                ToolsCore.num(s.avg(ToolsCore.JITTER), 2)));
+            b.append(String.format(Locale.US, "  %-22s %d %s %d %s\n", Lang.T("Quadros atrasados"), Math.max(0, s.sum(ToolsCore.LATE)),
+                Lang.T("acima de 1,5× a mediana ·"), Math.max(0, s.sum(ToolsCore.VERY_LATE)), Lang.T("acima de 2,5×")));
+        }
+        if (s.gpuUnavailable) b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("GPU por quadro"), Lang.T("indisponível neste aparelho")));
+        else row3(b, Lang.T("GPU por quadro"), s.min(ToolsCore.GPU_MIN), s.avg(ToolsCore.GPU_AVG), s.max(ToolsCore.GPU_MAX), 2, " ms");
+        row3(b, Lang.T("CPU (um núcleo)"), s.min(ToolsCore.CPU), s.avg(ToolsCore.CPU), s.max(ToolsCore.CPU), 0, " %");
+        b.append(String.format(Locale.US, "  %-22s %s MB\n", Lang.T("Memória máxima"), ToolsCore.num(s.max(ToolsCore.MEMORY), 0)));
+        row3(b, Lang.T("Temperatura bateria"), s.powerMin(ToolsCore.TEMP), s.powerAvg(ToolsCore.TEMP), s.powerMax(ToolsCore.TEMP), 1, " °C");
+        row3(b, Lang.T("Corrente"), s.powerMin(ToolsCore.CURRENT), s.powerAvg(ToolsCore.CURRENT), s.powerMax(ToolsCore.CURRENT), 0, " mA");
+        if (s.powerAvg(ToolsCore.WATTS) >= 0)
+            row3(b, Lang.T("Consumo estimado"), s.powerMin(ToolsCore.WATTS), s.powerAvg(ToolsCore.WATTS), s.powerMax(ToolsCore.WATTS), 2, " W");
+        else
+            b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Consumo estimado"),
+                s.charged() ? Lang.T("não estimado (no carregador)") : Lang.T("indisponível")));
+        int worst = (int) s.powerMax(ToolsCore.THERMAL);
+        b.append(String.format(Locale.US, "  %-22s %s%s\n", Lang.T("Estado térmico (pior)"),
+            worst >= 0 ? Lang.T(ToolsCore.thermalWords(worst)) + " (" + worst + ")" : Lang.T("indisponível"),
+            s.powerMax(ToolsCore.HEADROOM) >= 0 ? " · " + Lang.T("folga térmica máx. ") + ToolsCore.num(s.powerMax(ToolsCore.HEADROOM), 2) : ""));
+        double rmin = s.powerMin(ToolsCore.REFRESH), rmax = s.powerMax(ToolsCore.REFRESH);
+        b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Atualização da tela"), rmax < 0 ? Lang.T("indisponível")
+            : (Math.abs(rmax - rmin) < 0.05 ? ToolsCore.num(rmax, 1) + " Hz" : ToolsCore.num(rmin, 1) + "–" + ToolsCore.num(rmax, 1) + " Hz")));
+        java.util.Map<String, Integer> configs = s.configCounts();
+        if (!configs.isEmpty()) {
+            b.append('\n').append(Lang.T("CONFIGURAÇÕES GRÁFICAS (janelas de ~10 s)")).append('\n');
+            for (java.util.Map.Entry<String, Integer> e : configs.entrySet())
+                b.append("  ").append(e.getValue()).append("× ").append(e.getKey()).append('\n');
+        }
+        if (s.count() > 0) {
+            b.append('\n').append(Lang.T("JANELAS")).append('\n');
+            b.append(String.format(Locale.US, "%-4s %-6s %-7s %-7s %-7s %-7s %-6s %-5s %-5s\n", "#", "FPS", "quadro", "p95", "máx", "GPU", "jitter", "CPU%", "MB"));
+            int i = 1;
+            for (ToolsCore.Window w : s.windows) {
+                b.append(String.format(Locale.US, "%-4d %-6s %-7s %-7s %-7s %-7s %-6s %-5s %-5s\n", i++, ToolsCore.num(w.fps, 1),
+                    ToolsCore.num(ToolsCore.value(w, ToolsCore.FRAME_MS), 2), ToolsCore.num(w.ftP95, 2),
+                    ToolsCore.num(ToolsCore.value(w, ToolsCore.GAP_MS), 1), ToolsCore.num(w.gpuAvg, 2), ToolsCore.num(w.jitter, 2),
+                    ToolsCore.num(w.cpuOneCore, 0), ToolsCore.num(w.peakMb, 0)));
+            }
+        }
+        if (!s.power.isEmpty()) {
+            b.append('\n').append(Lang.T("ENERGIA E TEMPERATURA (a cada 10 s)")).append('\n');
+            b.append(String.format(Locale.US, "%-4s %-6s %-6s %-6s %-6s %-9s %-8s %-6s\n", "#", "°C", "mA", "W", "bat%", "fonte", "térmico", "Hz"));
+            int i = 1;
+            for (ToolsCore.Power p : s.power) {
+                b.append(String.format(Locale.US, "%-4d %-6s %-6s %-6s %-6s %-9s %-8s %-6s\n", i++, ToolsCore.num(p.tempC, 1),
+                    ToolsCore.num(p.currentMa, 0), ToolsCore.num(p.powerW, 2), p.level >= 0 ? Integer.toString(p.level) : "—",
+                    p.source == null ? "—" : "battery".equals(p.source) ? Lang.T("bateria") : Lang.T("carregador"),
+                    p.thermal >= 0 ? Integer.toString(p.thermal) : "—", ToolsCore.num(p.refreshHz, 1)));
+            }
         }
         return b.toString();
+    }
+
+    private static void row3(StringBuilder b, String label, double min, double avg, double max, int decimals, String unit) {
+        if (avg < 0 && max < 0) {
+            b.append(String.format(Locale.US, "  %-22s %s\n", label, Lang.T("indisponível")));
+            return;
+        }
+        b.append(String.format(Locale.US, "  %-22s %s / %s / %s%s\n", label, ToolsCore.num(min, decimals), ToolsCore.num(avg, decimals),
+            ToolsCore.num(max, decimals), unit));
     }
 }
