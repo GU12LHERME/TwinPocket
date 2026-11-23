@@ -164,7 +164,7 @@ final class Settings {
 
     /**
      * The Android menus' values (every launch; a value already in range is left as it is): the draw distance's percents of
-     * 0.5.0 - 0.6.0 (100 / 150 / 200 / 300) and 0.8.2's extreme / ultra as the levels of the menus (original .. max); the
+     * 0.5.0 - 0.6.0 (100 / 150 / 200 / 300) and max (4x) / 0.8.2's extreme / ultra as the levels of the menus (original .. long); the
      * shape as 4:3 or 16:9 (auto is the TV's 4:3; 16:10 / 21:9 / 32:9 are 16:9); the frame rate as 30 or 60; the window
      * always full screen. The game reads the older words the same way (platform/nativeee/host/te_display.h ApplyLaneRules,
      * port_settings.cpp), so the launcher and the game agree before and after this rewrite.
@@ -174,7 +174,7 @@ final class Settings {
         if ("100".equals(dd)) set(DRAW_DISTANCE, "original");
         else if ("150".equals(dd) || "200".equals(dd)) set(DRAW_DISTANCE, "medium");
         else if ("300".equals(dd)) set(DRAW_DISTANCE, "long");
-        else if ("extreme".equals(dd) || "ultra".equals(dd)) set(DRAW_DISTANCE, "max");
+        else if ("max".equals(dd) || "extreme".equals(dd) || "ultra".equals(dd)) set(DRAW_DISTANCE, "long");   // 4x left in 0.27.0
         String aspect = get(ASPECT, null);
         if ("auto".equals(aspect)) set(ASPECT, "4:3");
         else if ("16:10".equals(aspect) || "21:9".equals(aspect) || "32:9".equals(aspect)) set(ASPECT, "16:9");

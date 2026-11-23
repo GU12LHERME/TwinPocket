@@ -102,9 +102,10 @@ uint32_t AnisoIndex(int anisotropy) {
 // 60 fps in play), the filter (bilinear), the anisotropy (up to the driver's maximum), the draw distance, the
 // anti-aliasing (off: not validated on the device yet), the dithering (off). The frame rate, the shape, the audio and the
 // controls are never a preset's.
-//   original: 1x, off, original;  balanced: 2x, 4x, medium;  quality: 4x, 16x, max.  Custom = none of them matches.
+//   original: 1x, off, original;  balanced: 2x, 4x, medium;  quality: 4x, 16x, long (3x: max left the menus in 0.27.0).
+//   Custom = none of them matches.
 struct Preset { int scale; int anisotropy; uint32_t distance; };
-constexpr Preset kPresets[] = {{1, 1, 0}, {2, 4, 1}, {4, 16, 3}};
+constexpr Preset kPresets[] = {{1, 1, 0}, {2, 4, 1}, {4, 16, 2}};
 int AnisoClamped(int a) {
     const int max = std::max(1, gfx::MaxAnisotropy());
     int best = 1;

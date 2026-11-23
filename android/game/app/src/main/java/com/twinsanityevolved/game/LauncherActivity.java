@@ -181,10 +181,10 @@ public final class LauncherActivity extends Activity {
             "on", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado — padrão"}),
         new Choice(Settings.FPS_COUNTER, "Contador de FPS", "Mostra o FPS no canto da tela durante o jogo",
             "off", new String[] {"off", "on"}, new String[] {"Desligado", "Ligado"}),
-        new Choice(Settings.DRAW_DISTANCE, "Distância de detalhe (LOD, experimental)",
+        new Choice(Settings.DRAW_DISTANCE, "Distância de detalhe (LOD)",
             "Mantém os modelos detalhados por mais distância, só entre os que o jogo já carregou. Exige mais da GPU",
-            "original", new String[] {"original", "medium", "long", "max"},
-            new String[] {"Original (1x)", "Média (2x)", "Longa (3x)", "Máxima (4x)"}),
+            "original", new String[] {"original", "medium", "long"},
+            new String[] {"Original (1x)", "Média (2x)", "Longa (3x)"}),
     };
     static final Choice[] AUDIO = {
         new Choice(Settings.AUDIO_DRIVER, "Driver de áudio", "OpenSL ES é o que funcionou no Retroid Pocket 6 (vale no próximo início)",
@@ -1434,7 +1434,7 @@ public final class LauncherActivity extends Activity {
     // 'graphics preset' row is the same, display.cpp); the frame rate, the shape, the audio and the controls never change ----
     static final String[] PRESET_NAMES = {"Original", "Equilibrado", "Qualidade", "Personalizado"};
     static final String[][] PRESETS = {   // anisotropy, LOD, resolution
-        {"1", "original", "1"}, {"4", "medium", "2"}, {"16", "max", "4"}};
+        {"1", "original", "1"}, {"4", "medium", "2"}, {"16", "long", "4"}};
 
     private int presetNow(Settings st) {
         for (int i = 0; i < PRESETS.length; i++) {
@@ -1449,7 +1449,7 @@ public final class LauncherActivity extends Activity {
 
     private Item presetRow(final Settings st) {
         Item it = row("Predefinição gráfica",
-            "Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 4x.",
+            "Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 3x.",
             chooser(T(PRESET_NAMES[presetNow(st)])), false);
         it.onStep = d -> {
             int now = presetNow(st);

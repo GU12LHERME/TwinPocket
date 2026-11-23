@@ -34,7 +34,8 @@ constexpr uint32_t kSensitivityCount = 4, kDefaultSensitivity = 1;   // 1.33: th
 const char* const kDistanceKeys[] = {"original", "medium", "long", "max", "extreme", "ultra"};
 const uint32_t kDistancePercents[] = {100, 200, 300, 400, 600, 800};
 constexpr uint32_t kDistanceCount = 6, kDefaultDistance = 0;   // the game's own
-constexpr uint32_t kDistanceShown = 4;   // the menus offer original .. max (4x); extreme / ultra stay readable, shown as max
+constexpr uint32_t kDistanceShown = 3;   // the menus offer original .. long (3x); max (4x) / extreme / ultra stay readable, shown as long
+// (max dropped in 0.27.0: on the RP6 it pushed the frame's geometry builds past a field and near scenery vanished for a picture)
 
 struct State {
     uint32_t driver = kDefaultDriver, buffer = kDefaultBuffer;
@@ -114,7 +115,7 @@ void Configure(const std::string& ini_text) {
         if (ps2r::SettingsFile::GetFromText(ini_text, "android.draw_distance", &v) && (v == "100" || v == "150" || v == "200" || v == "300"))
             g.distance = v == "100" ? 0u : v == "300" ? 2u : 1u;
         else g.distance = Read(ini_text, "android.draw_distance", kDistanceKeys, kDistanceCount, kDefaultDistance);
-        if (g.distance >= kDistanceShown) g.distance = kDistanceShown - 1;   // 0.8.2's extreme (6x) / ultra (8x): max (4x)
+        if (g.distance >= kDistanceShown) g.distance = kDistanceShown - 1;   // max (4x), 0.8.2's extreme / ultra: long (3x)
         te::lod::SetPercent(kDistancePercents[g.distance]);
     }
     {
@@ -333,7 +334,7 @@ void SetDrawDistance(uint32_t choice) {
     Persist("android.draw_distance", kDistanceKeys[choice]);
     te::lod::SetPercent(kDistancePercents[choice]);
     std::fprintf(stderr, "[twinsanityevolved] android settings: draw distance %s (the levels of detail at %u %% of the game's "
-                 "distances; experimental)\n", kDistanceKeys[choice], kDistancePercents[choice]);
+                 "distances)\n", kDistanceKeys[choice], kDistancePercents[choice]);
 }
 
 }  // namespace te::port_settings
