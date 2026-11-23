@@ -27,6 +27,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -47,9 +48,11 @@ import static com.twinsanityevolved.game.Lang.T;
 
 /**
  * The app's entry (launcher icon), in the app's main process, with no native code and no SDL. A console-style menu for a
- * handheld's OLED screen: pure black, white text, the selected row framed in white, no gradient, glow or
- * animation. Five tabs: Jogar (the disc image, its state, JOGAR), Gráficos, Áudio, Controles, Sistema (language,
- * restoring, the diagnostics, leaving the app).
+ * handheld's OLED screen: pure black, white text, the selected row framed in white, no gradient or glow (one short fade
+ * on a tab change). Seven tabs between LB / RB: Jogar (the disc image, its state, JOGAR), Gráficos, Áudio, Controles,
+ * Saves, Sistema (language, restoring, the app) and Ferramentas (reports, the ZIP, performance, failures, the session
+ * history, the checks, the diagnostic mode). The rows show a name and a value; what the selected row does is in the
+ * detail pane on the right, and the legend lists only the buttons that do something on it.
  *
  * The settings are the game's own, in ps2r.ini (Settings.java): the game's menus (Options > graphic options, Options >
  * android settings) and this screen edit the same keys, and every change here is written at once.
@@ -66,6 +69,7 @@ public final class LauncherActivity extends Activity {
     private static final int REQUEST_EXPORT_SAVES = 42;
     private static final int REQUEST_IMPORT_SAVES = 43;
     private static final int REQUEST_ICON_IMAGE = 44;
+    private static final int REQUEST_EXPORT_TOOLS = 45;
     private final AtomicBoolean copyCancel = new AtomicBoolean(false);
     private boolean copying;
     private boolean starting;
@@ -74,8 +78,9 @@ public final class LauncherActivity extends Activity {
     // the palette: OLED black, white, a neutral grey
     static final int BG = 0xFF000000, FG = 0xFFFFFFFF, SUBTLE = 0xFF8C8C8C, LINE = 0xFF1A1A1A, DIM = 0xFF5A5A5A;
 
-    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SAVES = 4, TAB_SYSTEM = 5;
-    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Saves", "Sistema"};
+    static final int TAB_PLAY = Nav.TAB_PLAY, TAB_GRAPHICS = 1, TAB_AUDIO = 2, TAB_CONTROLS = 3, TAB_SAVES = 4, TAB_SYSTEM = 5,
+        TAB_TOOLS = 6;
+    static final String[] TAB_NAMES = {"Jogar", "Gráficos", "Áudio", "Controles", "Saves", "Sistema", "Ferramentas"};
 
     // the screen
     private LinearLayout page;
@@ -86,7 +91,10 @@ public final class LauncherActivity extends Activity {
     private final int[] tabSelection = new int[TAB_NAMES.length];
     private final List<Item> items = new ArrayList<>();
     private int selected = -1;
-    private TextView status;                    // Sistema's diagnostic text (null on the other tabs)
+    private TextView status;                    // Ferramentas' last-run summary (null on the other tabs)
+    private HorizontalScrollView tabScroll;
+    private TextView detailTitle, detailText, detailAbout, legend;
+    private String tabAbout = "";
     private TextView isoName, isoState, lastRun, playLabel;   // the Jogar tab's (null on the other tabs)
     private OledDialog openDialog;
     // the disc's check, the last run's line and Sistema's diagnostics read files: off the screen's thread, one at a time
@@ -207,6 +215,7 @@ public final class LauncherActivity extends Activity {
         Runnable onA;
         IntConsumer onStep;
         BooleanSupplier enabled;
+        String label, help;          // the detail pane's title and text when the row is selected
 
         Item(LinearLayout view) {
             this.view = view;
@@ -255,6 +264,20 @@ public final class LauncherActivity extends Activity {
         return t;
     }
 
+    // A shoulder button's hint beside the tabs (LB / RB); a tap changes the tab as the button does
+    private TextView shoulder(String name, Runnable action) {
+        TextView t = text(name, 12, SUBTLE, true);
+        android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+        g.setColor(BG);
+        g.setStroke(Math.max(1, dp(1)), SUBTLE);
+        g.setCornerRadius(dp(4));
+        t.setBackground(g);
+        t.setPadding(dp(7), dp(2), dp(7), dp(2));
+        t.setClickable(true);
+        t.setOnClickListener(v -> { if (!dialogOpen()) action.run(); });
+        return t;
+    }
+
     private View line() {
         View v = new View(this);
         v.setBackgroundColor(LINE);
@@ -281,11 +304,15 @@ public final class LauncherActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setBackgroundColor(BG);
-        root.setPadding(dp(32), dp(14), dp(32), dp(10));
+        root.setPadding(dp(28), dp(10), dp(28), dp(8));
         root.setFocusable(true);
         root.setFocusableInTouchMode(true);
 
-        // ---- the tabs, the version on the right ----
+        // ---- the tabs between the shoulder buttons that change them (the row scrolls if a font size makes it too wide) ----
+        LinearLayout bar = new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(shoulder("LB", () -> changeTab(-1, null)));
         LinearLayout top = new LinearLayout(this);
         top.setOrientation(LinearLayout.HORIZONTAL);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -293,8 +320,8 @@ public final class LauncherActivity extends Activity {
             final int index = i;
             LinearLayout tab = new LinearLayout(this);
             tab.setOrientation(LinearLayout.VERTICAL);
-            tab.setPadding(0, 0, dp(28), 0);
-            TextView label = text(TAB_NAMES[i], 17, SUBTLE, false);
+            tab.setPadding(dp(11), 0, dp(11), 0);
+            TextView label = text(TAB_NAMES[i], 16, SUBTLE, false);
             label.setSingleLine(true);
             label.setPadding(0, dp(6), 0, dp(6));
             tab.addView(label);
@@ -309,28 +336,55 @@ public final class LauncherActivity extends Activity {
             tabLabels.add(label);
             tabLines.add(under);
         }
-        View gap = new View(this);
-        top.addView(gap, new LinearLayout.LayoutParams(0, 1, 1f));
-        top.addView(text(T("versão ") + versionName(), 12, SUBTLE, false));
-        root.addView(top);
+        tabScroll = new HorizontalScrollView(this);
+        tabScroll.setHorizontalScrollBarEnabled(false);
+        tabScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        tabScroll.addView(top);
+        bar.addView(tabScroll, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        bar.addView(shoulder("RB", () -> changeTab(1, null)));
+        root.addView(bar);
         root.addView(line());
 
-        // ---- the tab's rows ----
+        // ---- the body: the tab's rows on the left, what the selected row does on the right ----
+        LinearLayout body = new LinearLayout(this);
+        body.setOrientation(LinearLayout.HORIZONTAL);
         pageScroll = new ScrollView(this);
         pageScroll.setVerticalScrollBarEnabled(false);
         pageScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
         page = new LinearLayout(this);
         page.setOrientation(LinearLayout.VERTICAL);
-        page.setPadding(0, dp(8), 0, dp(24));
+        page.setPadding(0, dp(6), dp(18), dp(24));
         pageScroll.addView(page);
-        root.addView(pageScroll, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+        body.addView(pageScroll, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 3f));
+        View divider = new View(this);
+        divider.setBackgroundColor(LINE);
+        body.addView(divider, new LinearLayout.LayoutParams(Math.max(1, dp(1)), ViewGroup.LayoutParams.MATCH_PARENT));
+        ScrollView detailScroll = new ScrollView(this);
+        detailScroll.setVerticalScrollBarEnabled(false);
+        detailScroll.setOverScrollMode(View.OVER_SCROLL_NEVER);
+        LinearLayout detail = new LinearLayout(this);
+        detail.setOrientation(LinearLayout.VERTICAL);
+        detail.setPadding(dp(22), dp(18), dp(4), dp(18));
+        detailTitle = text("", 19, FG, true);
+        detailText = text("", 14, SUBTLE, false);
+        detailText.setLineSpacing(0, 1.2f);
+        detailText.setPadding(0, dp(8), 0, 0);
+        detailAbout = text("", 12, SUBTLE, false);
+        detailAbout.setLineSpacing(0, 1.15f);
+        detailAbout.setPadding(0, dp(22), 0, 0);
+        detail.addView(detailTitle);
+        detail.addView(detailText);
+        detail.addView(detailAbout);
+        detailScroll.addView(detail);
+        body.addView(detailScroll, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.MATCH_PARENT, 2f));
+        root.addView(body, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
 
-        // ---- the buttons' legend ----
+        // ---- the buttons' legend: what the buttons do on the selected row ----
         root.addView(line());
-        TextView legend = text(T("A  Confirmar      B  Voltar      LB / RB  Abas      ◀ ▶  Alterar      START  Jogar"), 12, SUBTLE, false);
+        legend = text("", 12, SUBTLE, false);
         legend.setSingleLine(true);
         legend.setEllipsize(TextUtils.TruncateAt.END);
-        legend.setPadding(0, dp(8), 0, 0);
+        legend.setPadding(0, dp(7), 0, 0);
         root.addView(legend);
 
         setContentView(root);
@@ -548,6 +602,27 @@ public final class LauncherActivity extends Activity {
         ensureVisible();
     }
 
+    // The detail pane (the selected row's name and what it does, the tab's note under it) and the legend (only the
+    // buttons that do something on that row)
+    private void updateDetail() {
+        if (detailTitle == null) return;
+        Item it = current();
+        detailTitle.setText(it != null && it.label != null ? T(it.label) : T(TAB_NAMES[currentTab]));
+        String help = it != null && it.help != null ? T(it.help) : "";
+        detailText.setText(help);
+        detailText.setVisibility(help.isEmpty() ? View.GONE : View.VISIBLE);
+        detailAbout.setText(T(tabAbout));
+        detailAbout.setVisibility(tabAbout.isEmpty() ? View.GONE : View.VISIBLE);
+        StringBuilder b = new StringBuilder();
+        if (it != null && it.isEnabled()) {
+            if (it.onStep != null) b.append("◀ ▶  ").append(T("Alterar")).append("      ");
+            if (it.onA != null || it.onStep != null) b.append("A  ").append(T(it.onA != null ? "Abrir" : "Próximo valor")).append("      ");
+        }
+        b.append("B  ").append(T(currentTab == TAB_PLAY ? "Sair" : "Voltar")).append("      LB / RB  ").append(T("Categoria"))
+         .append("      START  ").append(T("Jogar"));
+        legend.setText(b.toString());
+    }
+
     private void paintItems() {
         for (int i = 0; i < items.size(); i++) {
             Item it = items.get(i);
@@ -558,6 +633,7 @@ public final class LauncherActivity extends Activity {
             for (TextView t : it.main) t.setTextColor(en ? FG : DIM);
             for (TextView t : it.sub) t.setTextColor(en ? SUBTLE : DIM);
         }
+        updateDetail();
     }
 
     // the selected row kept on screen with a margin; the first row shows the tab's top (the disc's state on Jogar)
@@ -587,8 +663,11 @@ public final class LauncherActivity extends Activity {
             tabLabels.get(i).setTypeface(on ? Typeface.DEFAULT_BOLD : Typeface.DEFAULT);
             tabLines.get(i).setBackgroundColor(on ? FG : BG);
         }
+        final View tabView = (View) tabLabels.get(index).getParent();
+        tabScroll.post(() -> tabScroll.smoothScrollTo(Math.max(0, tabView.getLeft() - (tabScroll.getWidth() - tabView.getWidth()) / 2), 0));
         page.removeAllViews();
         items.clear();
+        tabAbout = "";
         status = null;
         isoName = isoState = lastRun = playLabel = null;
         presetItem = null;
@@ -598,7 +677,7 @@ public final class LauncherActivity extends Activity {
                 playPage();
                 break;
             case TAB_GRAPHICS:
-                pageTitle("Gráficos", "As mesmas opções ficam no jogo: Opções → Opções gráficas.");
+                tabAbout = "As mesmas opções ficam no jogo: Opções → Opções gráficas.";
                 section("IMAGEM");
                 choiceRows(st, GRAPHICS, Settings.SCALE, Settings.ASPECT, Settings.FRAME_RATE, Settings.VSYNC, Settings.FPS_COUNTER);
                 section("QUALIDADE");
@@ -606,29 +685,32 @@ public final class LauncherActivity extends Activity {
                 choiceRows(st, GRAPHICS, Settings.TEXTURE_FILTER, Settings.ANISOTROPY, Settings.FXAA, Settings.DITHERING, Settings.DRAW_DISTANCE);
                 break;
             case TAB_AUDIO:
-                pageTitle("Áudio", T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
-                        + T("Driver e buffer também estão no jogo: Opções → android settings."));
+                tabAbout = T("O volume dos efeitos e da música fica no menu do jogo (Opções → Opções de som). ")
+                        + T("Driver e buffer também estão no jogo: Opções → android settings.");
                 section("SAÍDA DE ÁUDIO");
                 for (Choice c : AUDIO) choiceRow(st, c);
                 break;
             case TAB_CONTROLS:
-                pageTitle("Controles", "Os analógicos mudam na hora, também pelo jogo (Opções → android settings).");
+                tabAbout = "Os analógicos mudam na hora, também pelo jogo (Opções → android settings).";
                 section("ANALÓGICOS");
                 choiceRows(st, CONTROLS, Settings.STICK_DEADZONE, Settings.STICK_SENSITIVITY);
                 section("VIBRAÇÃO");
                 choiceRows(st, CONTROLS, "android.rumble", Haptics.KEY);
                 section("BOTÕES");
-                note("Escolha um botão do PS2 e aperte o botão do controle que deve fazer o papel dele. Se o botão "
-                        + "já estiver em uso, os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.");
                 for (int i = 0; i < PAD_BUTTONS.length; i++) padRow(st, i);
                 actionRow("Restaurar botões padrão", "O layout do controle volta ao do DualShock 2", this::confirmPadRestore);
                 break;
             case TAB_SAVES:
                 savesPage();
                 break;
-            default:
-                pageTitle("Sistema", "Idioma, restauração, diagnóstico e informações do aplicativo.");
+            case TAB_SYSTEM:
+                tabAbout = "Idioma, restauração e informações do aplicativo.";
                 systemPage(st);
+                break;
+            default:
+                tabAbout = "Ferramentas para investigar problemas e acompanhar o port entre versões. Tudo roda só quando "
+                        + "você pede, nunca durante o jogo. Relatórios e o ZIP não levam saves, cartões de memória nem a imagem do disco.";
+                toolsPage();
                 break;
         }
         selected = Nav.firstEnabled(enabledItems(), tabSelection[index]);
@@ -636,12 +718,16 @@ public final class LauncherActivity extends Activity {
         paintItems();
         pageScroll.scrollTo(0, 0);
         ensureVisible();
+        page.setAlpha(0f);   // a short fade, only on a tab change
+        page.animate().alpha(1f).setDuration(120).start();
     }
 
     /** The tab built again where it is (a change that touches other rows); the selected row stays the same. */
     private void rebuild() {
         int keep = pageScroll.getScrollY();
         showTab(currentTab);
+        page.animate().cancel();
+        page.setAlpha(1f);
         pageScroll.post(() -> {
             pageScroll.scrollTo(0, keep);
             ensureVisible();
@@ -653,7 +739,7 @@ public final class LauncherActivity extends Activity {
         head.setOrientation(LinearLayout.VERTICAL);
         head.setPadding(dp(4), dp(10), dp(4), dp(14));
         head.addView(text("Crash Twinsanity", 30, FG, true));
-        head.addView(text("Port nativo para Android", 13, SUBTLE, false));
+        head.addView(text(T("Port nativo para Android · versão ") + versionName(), 13, SUBTLE, false));
         TextView label = text("JOGO SELECIONADO", 11, SUBTLE, true);
         label.setPadding(0, dp(18), 0, dp(2));
         head.addView(label);
@@ -663,7 +749,7 @@ public final class LauncherActivity extends Activity {
         head.addView(isoState);
         page.addView(head);
         page.addView(line());
-        Item play = row("JOGAR", null, "START", true);
+        Item play = row("JOGAR", "Inicia o jogo com a imagem selecionada. No jogo, Menu principal → quit game volta para cá.", "START", true);
         playLabel = play.main.get(0);
         play.onA = () -> startGame(false);
         play.enabled = () -> !starting && !copying;
@@ -673,40 +759,20 @@ public final class LauncherActivity extends Activity {
         lastRun = text("", 12, SUBTLE, false);
         lastRun.setPadding(dp(4), dp(14), dp(4), 0);
         page.addView(lastRun);
-        note("No jogo: Menu principal → quit game volta para cá.");
+        tabAbout = "A imagem do disco é sua: o app copia a ISO ou o CHD para o armazenamento dele, sem pedir permissões. "
+                + "Nenhum dado do jogo vem no aplicativo.";
         updatePlayState();
     }
 
     private void systemPage(Settings st) {
         section("IDIOMA");
-        choiceRow(st, LANGUAGE);
-        note("O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).");
+        Item lang = choiceRow(st, LANGUAGE);
+        lang.help = "O launcher muda na hora; as opções do port dentro do jogo ficam em inglês (a fonte do jogo).";
         section("RESTAURAR");
         actionRow("Restaurar apenas gráficos",
             "Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
             this::confirmRestoreGraphics);
         actionRow("Restaurar configurações padrão", "Gráficos, áudio e controles voltam aos valores recomendados", this::confirmRestore);
-        section("DIAGNÓSTICO");
-        actionRow("Relatório de diagnóstico", "Os logs da última execução: compartilhar como arquivo de texto ou copiar",
-            () -> dialog(T("Relatório de diagnóstico"), T("Compartilhar envia um arquivo de texto; copiar põe o mesmo texto na área de transferência."),
-                null, new String[] {T("Compartilhar"), T("Copiar"), T("Cancelar")}, 0, 2, w -> {
-                    if (w == 0) buildReport(true);
-                    else if (w == 1) buildReport(false);
-                }));
-        final boolean diag = prefs().getBoolean("diagnostic_mode", false);
-        Item mode = row("Modo diagnóstico", "Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
-                T(diag ? "Ligado" : "Desligado"), false);
-        mode.onA = () -> {
-            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
-            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
-            rebuild();
-        };
-        actionRow("Testes sem o jogo", "Bibliotecas nativas e ambiente, ou janela, controle e áudio do SDL, sem a ISO",
-            () -> dialog(T("Testes sem o jogo"), T("Ambiente: carrega as bibliotecas nativas e testa o aparelho. SDL: abre a janela, o controle e o áudio sem a ISO."),
-                null, new String[] {T("Ambiente"), T("SDL"), T("Cancelar")}, 0, 2, w -> {
-                    if (w == 0) startActivity(new Intent(this, ProbeActivity.class));
-                    else if (w == 1) startSdlTest();
-                }));
         section("APLICATIVO");
         actionRow("Ícone personalizado", "Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", this::chooseIconImage);
         actionRow("Licenças de código aberto", "Os projetos em que este port se baseia e as suas licenças", () -> dialog(T("Licenças de código aberto"),
@@ -720,27 +786,7 @@ public final class LauncherActivity extends Activity {
                 + T("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco."),
             null, new String[] {T("OK")}, 0, 0, null));
         actionRow("Sair do aplicativo", "Fecha o Crash Twinsanity (configurações, saves e a ISO ficam guardados)", this::confirmExit);
-        note(T("Arquivo de configurações (compartilhado com o jogo):\n") + st.file().getAbsolutePath());
-        note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE
-                + " (API " + Build.VERSION.SDK_INT + ") · " + (Build.SUPPORTED_ABIS.length > 0 ? Build.SUPPORTED_ABIS[0] : "?"));
-        status = text("", 11, SUBTLE, false);
-        status.setTypeface(Typeface.MONOSPACE);
-        status.setPadding(dp(4), dp(14), dp(4), dp(6));
-        page.addView(status);
-        status.setText("…");
-        updateStatus();
-    }
-
-    // A settings tab's name and what it holds, above its rows
-    private void pageTitle(String name, String about) {
-        LinearLayout head = new LinearLayout(this);
-        head.setOrientation(LinearLayout.VERTICAL);
-        head.setPadding(dp(4), dp(10), dp(4), dp(2));
-        head.addView(text(name, 28, FG, true));
-        TextView a = text(about, 13, SUBTLE, false);
-        a.setPadding(0, dp(4), 0, 0);
-        head.addView(a);
-        page.addView(head);
+        note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE);
     }
 
     /** The rows of `group` with these keys, in this order */
@@ -748,6 +794,188 @@ public final class LauncherActivity extends Activity {
         for (String k : keys)
             for (Choice c : group)
                 if (c.key.equals(k)) choiceRow(st, c);
+    }
+
+    // ---- the tools (Tools.java, ToolsCore.java) ---------------------------------------------------------------------------
+    private void toolsPage() {
+        section("ÚLTIMA EXECUÇÃO");
+        status = text("…", 13, FG, false);
+        status.setTypeface(Typeface.MONOSPACE);
+        status.setLineSpacing(0, 1.2f);
+        status.setPadding(dp(4), dp(8), dp(4), dp(8));
+        page.addView(status);
+        section("RELATÓRIOS");
+        actionRow("Relatório completo",
+            "Aparelho, renderizador, áudio, controles, configurações, última execução, histórico e logs num só texto, pronto para colar numa IA. Compartilhar ou copiar.",
+            () -> dialog(T("Relatório completo"), T("Compartilhar envia um arquivo de texto; copiar põe o mesmo texto na área de transferência."),
+                null, new String[] {T("Compartilhar"), T("Copiar"), T("Cancelar")}, 0, 2, w -> {
+                    if (w == 0) buildReport(true);
+                    else if (w == 1) buildReport(false);
+                }));
+        actionRow("Exportar pacote ZIP",
+            "Todos os registros técnicos (logs do jogo e do launcher, travamentos, histórico de sessões, verificações, aparelho e ps2r.ini) num .zip onde você escolher. Sem saves nem a ISO.",
+            () -> {
+                String name = "crash-twinsanity-diagnostico-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+                launchPicker(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
+                    .putExtra(Intent.EXTRA_TITLE, name), REQUEST_EXPORT_TOOLS);
+            });
+        section("ANÁLISE");
+        actionRow("Desempenho", "FPS, tempo de quadro, pior engasgo, CPU e memória da última execução, a cada ~10 segundos de jogo (o jogo já mede; nada é ligado a mais).",
+            this::showPerformance);
+        actionRow("Falhas e travamentos", "Como terminou a última execução e as linhas de erro, travamento e encerramento dos logs.", this::showFailures);
+        actionRow("Histórico de sessões", "As últimas " + Tools.KEEP_SESSIONS + " sessões com versão, duração, FPS, CPU, memória e configurações: para comparar versões e achar regressões.",
+            this::showSessions);
+        section("TESTES");
+        actionRow("Verificar componentes", "Armazenamento, configurações, imagem do disco, biblioteca nativa, gráficos, áudio, controles, vibração e memória, em poucos segundos.",
+            this::runChecks);
+        actionRow("Teste do ambiente", "Carrega as bibliotecas nativas e testa fibers, armazenamento, imagem do disco e OpenGL ES, sem o jogo.",
+            () -> startActivity(new Intent(this, ProbeActivity.class)));
+        actionRow("Teste do SDL", "Abre a janela, o controle e o áudio do SDL sem a ISO.", this::startSdlTest);
+        section("OPÇÕES");
+        final boolean diag = prefs().getBoolean("diagnostic_mode", false);
+        Item mode = row("Modo diagnóstico", "Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
+                T(diag ? "Ligado" : "Desligado"), false);
+        mode.onA = () -> {
+            prefs().edit().putBoolean("diagnostic_mode", !diag).apply();
+            Diag.log(this, "main", "diagnostic mode " + (!diag ? "on" : "off"));
+            rebuild();
+        };
+        mode.onStep = d -> mode.onA.run();
+        actionRow("Apagar registros técnicos", "Apaga os logs, relatórios e verificações (o histórico de sessões, os saves e as configurações ficam).",
+            () -> dialog(T("Apagar registros técnicos?"), T("Os logs, relatórios e verificações são apagados. O histórico de sessões, os saves, as configurações e a ISO ficam."),
+                null, new String[] {T("Apagar"), T("Cancelar")}, 1, 1, w -> {
+                    if (w != 0) return;
+                    io.execute(() -> {
+                        int n = Tools.clearLogs(this);
+                        runOnUiThread(() -> {
+                            Toast.makeText(this, T("Registros apagados: ") + n, Toast.LENGTH_SHORT).show();
+                            updateStatus();
+                        });
+                    });
+                }));
+        updateStatus();
+    }
+
+    // A long text in a dialog that scrolls (up / down), monospaced when it is a table
+    private void textDialog(String title, String body, boolean mono) {
+        TextView t = new TextView(this);
+        t.setText(body);
+        t.setTextColor(FG);
+        t.setTextSize(TypedValue.COMPLEX_UNIT_SP, mono ? 12 : 14);
+        if (mono) t.setTypeface(Typeface.MONOSPACE);
+        t.setLineSpacing(0, 1.15f);
+        t.setTextIsSelectable(false);
+        ScrollView sc = new ScrollView(this);
+        sc.setVerticalScrollBarEnabled(true);
+        sc.addView(t);
+        int max = (int) (getResources().getDisplayMetrics().heightPixels * 0.55f);
+        LinearLayout holder = new LinearLayout(this) {
+            @Override
+            protected void onMeasure(int w, int h) {
+                super.onMeasure(w, MeasureSpec.makeMeasureSpec(max, MeasureSpec.AT_MOST));
+            }
+        };
+        holder.addView(sc, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        OledDialog d = dialog(title, null, holder, new String[] {T("Fechar")}, 0, 0, null);
+        d.setScrollTarget(sc);
+    }
+
+    private void showPerformance() {
+        io.execute(() -> {
+            ToolsCore.Summary s = Tools.lastSession(this);
+            String table = Tools.performanceText(s);
+            final String body = table == null
+                ? T("Nenhuma medida ainda: jogue pelo menos 10 segundos e volte aqui.")
+                : T("Média ") + ToolsCore.num(s.avg(ToolsCore.FPS), 1) + " FPS · " + T("mínima ") + ToolsCore.num(s.min(ToolsCore.FPS), 1)
+                    + " FPS · " + T("quadro ") + ToolsCore.num(s.avg(ToolsCore.FRAME_MS), 2) + " ms · " + T("pior engasgo ")
+                    + ToolsCore.num(s.max(ToolsCore.GAP_MS), 1) + " ms\nCPU " + ToolsCore.num(s.avg(ToolsCore.CPU), 0) + T("% de um núcleo · memória máxima ")
+                    + ToolsCore.num(s.max(ToolsCore.MEMORY), 0) + " MB\n\n" + table;
+            runOnUiThread(() -> textDialog(T("Desempenho da última execução"), body, true));
+        });
+    }
+
+    private void showFailures() {
+        io.execute(() -> {
+            File dir = Diag.logsDir(this);
+            StringBuilder b = new StringBuilder();
+            String stage = Diag.readFile(new File(dir, "stage-game.txt"), 2000);
+            b.append(T("Última execução: ")).append(T(ToolsCore.stageWords(stage)));
+            if (stage != null) b.append("\n").append(stage.trim());
+            b.append("\n");
+            for (String[] f : new String[][] {{"latest-game.log", "Última execução"}, {"previous-game.log", "Execução anterior"}}) {
+                List<String> lines = ToolsCore.failureLines(Diag.readFile(new File(dir, f[0]), 0), 40);
+                b.append("\n").append(T(f[1])).append(" (").append(f[0]).append("): ");
+                if (lines.isEmpty()) b.append(T("nenhuma linha de erro")).append("\n");
+                else {
+                    b.append(lines.size()).append("\n");
+                    for (String l : lines) b.append("  ").append(l).append("\n");
+                }
+            }
+            for (String name : new String[] {"java-crash-game.txt", "java-crash-main.txt", "java-crash-probe.txt"}) {
+                String t = Diag.readFile(new File(dir, name), 4000);
+                if (t != null) b.append("\n").append(name).append(":\n").append(t).append("\n");
+            }
+            String nat = Diag.readFile(new File(dir, "latest-game.log"), 200000);
+            if (nat != null && nat.contains("FATAL")) {
+                String frames = Diag.symbolizeFrames(this, nat);
+                if (!frames.isEmpty()) b.append("\n").append(T("Funções no travamento (libmain.so):")).append("\n").append(frames);
+            }
+            final String body = b.toString();
+            runOnUiThread(() -> textDialog(T("Falhas e travamentos"), body, true));
+        });
+    }
+
+    private void showSessions() {
+        io.execute(() -> {
+            Tools.recordSessions(this, versionName());
+            List<String[]> rows = ToolsCore.sessions(Diag.readFile(new File(Diag.logsDir(this), Tools.SESSIONS), 0));
+            StringBuilder b = new StringBuilder();
+            if (rows.isEmpty()) b.append(T("Nenhuma sessão registrada ainda: as sessões entram aqui depois de jogar."));
+            else {
+                b.append(String.format(Locale.US, "%-16s %-8s %-10s %-9s %-6s %-6s %-5s %-6s %s\n", T("início"), T("versão"), T("duração"),
+                    T("fim"), "FPS", "min", "CPU", "MB", T("config.")));
+                for (int i = rows.size() - 1; i >= 0; i--) {
+                    String[] f = rows.get(i);
+                    long secs = -1;
+                    try { secs = Long.parseLong(f[2]); } catch (NumberFormatException ignored) {}
+                    b.append(String.format(Locale.US, "%-16s %-8s %-10s %-9s %-6s %-6s %-5s %-6s %s\n",
+                        f[0].length() >= 16 ? f[0].substring(0, 16) : f[0], f[1], ToolsCore.duration(secs), f[3], f[4], f[5], f[8], f[9],
+                        f[10] + "x " + f[11] + "fps " + f[13]));
+                }
+            }
+            final String body = b.toString();
+            runOnUiThread(() -> textDialog(T("Histórico de sessões"), body, true));
+        });
+    }
+
+    private void runChecks() {
+        Toast.makeText(this, T("Verificando…"), Toast.LENGTH_SHORT).show();
+        io.execute(() -> {
+            final String out = Tools.runChecks(this, versionName());
+            runOnUiThread(() -> textDialog(T("Verificação dos componentes"), out, true));
+        });
+    }
+
+    private void exportTools(final Uri uri) {
+        Toast.makeText(this, T("Gerando o pacote…"), Toast.LENGTH_SHORT).show();
+        new Thread(() -> {
+            String msg;
+            try {
+                Tools.recordSessions(this, versionName());
+                writeReport();
+                try (java.io.OutputStream out = getContentResolver().openOutputStream(uri)) {
+                    if (out == null) throw new java.io.IOException("destino indisponível");
+                    int n = Tools.exportZip(this, versionName(), out);
+                    msg = T("Pacote exportado: ") + n + T(" arquivo(s)");
+                    Diag.log(this, "main", "tools: diagnostic zip exported, " + n + " entries");
+                }
+            } catch (Exception e) {
+                msg = T("A exportação falhou: ") + e.getMessage();
+                Diag.log(this, "main", "tools: zip export failed: " + e);
+            }
+            final String m = msg;
+            runOnUiThread(() -> Toast.makeText(this, m, Toast.LENGTH_LONG).show());
+        }, "export-tools").start();
     }
 
     // ---- the saves (SaveManager.java) ------------------------------------------------------------------------------------
@@ -771,7 +999,7 @@ public final class LauncherActivity extends Activity {
     }
 
     private void savesPage() {
-        pageTitle("Saves", "Os saves do cartão de memória do jogo: backup, restauração e exclusão.");
+        tabAbout = T("Os saves do cartão de memória do jogo. Backups automáticos (antes de importar ou apagar): ") + backupDir().getAbsolutePath();
         section("BACKUP");
         actionRow("Exportar backup", "Salva todos os cartões de memória num arquivo .zip onde você escolher", () -> {
             if (gameRunning()) return;
@@ -792,10 +1020,11 @@ public final class LauncherActivity extends Activity {
         java.text.DateFormat when = java.text.DateFormat.getDateTimeInstance(java.text.DateFormat.SHORT, java.text.DateFormat.SHORT);
         for (final SaveManager.Save sv : saves) {
             String card = sv.card.equals("memcards") ? T("cartão principal") : sv.card.equals("memcards-mods") ? T("cartão dos mods") : sv.card;
-            Item it = row(sv.title, card + " · " + sv.port + " · " + SaveManager.humanSize(sv.bytes) + " · " + when.format(new java.util.Date(sv.modified)), "›", false);
+            Item it = row(sv.title, card + " · " + sv.port + " · " + SaveManager.humanSize(sv.bytes) + " · " + when.format(new java.util.Date(sv.modified)),
+                when.format(new java.util.Date(sv.modified)), false);
+            it.help = T("A apaga este save (um backup automático é feito antes).\n\n") + it.help;
             it.onA = () -> confirmDeleteSave(sv);
         }
-        note(T("Backups automáticos (antes de importar ou apagar): ") + backupDir().getAbsolutePath());
     }
 
     // ---- the custom icon: a pinned home-screen shortcut with the player's picture (ShortcutManager). Android gives an app
@@ -983,20 +1212,16 @@ public final class LauncherActivity extends Activity {
         LinearLayout v = new LinearLayout(this);
         v.setOrientation(LinearLayout.HORIZONTAL);
         v.setGravity(Gravity.CENTER_VERTICAL);
-        v.setPadding(dp(14), dp(large ? 16 : 11), dp(14), dp(large ? 16 : 11));
-        v.setMinimumHeight(dp(large ? 64 : 52));
+        v.setPadding(dp(14), dp(large ? 14 : 9), dp(14), dp(large ? 14 : 9));
+        v.setMinimumHeight(dp(large ? 60 : 46));
         final Item it = new Item(v);
         LinearLayout words = new LinearLayout(this);
         words.setOrientation(LinearLayout.VERTICAL);
         TextView l = text(label, large ? 22 : 16, FG, large);
         words.addView(l);
         it.main.add(l);
-        if (help != null) {
-            TextView h = text(help, 12, SUBTLE, false);
-            h.setPadding(0, dp(2), 0, 0);
-            words.addView(h);
-            it.sub.add(h);
-        }
+        it.label = label;
+        it.help = help;   // shown in the detail pane while the row is selected, not under every row
         v.addView(words, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         if (value != null) {
             TextView val = text(value, large ? 15 : 15, FG, false);
@@ -1158,7 +1383,9 @@ public final class LauncherActivity extends Activity {
 
 
     private Item padRow(final Settings st, final int i) {
-        Item it = row(PAD_LABELS[i], null, controlLabel(padControl(st, i)), false);   // (A, B, L1, ...: the same in both languages)
+        Item it = row(PAD_LABELS[i], "Aperte A e depois o botão do controle que deve fazer o papel deste. Se ele já estiver em uso, "
+                + "os dois trocam de lugar. Vale no próximo início do jogo; o launcher não muda.",
+            controlLabel(padControl(st, i)), false);   // (A, B, L1, ...: the same in both languages)
         it.onA = () -> capturePad(st, i);
         return it;
     }
@@ -1309,12 +1536,28 @@ public final class LauncherActivity extends Activity {
         });
     }
 
-    // Sistema's diagnostic text (several log files): read on the io thread
+    // Ferramentas' summary of the last run (the game's own pace / perf lines): read on the io thread; the session history
+    // gets the runs it lacks at the same time
     private void updateStatus() {
         final TextView st = status;
         if (st == null) return;
         io.execute(() -> {
-            final String text = statusText();
+            Tools.recordSessions(this, versionName());
+            ToolsCore.Summary s = Tools.lastSession(this);
+            String stage = Diag.readFile(new File(Diag.logsDir(this), "stage-game.txt"), 2000);
+            StringBuilder b = new StringBuilder();
+            b.append(T(ToolsCore.stageWords(stage)));
+            if (s.start != null) b.append(" · ").append(s.start).append(" · ").append(ToolsCore.duration(ToolsCore.seconds(s.start, s.end)));
+            if (s.count() > 0) {
+                b.append("\nFPS ").append(ToolsCore.num(s.avg(ToolsCore.FPS), 1)).append(T(" (mín. ")).append(ToolsCore.num(s.min(ToolsCore.FPS), 1))
+                 .append(")  ·  ").append(T("quadro ")).append(ToolsCore.num(s.avg(ToolsCore.FRAME_MS), 2)).append(" ms  ·  ")
+                 .append(T("pior ")).append(ToolsCore.num(s.max(ToolsCore.GAP_MS), 1)).append(" ms")
+                 .append("\nCPU ").append(ToolsCore.num(s.avg(ToolsCore.CPU), 0)).append(T("% de um núcleo  ·  memória ")).append(ToolsCore.num(s.max(ToolsCore.MEMORY), 0)).append(" MB");
+            } else if (s.start != null) {
+                b.append("\n").append(T("Sem medidas de desempenho (menos de 10 s de jogo)."));
+            }
+            if (s.fatalLines > 0) b.append("\n").append(s.fatalLines).append(T(" linha(s) de erro fatal — veja Falhas e travamentos."));
+            final String text = b.toString();
             runOnUiThread(() -> { if (status == st) st.setText(text); });
         });
     }
@@ -1327,9 +1570,9 @@ public final class LauncherActivity extends Activity {
         s = s.trim();
         if (s.startsWith("running")) {
             if (Diag.processAlive(this, "game")) return new String[] {"O jogo está em execução.", null};
-            return new String[] {"A última execução terminou de forma inesperada. Veja Sistema → Relatório de diagnóstico.", "bad"};
+            return new String[] {"A última execução terminou de forma inesperada. Veja Ferramentas → Falhas e travamentos.", "bad"};
         }
-        if (s.startsWith("crash")) return new String[] {"A última execução travou. Veja Sistema → Relatório de diagnóstico.", "bad"};
+        if (s.startsWith("crash")) return new String[] {"A última execução travou. Veja Ferramentas → Falhas e travamentos.", "bad"};
         return new String[] {"A última execução terminou normalmente.", null};
     }
 
@@ -1414,8 +1657,6 @@ public final class LauncherActivity extends Activity {
 
         File ext = getExternalFilesDir(null);
         b.append("IMAGEM DO DISCO\n");
-        String source = prefs().getString("iso_source", null);
-        if (source != null) b.append("  selecionada: ").append(source).append('\n');
         String[] disc = Diag.findDiscImage(this);
         if (disc[0] == null) {
             b.append("  NENHUMA imagem encontrada — ").append(disc[1]).append('\n')
@@ -1482,6 +1723,11 @@ public final class LauncherActivity extends Activity {
         if (requestCode == REQUEST_ICON_IMAGE) {
             pickerOpen = false;
             if (resultCode == RESULT_OK && data != null && data.getData() != null) makeIconShortcut(data.getData());
+            return;
+        }
+        if (requestCode == REQUEST_EXPORT_TOOLS) {
+            pickerOpen = false;
+            if (resultCode == RESULT_OK && data != null && data.getData() != null) exportTools(data.getData());
             return;
         }
         if (requestCode == REQUEST_EXPORT_SAVES || requestCode == REQUEST_IMPORT_SAVES) {
@@ -1628,49 +1874,82 @@ public final class LauncherActivity extends Activity {
     }
 
 
+    // The complete report (files/logs/report.txt): built on the calling thread (never the screen's). Sections an AI or a
+    // person reads in order: the app and the device, the last run in figures, the history, the checks, the settings,
+    // then the logs and their filtered views. No save, no disc image, no name the player gave a file.
+    private String writeReport() {
+        final Context c = this;
+        File dir = Diag.logsDir(c);
+        Tools.recordSessions(c, versionName());
+        Diag.write(new File(dir, "logcat.txt"), Diag.captureLogcat(4000));
+        StringBuilder b = new StringBuilder();
+        b.append("Crash Twinsanity Android — relatório completo — ").append(Diag.now()).append("\n\n");
+        b.append("===== APLICATIVO E APARELHO =====\n").append(Tools.deviceLines(c, versionName()));
+        String pads = Tools.controllers();
+        b.append("controles conectados:\n").append(pads.isEmpty() ? "  (nenhum)\n" : pads);
+        b.append("modo diagnóstico: ").append(prefs().getBoolean("diagnostic_mode", false) ? "ligado" : "desligado").append("\n");
+
+        ToolsCore.Summary s = Tools.lastSession(c);
+        b.append("\n===== ÚLTIMA EXECUÇÃO (resumo) =====\n");
+        b.append("fim: ").append(ToolsCore.stageWords(Diag.readFile(new File(dir, "stage-game.txt"), 2000))).append(" (").append(s.endState).append(")\n");
+        b.append("início: ").append(s.start != null ? s.start : "?").append(", duração ").append(ToolsCore.duration(ToolsCore.seconds(s.start, s.end))).append("\n");
+        b.append("renderizador: ").append(s.renderer != null ? s.renderer : "?").append("\n");
+        b.append("janelas medidas: ").append(s.count()).append(", FPS médio ").append(ToolsCore.num(s.avg(ToolsCore.FPS), 1))
+         .append(", mínimo ").append(ToolsCore.num(s.min(ToolsCore.FPS), 1)).append(", quadro ").append(ToolsCore.num(s.avg(ToolsCore.FRAME_MS), 2))
+         .append(" ms, pior engasgo ").append(ToolsCore.num(s.max(ToolsCore.GAP_MS), 1)).append(" ms, CPU ").append(ToolsCore.num(s.avg(ToolsCore.CPU), 0))
+         .append("% de um núcleo, memória máxima ").append(ToolsCore.num(s.max(ToolsCore.MEMORY), 0)).append(" MB, linhas fatais ").append(s.fatalLines).append("\n");
+        String perf = Tools.performanceText(s);
+        if (perf != null) b.append(perf);
+
+        b.append("\n===== HISTÓRICO DE SESSÕES (sessions.tsv) =====\n");
+        String hist = Diag.readFile(new File(dir, Tools.SESSIONS), 0);
+        b.append(hist != null ? hist : "(vazio)\n");
+        b.append("\n===== ÚLTIMA VERIFICAÇÃO DOS COMPONENTES (tests.txt) =====\n");
+        String tests = Diag.readFile(new File(dir, Tools.TESTS), 0);
+        b.append(tests != null ? tests : "(nunca executada: Ferramentas → Verificar componentes)\n");
+        b.append("\n===== CONFIGURAÇÕES (ps2r.ini) =====\n");
+        String ini = Diag.readFile(new Settings(c).file(), 20000);
+        b.append(ini != null ? ini : "(ainda não existe)\n");
+        b.append("\n===== ESTADO (imagem do disco, áudio, estágios) =====\n").append(statusText()).append('\n');
+
+        String[] order = {"stage-game.txt", "java-crash-game.txt", "java-game.log", "latest-game.log", "previous-game.log",
+                          "stage-probe.txt", "java-crash-probe.txt", "probe-result.txt", "latest-probe.log",
+                          "java-crash-main.txt", "java-main.log", "logcat.txt"};
+        for (String name : order) {
+            String content = Diag.readFile(new File(dir, name), name.equals("logcat.txt") ? 300000 : 120000);
+            if (content == null) continue;
+            b.append("\n===== ").append(name).append(" =====\n").append(content).append('\n');
+        }
+        String game = Diag.readFile(new File(dir, "latest-game.log"), 0);
+        if (game != null) {
+            StringBuilder in = new StringBuilder(), au = new StringBuilder(), gx = new StringBuilder(), pf = new StringBuilder();
+            for (String line : game.split("\n")) {
+                if (line.contains("input:") || line.contains("] input")) in.append(line).append('\n');
+                if (line.contains("audio") || line.contains("AAudio")) au.append(line).append('\n');
+                if (line.contains("[gl") || line.contains("display:") || line.contains("particles") || line.contains("TE_GFX")
+                        || line.contains("te.gfx.capture") || line.contains("te.gfx.submit"))
+                    gx.append(line).append('\n');
+                if (line.contains("[te.gfx] pace") || line.contains("[te.gfx] lod") || line.contains("[te.android] perf") || line.contains("android settings:")
+                        || line.contains("] display: aspect"))
+                    pf.append(line).append('\n');
+            }
+            b.append("\n===== CONTROLES (linhas de input do latest-game.log) =====\n").append(in.length() > 0 ? in : "(nenhuma)\n");
+            b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
+            b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
+            b.append("\n===== DESEMPENHO (fps, tempo de quadro, CPU, memória, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");
+        }
+        String frames = Diag.symbolizeFrames(c, b.toString());
+        if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);
+        final String report = b.toString();
+        Diag.write(new File(dir, "report.txt"), report);
+        return report;
+    }
+
     private void buildReport(final boolean share) {
         Toast.makeText(this, T("Gerando relatório…"), Toast.LENGTH_SHORT).show();
         final Context c = this;
         new Thread(() -> {
-            File dir = Diag.logsDir(c);
-            Diag.write(new File(dir, "logcat.txt"), Diag.captureLogcat(4000));
-            StringBuilder b = new StringBuilder();
-            b.append("Crash Twinsanity Android — relatório de diagnóstico — ").append(Diag.now()).append("\n\n");
-            b.append(statusText()).append('\n');
-            String[] order = {"stage-game.txt", "java-crash-game.txt", "java-game.log", "latest-game.log", "previous-game.log",
-                              "stage-probe.txt", "java-crash-probe.txt", "probe-result.txt", "latest-probe.log",
-                              "java-crash-main.txt", "java-main.log", "logcat.txt"};
-            for (String name : order) {
-                String content = Diag.readFile(new File(dir, name), name.equals("logcat.txt") ? 300000 : 120000);
-                if (content == null) continue;
-                b.append("\n===== ").append(name).append(" =====\n").append(content).append('\n');
-            }
-            String game = Diag.readFile(new File(dir, "latest-game.log"), 0);
-            if (game != null) {
-                StringBuilder in = new StringBuilder(), au = new StringBuilder();
-                for (String line : game.split("\n")) {
-                    if (line.contains("input:") || line.contains("] input")) in.append(line).append('\n');
-                    if (line.contains("audio") || line.contains("AAudio")) au.append(line).append('\n');
-                }
-                b.append("\n===== CONTROLES (linhas de input do latest-game.log) =====\n").append(in.length() > 0 ? in : "(nenhuma)\n");
-                b.append("\n===== ÁUDIO (linhas de áudio do latest-game.log) =====\n").append(au.length() > 0 ? au : "(nenhuma)\n");
-                StringBuilder gx = new StringBuilder();
-                for (String line : game.split("\n"))
-                    if (line.contains("[gl") || line.contains("display:") || line.contains("particles") || line.contains("TE_GFX")
-                            || line.contains("te.gfx.capture") || line.contains("te.gfx.submit"))
-                        gx.append(line).append('\n');
-                b.append("\n===== GRÁFICOS ([gl], [gl.es], [gl.debug], display:, partículas) =====\n").append(gx.length() > 0 ? gx : "(nenhuma)\n");
-                StringBuilder pf = new StringBuilder();
-                for (String line : game.split("\n"))
-                    if (line.contains("[te.gfx] pace") || line.contains("[te.gfx] lod") || line.contains("[te.android] perf") || line.contains("android settings:")
-                            || line.contains("] display: aspect"))
-                        pf.append(line).append('\n');
-                b.append("\n===== DESEMPENHO (fps, tempo de quadro, CPU, memória, configurações) =====\n").append(pf.length() > 0 ? pf : "(nenhuma)\n");
-            }
-            String frames = Diag.symbolizeFrames(c, b.toString());
-            if (!frames.isEmpty()) b.append("\n===== libmain.so frames, symbolised (installed libmain.so .symtab) =====\n").append(frames);
-            final String report = b.toString();
-            Diag.write(new File(dir, "report.txt"), report);
+            final String report = writeReport();
             runOnUiThread(() -> {
                 refresh();
                 if (share) {
@@ -1680,7 +1959,7 @@ public final class LauncherActivity extends Activity {
                     send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor(this, "report.txt"));
                     send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Crash Twinsanity (anexo report.txt).");
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                    startActivity(Intent.createChooser(send, "Compartilhar relatório"));
+                    startActivity(Intent.createChooser(send, T("Compartilhar relatório")));
                 } else {
                     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     String clip = report.length() > 250000 ? report.substring(report.length() - 250000) : report;
