@@ -788,7 +788,7 @@ public final class LauncherActivity extends Activity {
         playLabel = play.main.get(0);
         play.onA = () -> startGame(false);
         play.enabled = () -> !starting && !copying;
-        Item pick = row("Selecionar ISO ou CHD…", "Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "›", false);
+        Item pick = row("Selecionar", "Copia a SUA imagem do jogo (ISO ou CHD) para o app, sem permissão de armazenamento", "›", false);
         pick.onA = this::pickIso;
         pick.enabled = () -> !copying;
         lastRun = text("", 12, SUBTLE, false);
@@ -1479,7 +1479,7 @@ public final class LauncherActivity extends Activity {
                 if (isoName != name) return;   // the tab changed meanwhile
                 if (disc[0] == null) {
                     name.setText(T("Nenhuma ISO selecionada"));
-                    state.setText(T("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
+                    state.setText(T("Escolha \"Selecionar\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U)."));
                     state.setTextColor(FG);
                 } else {
                     name.setText(source != null ? source : new File(disc[0]).getName());
@@ -1550,9 +1550,9 @@ public final class LauncherActivity extends Activity {
         if (err != null && !force) {
             dialog(T("Imagem do disco não disponível"),
                 T("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n")
-                    + T("Escolha \"Selecionar ISO ou CHD…\" e indique o arquivo no gerenciador de arquivos do Android.\n\n")
+                    + T("Escolha \"Selecionar\" e indique o arquivo no gerenciador de arquivos do Android.\n\n")
                     + T("Detalhe: ") + err,
-                null, new String[] {T("Selecionar ISO"), T("Iniciar mesmo assim"), T("Cancelar")}, 0, 2, w -> {
+                null, new String[] {T("Selecionar"), T("Iniciar mesmo assim"), T("Cancelar")}, 0, 2, w -> {
                     if (w == 0) pickIso();
                     else if (w == 1) startGame(true);
                 });
@@ -1611,7 +1611,7 @@ public final class LauncherActivity extends Activity {
         String[] disc = Diag.findDiscImage(this);
         if (disc[0] == null) {
             b.append("  NENHUMA imagem encontrada — ").append(disc[1]).append('\n')
-             .append("  Toque em \"Selecionar ISO\" e escolha a SUA imagem do jogo no gerenciador de arquivos.\n")
+             .append("  Toque em \"Selecionar\" e escolha a SUA imagem do jogo no gerenciador de arquivos.\n")
              .append("  (pasta alternativa: ").append(ext != null ? ext.getAbsolutePath() : "indisponível").append("/twinsanity.iso)\n");
         } else {
             StringBuilder r = new StringBuilder();
@@ -1619,7 +1619,7 @@ public final class LauncherActivity extends Activity {
             b.append("  ").append(disc[0]).append(" (").append(disc[1]).append(")\n  ").append(r)
              .append(err == null ? " — OK" : " — NÃO UTILIZÁVEL: " + err).append('\n');
             if (err != null && err.contains("EACCES"))
-                b.append("  O arquivo existe, mas o Android não deixa o app lê-lo (EACCES). Use \"Selecionar ISO\": o app copia a\n")
+                b.append("  O arquivo existe, mas o Android não deixa o app lê-lo (EACCES). Use \"Selecionar\": o app copia a\n")
                  .append("  imagem pelo seletor do Android para o seu armazenamento privado, sem pedir permissões de armazenamento.\n");
         }
         Settings st = new Settings(this);

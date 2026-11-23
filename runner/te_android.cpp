@@ -191,7 +191,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
         const std::string why = iso.empty() ? how : report;
         ShowMessage(SDL_MESSAGEBOX_WARNING, "TwinsanityEvolved - imagem do disco",
                     "Nenhuma imagem de disco utilizável foi encontrada, então o jogo não foi iniciado.\n\n"
-                    "Volte ao inicializador, toque em \"Selecionar ISO\" e escolha a SUA imagem do Crash Twinsanity "
+                    "Volte ao inicializador, toque em \"Selecionar\" e escolha a SUA imagem do Crash Twinsanity "
                     "(PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) no gerenciador de arquivos.\n\nDetalhe: " + why);
         te_android_finished(2);
         return 2;

@@ -50,12 +50,11 @@ final class Lang {
         e("Sistema", "System");
         e("JOGAR", "PLAY");
         e("Iniciando…", "Starting…");
-        e("Selecionar ISO", "Select ISO");
+        e("Selecionar", "Select");
         e("Sair do aplicativo", "Exit application");
         e("JOGO SELECIONADO", "SELECTED GAME");
         e("Jogar", "Play");
-        e("Selecionar ISO ou CHD…", "Select ISO or CHD…");
-        e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
+        e("Copia a SUA imagem do jogo (ISO ou CHD) para o app, sem permissão de armazenamento", "Copies YOUR game image (ISO or CHD) into the app, no storage permission");
         e("RESTAURAR", "RESTORE");
         e("Licenças de código aberto", "Open source licenses");
         e("Os projetos em que este port se baseia e as suas licenças", "The projects this port is built on and their licenses");
@@ -104,8 +103,8 @@ final class Lang {
         e("Fecha o Twinsanity Pocket (configurações, saves e a ISO ficam guardados)", "Closes Twinsanity Pocket (settings, saves and the ISO are kept)");
         e("versão ", "version ");
         e("Nenhuma ISO selecionada", "No ISO selected");
-        e("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
-          "Choose \"Select ISO or CHD…\" and point to YOUR Crash Twinsanity disc image (PAL or NTSC-U).");
+        e("Escolha \"Selecionar\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
+          "Choose \"Select\" and point to YOUR Crash Twinsanity disc image (PAL or NTSC-U).");
         e("Pronta — ", "Ready — ");
         e("Não utilizável: ", "Not usable: ");
         e("Ainda não executado nesta instalação.", "Not run yet on this installation.");
@@ -327,8 +326,8 @@ final class Lang {
         e("Imagem do disco não disponível", "Disc image not available");
         e("O jogo precisa da SUA imagem do Crash Twinsanity (PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00).\n\n",
           "The game needs YOUR Crash Twinsanity disc image (PAL SLES-52568 or NTSC-U SLUS-20909 v2.00).\n\n");
-        e("Escolha \"Selecionar ISO ou CHD…\" e indique o arquivo no gerenciador de arquivos do Android.\n\n",
-          "Choose \"Select ISO or CHD…\" and point to the file in Android's file manager.\n\n");
+        e("Escolha \"Selecionar\" e indique o arquivo no gerenciador de arquivos do Android.\n\n",
+          "Choose \"Select\" and point to the file in Android's file manager.\n\n");
         e("Detalhe: ", "Detail: ");
         e("Iniciar mesmo assim", "Start anyway");
         e("O seletor de arquivos do Android não abriu: ", "Android's file picker did not open: ");
