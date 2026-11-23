@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The adaptive icon: the illustration (on its own black) over a black background; the launcher's mask cuts the shape. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_crash_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_crash_launcher_foreground" />
+</adaptive-icon>

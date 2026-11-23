@@ -61,6 +61,8 @@ IOPRP???.IMG
 *.dds
 *.PNG
 *.png
+# ...except the Android app's own icon (an original illustration made for the launcher; no game or promotional art)
+!android/game/app/src/main/res/mipmap-*/ic_crash_launcher*.png
 # the one picture exemption (tools/ci/asset_scan.sh): the launcher's own window for README, nothing of the disc
 !/docs/launcher/screenshots/launcher-*.png
 *.jpg

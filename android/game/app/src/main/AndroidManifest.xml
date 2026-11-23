@@ -11,8 +11,10 @@
         android:allowBackup="false"
         android:extractNativeLibs="true"
         android:hasCode="true"
+        android:icon="@mipmap/ic_crash_launcher"
         android:isGame="true"
         android:label="${appLabel}"
+        android:roundIcon="@mipmap/ic_crash_launcher_round"
         android:supportsRtl="true">
 
         <!-- The entry: Java only, the app's main process. The landscape launcher: the game, the settings (ps2r.ini), the diagnostics. -->
