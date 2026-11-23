@@ -120,7 +120,7 @@ final class Lang {
         e("Modo diagnóstico", "Diagnostic mode");
         e("Registra as mensagens da GPU, os analógicos e a vibração do jogo e permite capturar um quadro com L3 + R3 (deixe desligado para jogar)",
           "Logs the GPU messages, the sticks and the game's vibration and lets L3 + R3 capture a frame (leave off to play)");
-        e("Fecha o Crash Twinsanity (configurações, saves e a ISO ficam guardados)", "Closes Crash Twinsanity (settings, saves and the ISO are kept)");
+        e("Fecha o Twinsanity Pocket (configurações, saves e a ISO ficam guardados)", "Closes Twinsanity Pocket (settings, saves and the ISO are kept)");
         e("versão ", "version ");
         e("Nenhuma ISO selecionada", "No ISO selected");
         e("Escolha \"Selecionar ISO ou CHD…\" e indique a SUA imagem do Crash Twinsanity (PAL ou NTSC-U).",
@@ -382,8 +382,8 @@ final class Lang {
                 + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo.",
           "The game is still open in the background. Leave it from the game (Main menu → quit game) "
                 + "so no unsaved progress is lost. Exiting anyway ends the game.");
-        e("O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados.",
-          "Crash Twinsanity will close. Settings, saves and the ISO stay stored.");
+        e("O Twinsanity Pocket será fechado. Configurações, saves e a ISO continuam guardados.",
+          "Twinsanity Pocket will close. Settings, saves and the ISO stay stored.");
         e("Sair", "Exit");
         e("Cancelar", "Cancel");
         e("OK", "OK");

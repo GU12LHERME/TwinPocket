@@ -1276,7 +1276,11 @@ bool EnsureDevice() {
     cfg.window_height = g.display_h * 2;
     cfg.window_width = (cfg.window_height * 4 + 1) / 3;
     cfg.headless = g.headless ? 1 : 0;
+#if defined(__ANDROID__)
+    cfg.title = "Twinsanity Pocket";   // the Android port's name (the app's label)
+#else
     cfg.title = "Crash Twinsanity";
+#endif
     // the threads' locks made before the device's memory is (the Vita: below)
     PrimeThreadSync();
     // PS2E_DRAW_STENCIL_DIAG=1 (the cryscave flicker diagnosis): the engine logs the stencil's histogram at the shadow bracket's
