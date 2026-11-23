@@ -1,0 +1,60 @@
+CRASH TWINSANITY — PORT NATIVO ANDROID (ARM64)
+Notas da versão 1.0.0 — 23/11/2026
+Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
+================================================================================
+
+O QUE É
+- Port nativo do Crash Twinsanity (PS2) para Android ARM64. Não é emulação: o jogo roda
+  como código nativo, com renderizador OpenGL ES 3.2 próprio.
+- O app não traz nenhum dado do jogo: você escolhe a SUA ISO ou CHD (NTSC-U ou PAL), que é
+  copiada para o armazenamento privado do app. Nenhuma permissão de armazenamento é pedida.
+
+DESTAQUES DA 1.0.0
+- 60 FPS estáveis no RP6 com resolução 4x, filtro anisotrópico 16x e distância de detalhe 3x.
+- Launcher próprio em tela cheia, feito para controle: 7 abas (Jogar, Gráficos, Áudio,
+  Controles, Saves, Sistema, Ferramentas), painel de detalhes e legenda de botões por opção.
+- Predefinições gráficas:
+    Original    — resolução 1x, sem anisotrópico, distância original (como no PS2)
+    Equilibrado — resolução 2x, anisotrópico 4x, distância 2x
+    Qualidade   — resolução 4x, anisotrópico 16x, distância 3x
+- Gerenciador de saves: listar, exportar (.zip), importar e apagar, com backup automático.
+- Ferramentas de diagnóstico: relatório completo, pacote ZIP, desempenho, falhas,
+  histórico de sessões e verificação dos componentes — tudo sob demanda, nunca durante o jogo.
+- Vibração do jogo no controle (ou no aparelho), remapeamento de botões, zona morta e
+  sensibilidade dos analógicos.
+- Ícone do app (ilustração própria do projeto) e opção de ícone personalizado da galeria.
+
+CORREÇÕES DESTA RETA FINAL (0.25 → 1.0.0)
+Imagem
+- Pontinhos (fendas) no disco do menu em resoluções acima de 1x: corrigidos.
+- Linhas finas entre as letras dos menus com filtro Bilinear: corrigidas.
+- Sumiço de cenário perto da câmera por um quadro: acontecia só com a distância 4x, que
+  sobrecarregava o preparo da geometria. A opção 4x saiu; quem usava passa para 3x sozinho.
+Minimizar e voltar
+- Tela preta ao voltar ao jogo: corrigida.
+- Abrir pelo ícone do app com o jogo rodando volta para o jogo (não reinicia).
+- Barra de status e de navegação por cima do jogo ao voltar: corrigido (tela cheia mantida).
+- Quadro pequeno no canto e tela preta longa ao voltar: corrigidos.
+Áudio
+- O som pausa em segundo plano.
+- "Brrrrrr" (zumbido) ao minimizar: corrigido — o som agora some suavemente.
+- Pedaço de som antigo e corte ao voltar: corrigidos — o som volta limpo, com fade curto.
+Launcher
+- Leitura das configurações otimizada (uma vez por aba).
+- Diagnósticos reorganizados na aba Ferramentas; aba Sistema mais enxuta.
+- Rótulo "experimental" removido da distância de detalhe.
+
+LIMITAÇÕES CONHECIDAS
+- As opções do port dentro do menu do jogo ficam em inglês (a fonte do jogo).
+- O ícone personalizado é um atalho na tela inicial (o Android não deixa trocar o ícone do app).
+- Ao voltar de segundo plano pode haver uma tela preta muito curta enquanto o Android recria
+  a área de desenho do jogo.
+- Save states não estão disponíveis nesta plataforma.
+
+INSTALAÇÃO
+- Instale por cima da versão anterior: saves, configurações e a ISO são mantidos.
+- Primeira vez: abra o app, Jogar → Selecionar ISO ou CHD, escolha a sua imagem e aperte JOGAR.
+
+CRÉDITOS
+- Baseado em TwinsanityEvolved, NativeEE e twinsanity-reversed (licenças em Sistema →
+  Licenças de código aberto). SDL2 (zlib), FFmpeg (LGPL 2.1+), libchdr (BSD-3).
