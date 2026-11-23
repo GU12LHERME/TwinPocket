@@ -48,12 +48,17 @@ void AudioPullRing::Prime() {
 // Pad mode, consumer side: the previous quantum's tail, cyclic and phase-continuous.
 void AudioPullRing::PadFromTail(float* dst, int frames, uint64_t write_pos) {
     const uint64_t tail_start = write_pos - static_cast<uint64_t>(kQuantumFrames);
+    const bool fade = pad_fade_.load(std::memory_order_acquire);
+    constexpr uint64_t kFull = kQuantumFrames, kFade = 2 * kQuantumFrames;   // the tail as it is for one quantum, then a fade
     for (int i = 0; i < frames; ++i) {
         const uint64_t pos = tail_start + (pad_phase_ % static_cast<uint64_t>(kQuantumFrames));
         const float* src = &samples_[static_cast<size_t>(Slot(pos)) * kChannels];
-        dst[static_cast<size_t>(i) * kChannels]     = src[0];
-        dst[static_cast<size_t>(i) * kChannels + 1] = src[1];
+        float g = 1.0f;
+        if (fade && pad_run_ >= kFull) g = pad_run_ >= kFull + kFade ? 0.0f : 1.0f - float(pad_run_ - kFull) / float(kFade);
+        dst[static_cast<size_t>(i) * kChannels]     = src[0] * g;
+        dst[static_cast<size_t>(i) * kChannels + 1] = src[1] * g;
         ++pad_phase_;
+        ++pad_run_;
     }
 }
 
@@ -151,6 +156,7 @@ void AudioPullRing::Pull(float* out, int frames) {
         }
     }
 
+    if (got > 0) pad_run_ = 0;   // the stream delivered: a later pad starts at full level again
     if (got < frames) {
         const int missing = frames - got;
         const uint64_t w = write_.load(std::memory_order_acquire);

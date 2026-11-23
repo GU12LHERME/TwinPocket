@@ -82,6 +82,11 @@ public:
     int LeadFrames() const { return lead_frames_.load(std::memory_order_relaxed); }
     int TrimFrames() const { return trim_frames_.load(std::memory_order_relaxed); }
     void SetPadWithTail(bool on) { pad_with_tail_.store(on, std::memory_order_release); }
+    // Pad mode: a pad that goes on past one quantum fades out over the next two, then is silence until the stream pushes
+    // again. Off (the default): the tail repeats for as long as the stream is late. On (Android): a stream that stops --
+    // the app losing the screen stalls the game thread before the background event mutes the device -- gave ~0.4 s of
+    // one 16.7 ms quantum repeated, a 60 Hz buzz (the RP6, 0.27.0).
+    void SetPadFade(bool on) { pad_fade_.store(on, std::memory_order_release); }
     bool PadWithTail() const { return pad_with_tail_.load(std::memory_order_acquire); }
     // Producer side, once before the stream (and after a restore's discard):
     // kLeadQuanta quanta of silence as the ring's standing lead (counted as pushed).
@@ -130,6 +135,8 @@ private:
     std::atomic<uint64_t> relatches_{0};
     std::atomic<uint64_t> trimmed_{0};
     uint64_t              pad_phase_ = 0;  // consumer-owned: position inside the repeated tail
+    uint64_t              pad_run_ = 0;    // consumer-owned: frames padded since the stream last delivered
+    std::atomic<bool>     pad_fade_{false};
     float                 last_quantum_[kQuantumFrames * kChannels] = {};   // producer-owned: the previous push
     int                   last_quantum_frames_ = 0;
 };
