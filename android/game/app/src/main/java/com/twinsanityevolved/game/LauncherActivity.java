@@ -637,20 +637,50 @@ public final class LauncherActivity extends Activity {
     }
 
     // the selected row kept on screen with a margin; the first row shows the tab's top (the disc's state on Jogar)
+    // The list scrolled so the selected row shows -- in the same picture that paints its frame. It ran posted, one picture
+    // after the frame moved: for that picture the frame sat at the old scroll (half out of the list, or where the next row
+    // would come), so a fast walk looked like two frames or none (the RP6, 1.0.0). Run just before the next draw, after
+    // the layout: the rows' places are final there, also right after a rebuild.
     private void ensureVisible() {
+        if (current() == null) return;
+        beforeNextDraw(this::scrollToSelected);
+    }
+
+    private void scrollToSelected() {
         final Item it = current();
         if (it == null) return;
-        pageScroll.post(() -> {
-            int first = Nav.firstEnabled(enabledItems(), 0);
-            if (selected == first) {
-                pageScroll.scrollTo(0, 0);
-                return;
+        int first = Nav.firstEnabled(enabledItems(), 0);
+        if (selected == first) {
+            pageScroll.scrollTo(0, 0);
+            return;
+        }
+        int top = it.view.getTop(), bottom = it.view.getBottom();
+        int y = pageScroll.getScrollY(), h = pageScroll.getHeight(), m = dp(56);
+        if (top - m < y) pageScroll.scrollTo(0, Math.max(0, top - m));
+        else if (bottom + m > y + h) pageScroll.scrollTo(0, bottom + m - h);
+    }
+
+    private boolean drawHookPending;
+    private final java.util.ArrayList<Runnable> beforeDraw = new java.util.ArrayList<>();
+
+    private void beforeNextDraw(Runnable r) {
+        beforeDraw.add(r);
+        if (drawHookPending) return;
+        drawHookPending = true;
+        final android.view.ViewTreeObserver vto = pageScroll.getViewTreeObserver();
+        vto.addOnPreDrawListener(new android.view.ViewTreeObserver.OnPreDrawListener() {
+            @Override
+            public boolean onPreDraw() {
+                android.view.ViewTreeObserver now = pageScroll.getViewTreeObserver();
+                if (now.isAlive()) now.removeOnPreDrawListener(this);
+                drawHookPending = false;
+                java.util.ArrayList<Runnable> run = new java.util.ArrayList<>(beforeDraw);
+                beforeDraw.clear();
+                for (Runnable x : run) x.run();
+                return true;
             }
-            int top = it.view.getTop(), bottom = it.view.getBottom();
-            int y = pageScroll.getScrollY(), h = pageScroll.getHeight(), m = dp(56);
-            if (top - m < y) pageScroll.scrollTo(0, Math.max(0, top - m));
-            else if (bottom + m > y + h) pageScroll.scrollTo(0, bottom + m - h);
         });
+        pageScroll.invalidate();
     }
 
     // ---- the tabs -------------------------------------------------------------------------------------------------------
@@ -723,14 +753,17 @@ public final class LauncherActivity extends Activity {
     }
 
     /** The tab built again where it is (a change that touches other rows); the selected row stays the same. */
+    // The tab built again in place (a value that changes other rows: a preset, a restore): its scroll kept before the
+    // first picture of the new rows -- posted, one picture showed the list from its top (the RP6, 1.0.0)
     private void rebuild() {
-        int keep = pageScroll.getScrollY();
+        final int keep = pageScroll.getScrollY();
         showTab(currentTab);
         page.animate().cancel();
         page.setAlpha(1f);
-        pageScroll.post(() -> {
+        beforeDraw.clear();
+        beforeNextDraw(() -> {
             pageScroll.scrollTo(0, keep);
-            ensureVisible();
+            scrollToSelected();
         });
     }
 
@@ -738,7 +771,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.VERTICAL);
         head.setPadding(dp(4), dp(10), dp(4), dp(14));
-        head.addView(text("Crash Twinsanity", 30, FG, true));
+        head.addView(text("Twinsanity Pocket", 30, FG, true));
         head.addView(text(T("Port nativo para Android · versão ") + versionName(), 13, SUBTLE, false));
         TextView label = text("JOGO SELECIONADO", 11, SUBTLE, true);
         label.setPadding(0, dp(18), 0, dp(2));
@@ -785,7 +818,7 @@ public final class LauncherActivity extends Activity {
                 + "• libchdr — BSD 3-Clause License\n\n"
                 + T("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco."),
             null, new String[] {T("OK")}, 0, 0, null));
-        actionRow("Sair do aplicativo", "Fecha o Crash Twinsanity (configurações, saves e a ISO ficam guardados)", this::confirmExit);
+        actionRow("Sair do aplicativo", "Fecha o Twinsanity Pocket (configurações, saves e a ISO ficam guardados)", this::confirmExit);
         note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE);
     }
 
@@ -815,7 +848,7 @@ public final class LauncherActivity extends Activity {
         actionRow("Exportar pacote ZIP",
             "Todos os registros técnicos (logs do jogo e do launcher, travamentos, histórico de sessões, verificações, aparelho e ps2r.ini) num .zip onde você escolher. Sem saves nem a ISO.",
             () -> {
-                String name = "crash-twinsanity-diagnostico-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+                String name = "twinsanity-pocket-diagnostico-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
                 launchPicker(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
                     .putExtra(Intent.EXTRA_TITLE, name), REQUEST_EXPORT_TOOLS);
             });
@@ -1003,7 +1036,7 @@ public final class LauncherActivity extends Activity {
         section("BACKUP");
         actionRow("Exportar backup", "Salva todos os cartões de memória num arquivo .zip onde você escolher", () -> {
             if (gameRunning()) return;
-            String name = "crash-twinsanity-saves-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+            String name = "twinsanity-pocket-saves-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
             Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
                 .putExtra(Intent.EXTRA_TITLE, name);
             launchPicker(i, REQUEST_EXPORT_SAVES);
@@ -1293,7 +1326,7 @@ public final class LauncherActivity extends Activity {
             T(gameAlive
                 ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Menu principal → quit game) "
                   + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
-                : "O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados."),
+                : "O Twinsanity Pocket será fechado. Configurações, saves e a ISO continuam guardados."),
             null, new String[] {T("Sair"), T("Cancelar")}, 1, 1, i -> { if (i == 0) exitApp(); });
     }
 
@@ -1884,7 +1917,7 @@ public final class LauncherActivity extends Activity {
         Tools.recordSessions(c, versionName());
         Diag.write(new File(dir, "logcat.txt"), Diag.captureLogcat(4000));
         StringBuilder b = new StringBuilder();
-        b.append("Crash Twinsanity Android — relatório completo — ").append(Diag.now()).append("\n\n");
+        b.append("Twinsanity Pocket — relatório completo — ").append(Diag.now()).append("\n\n");
         b.append("===== APLICATIVO E APARELHO =====\n").append(Tools.deviceLines(c, versionName()));
         String pads = Tools.controllers();
         b.append("controles conectados:\n").append(pads.isEmpty() ? "  (nenhum)\n" : pads);
@@ -1956,15 +1989,15 @@ public final class LauncherActivity extends Activity {
                 if (share) {
                     Intent send = new Intent(Intent.ACTION_SEND);
                     send.setType("text/plain");
-                    send.putExtra(Intent.EXTRA_SUBJECT, "Crash Twinsanity Android — relatório");
+                    send.putExtra(Intent.EXTRA_SUBJECT, "Twinsanity Pocket — relatório");
                     send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor(this, "report.txt"));
-                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Crash Twinsanity (anexo report.txt).");
+                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Twinsanity Pocket (anexo report.txt).");
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivity(Intent.createChooser(send, T("Compartilhar relatório")));
                 } else {
                     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     String clip = report.length() > 250000 ? report.substring(report.length() - 250000) : report;
-                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Crash Twinsanity report", clip));
+                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Twinsanity Pocket report", clip));
                     Toast.makeText(c, T("Relatório copiado (") + clip.length() + T(" caracteres)"), Toast.LENGTH_LONG).show();
                 }
             });
