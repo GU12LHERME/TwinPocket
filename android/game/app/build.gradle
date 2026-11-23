@@ -27,8 +27,8 @@ android {
         manifestPlaceholders = [appLabel: (project.findProperty("appLabel") ?: "Twinsanity Pocket")]
         minSdk 24
         targetSdk 33
-        versionCode 52
-        versionName "1.1.0"
+        versionCode 53
+        versionName "1.2.0"
         ndk {
             abiFilters "arm64-v8a"
         }
