@@ -21,6 +21,28 @@
 #include "savestate.h"
 #include "stream_service.h"
 #include "te_audio.h"
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+#include <SDL.h>
+#include <atomic>
+// Android: the sound paused while the app is away (minimised, the screen off) and resumed on the return -- SDL 2.30.9's
+// OpenSL ES backend pauses nothing itself (openslES_PauseDevices is empty), so the device kept pulling while the game
+// thread was parked: a stutter, then silence or the last buffer, and the battery spent for nothing. An SDL event watch
+// (called where the event is sent: the UI thread on the way out, the pumping thread on the return).
+namespace {
+std::atomic<ps2r::platform::sdl::SdlAudioSink*> g_lifecycle_sink{nullptr};
+bool g_lifecycle_watch = false;
+int AudioLifecycleWatch(void*, SDL_Event* e) {
+    ps2r::platform::sdl::SdlAudioSink* sink = g_lifecycle_sink.load(std::memory_order_acquire);
+    if (!sink) return 0;
+    if (e->type == SDL_APP_WILLENTERBACKGROUND || e->type == SDL_APP_DIDENTERBACKGROUND) {
+        sink->SetPaused(true);
+    } else if (e->type == SDL_APP_DIDENTERFOREGROUND) {
+        sink->SetPaused(false);
+    }
+    return 0;
+}
+}  // namespace
+#endif
 #include "te_prof.h"
 #include "te_services.h"
 #if defined(_WIN32)
@@ -338,6 +360,15 @@ void AudioService::EnsureDevice() {
         // default 50 ms lead): set before the device thread starts
         ring_->SetDeviceFrames(ps2r::platform::sdl::SdlAudioSink::RequestedBufferFrames());
         device_open_ = sink_->Open(spec, *ring_);
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+        if (device_open_) {
+            g_lifecycle_sink.store(sink_.get(), std::memory_order_release);
+            if (!g_lifecycle_watch) {
+                g_lifecycle_watch = true;
+                SDL_AddEventWatch(AudioLifecycleWatch, nullptr);
+            }
+        }
+#endif
         if (device_open_)
             std::fprintf(stderr, "[twinsanityevolved] audio: ring lead %d frames, trim line %d, capacity %d (%.1f / %.1f / %.1f ms)\n",
                          ring_->LeadFrames(), ring_->TrimFrames(), ps2r::platform::sdl::AudioPullRing::kCapacityFrames,
@@ -361,6 +392,9 @@ void AudioService::EnsureDevice() {
 
 void AudioService::CloseDevice() {
     if (device_open_) {
+#if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
+        g_lifecycle_sink.store(nullptr, std::memory_order_release);   // the watch leaves the closing device alone
+#endif
         sink_->Close();   // waits for an in-flight callback, whose refill takes mutex_: never called holding it
         device_open_ = false;
         Lock lock(mutex_);

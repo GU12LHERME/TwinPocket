@@ -844,7 +844,8 @@ public final class LauncherActivity extends Activity {
         }
         try {
             android.content.pm.ShortcutManager sm = getSystemService(android.content.pm.ShortcutManager.class);
-            Intent open = new Intent(this, LauncherActivity.class).setAction(Intent.ACTION_MAIN).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            // (through IconShortcutActivity: a pinned shortcut is started with CLEAR_TASK, which would end a game in progress)
+            Intent open = new Intent(this, IconShortcutActivity.class).setAction(Intent.ACTION_MAIN);
             android.content.pm.ShortcutInfo info = new android.content.pm.ShortcutInfo.Builder(this, ICON_SHORTCUT)
                 .setShortLabel(getApplicationInfo().loadLabel(getPackageManager()).toString())
                 .setIcon(android.graphics.drawable.Icon.createWithAdaptiveBitmap(bitmap))
