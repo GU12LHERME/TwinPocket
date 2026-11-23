@@ -60,7 +60,7 @@ final class Lang {
         e("Jogar", "Play");
         e("Selecionar ISO ou CHD…", "Select ISO or CHD…");
         e("Copia a SUA imagem do jogo para o app (nenhuma permissão de armazenamento)", "Copies YOUR game image into the app (no storage permission)");
-        e("No jogo: Opções → android settings → return to launcher volta para cá.", "In game: Options → android settings → return to launcher comes back here.");
+        e("No jogo: Menu principal → quit game volta para cá.", "In game: Main menu → quit game comes back here.");
         e("RESTAURAR", "RESTORE");
         e("Ícone personalizado", "Custom icon");
         e("Escolha uma imagem da galeria: um atalho com ela é criado na tela inicial", "Pick a picture from the gallery: a shortcut with it is placed on the home screen");
@@ -90,8 +90,8 @@ final class Lang {
         e("Backups automáticos (antes de importar ou apagar): ", "Automatic backups (before importing or deleting): ");
         e("Nenhum gerenciador de arquivos disponível.", "No file manager available.");
         e("O jogo está aberto", "The game is open");
-        e("Saia do jogo (Opções → android settings → return to launcher) antes de mexer nos saves: o jogo grava no cartão de memória.",
-          "Leave the game (Options → android settings → return to launcher) before touching the saves: the game writes the memory card.");
+        e("Saia do jogo (Menu principal → quit game) antes de mexer nos saves: o jogo grava no cartão de memória.",
+          "Leave the game (Main menu → quit game) before touching the saves: the game writes the memory card.");
         e("Apagar save?", "Delete save?");
         e("Um backup automático de todos os cartões é feito antes, em save-backups.", "An automatic backup of every card is made first, in save-backups.");
         e("Apagar", "Delete");
@@ -282,9 +282,9 @@ final class Lang {
 
         // exit
         e("Sair do aplicativo?", "Exit the application?");
-        e("O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
+        e("O jogo ainda está aberto em segundo plano. Saia pelo jogo (Menu principal → quit game) "
                 + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo.",
-          "The game is still open in the background. Leave it from the game (Options → android settings → return to launcher) "
+          "The game is still open in the background. Leave it from the game (Main menu → quit game) "
                 + "so no unsaved progress is lost. Exiting anyway ends the game.");
         e("O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados.",
           "Crash Twinsanity will close. Settings, saves and the ISO stay stored.");

@@ -469,33 +469,16 @@ MenuPage* ActionItem::Activate(u32 player, MenuPage* page)
     return MenuItem::Activate(player, page);
 }
 
-// TwinsanityEvolved: the platform's "return to launcher" action (Android: android settings' last row) on the main menu
-// too, after Options -- the same row (its id, its two-press confirmation, its label); nothing where the platform has none
+// TwinsanityEvolved: the platform's "quit game" action (Android: back to the launcher) on the main menu, after Options --
+// the platform's page 2 (no settings page shows it): its two-press confirmation and its label kept by SyncActionRows;
+// nothing where the platform has none
 static void SyncActionRows(MenuPage* page, u32 player, bool cancelAll);
-static void AddReturnToLauncherRow(MenuPage* owner)
+static void AddQuitGameRow(MenuPage* owner)
 {
     u32 settings = Platform::Graphics::DisplaySettingCount();
     for (u32 setting = 0; setting < settings && setting < DisplaySettingsMax; setting++)
     {
-        if (Platform::Graphics::DisplaySettingKind(setting) != 1 || Platform::Graphics::DisplaySettingPage(setting) != 1)
-        {
-            continue;
-        }
-
-        char label[DisplaySettingLabelSize];
-        Platform::Graphics::DisplaySettingLabel(setting, label, DisplaySettingLabelSize);
-        const char want[] = "return to launcher";
-        bool match = true;
-        for (u32 i = 0; i + 1 < sizeof(want); i++)
-        {
-            if (label[i] != want[i])
-            {
-                match = false;
-                break;
-            }
-        }
-
-        if (!match)
+        if (Platform::Graphics::DisplaySettingKind(setting) != 1 || Platform::Graphics::DisplaySettingPage(setting) != 2)
         {
             continue;
         }
@@ -525,7 +508,7 @@ MainMenuPage* MainMenuPage::Construct(MainMenuPage* page)
     page->Add(newGame);
     page->Add(loadGame);
     page->Add(options);
-    AddReturnToLauncherRow(page);
+    AddQuitGameRow(page);
     return page;
 }
 
@@ -539,7 +522,7 @@ void MainMenuPage::Destroy(u32 flags)
 
 void MainMenuPage::Frame(u32 player, MenuInput*, MenuSounds*)
 {
-    // TwinsanityEvolved: the return-to-launcher row's confirmation follows the selection (as on android settings)
+    // TwinsanityEvolved: the quit-game row's confirmation follows the selection (as on android settings)
     SyncActionRows(this, player, false);
 }
 

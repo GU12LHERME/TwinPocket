@@ -526,7 +526,12 @@ ps2e_s32 ps2e_graphics_display_setting_kind(ps2e_s32 setting) {
 }
 
 // Platform::Graphics::DisplaySettingPage / DisplaySettingPageTitle: which page a row is on, and the platform page's title
-ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) { return IsPortRow(setting) ? 1 : 0; }
+// 0 graphic options, 1 android settings, 2 the main menu's "quit game" (port_settings RowReturnToLauncher: the main menu
+// alone shows it, olegpages.cpp AddQuitGameRow)
+ps2e_s32 ps2e_graphics_display_setting_page(ps2e_s32 setting) {
+    if (!IsPortRow(setting)) return 0;
+    return PortRow(setting) == te::port_settings::RowReturnToLauncher ? 2 : 1;
+}
 
 void ps2e_graphics_display_setting_page_title(ps2e_u32 out, ps2e_s32 size) { CopyLabel(te::port_settings::Title(), out, size); }
 

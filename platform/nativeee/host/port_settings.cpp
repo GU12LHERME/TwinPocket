@@ -178,7 +178,7 @@ std::string RowLabel(uint32_t row) {
     case RowStickDeadzone: return "stick deadzone";
     case RowStickSensitivity: return "stick sensitivity";
     case RowRestoreDefaults: return Armed(row) ? "restore defaults? press again" : g.done == row ? "defaults restored" : "restore defaults";
-    case RowReturnToLauncher: return Armed(row) ? "return to launcher? press again" : g.done == row ? "returning to launcher" : "return to launcher";
+    case RowReturnToLauncher: return Armed(row) ? "quit game? press again" : g.done == row ? "quitting" : "quit game";
     default: return "";
     }
 }
@@ -285,7 +285,7 @@ void Set(uint32_t row, uint32_t choice) {
         g.armed = RowCount;
         g.done = row;
         // the desktop window's close path: the next window pump sees the quit and the runner leaves through te::RequestExit(0)
-        std::fprintf(stderr, "[twinsanityevolved] android settings: return to launcher (the session ends as a window close: %s)\n",
+        std::fprintf(stderr, "[twinsanityevolved] main menu: quit game -- back to the launcher (the session ends as a window close: %s)\n",
                      te::input::RequestWindowClose() ? "quit posted" : "SDL refused the quit event");
         return;
     default: return;

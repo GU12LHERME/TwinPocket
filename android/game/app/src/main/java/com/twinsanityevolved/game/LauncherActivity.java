@@ -673,7 +673,7 @@ public final class LauncherActivity extends Activity {
         lastRun = text("", 12, SUBTLE, false);
         lastRun.setPadding(dp(4), dp(14), dp(4), 0);
         page.addView(lastRun);
-        note("No jogo: Opções → android settings → return to launcher volta para cá.");
+        note("No jogo: Menu principal → quit game volta para cá.");
         updatePlayState();
     }
 
@@ -757,7 +757,7 @@ public final class LauncherActivity extends Activity {
 
     private boolean gameRunning() {
         if (!Diag.processAlive(this, "game")) return false;
-        dialog(T("O jogo está aberto"), T("Saia do jogo (Opções → android settings → return to launcher) antes de mexer nos saves: o jogo grava no cartão de memória."),
+        dialog(T("O jogo está aberto"), T("Saia do jogo (Menu principal → quit game) antes de mexer nos saves: o jogo grava no cartão de memória."),
             null, new String[] {T("OK")}, 0, 0, null);
         return true;
     }
@@ -1057,7 +1057,7 @@ public final class LauncherActivity extends Activity {
         final boolean gameAlive = Diag.processAlive(this, "game");
         dialog(T("Sair do aplicativo?"),
             T(gameAlive
-                ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Opções → android settings → return to launcher) "
+                ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Menu principal → quit game) "
                   + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
                 : "O Crash Twinsanity será fechado. Configurações, saves e a ISO continuam guardados."),
             null, new String[] {T("Sair"), T("Cancelar")}, 1, 1, i -> { if (i == 0) exitApp(); });

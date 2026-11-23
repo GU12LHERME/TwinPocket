@@ -109,6 +109,8 @@ extern "C" size_t vglMemFree(int type);
 #include "te_display.h"
 #if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
 #include <SDL.h>   // the app lifecycle events (AppLifecycleWatch)
+#include <EGL/egl.h>   // the render thread's context parked off the window while the app is away
+#include <cstring>
 #endif
 #include "te_glyph_texels.h"
 #include "te_graphics_hooks.h"
@@ -1154,30 +1156,84 @@ void PostRender(std::function<void()> fn) {
     rt.wake.notify_one();
 }
 #if defined(__ANDROID__) && TE_HAVE_SDL_INPUT
-// Android: minimising the app destroys the window's EGL surface and coming back makes a new one (SDL's Java side), and SDL
-// moves its GL context only on the thread that pumps its events -- the game thread here. The context lives on the render
-// thread (RenderLoop: ps2e_draw_bind_thread), which kept drawing onto the destroyed surface after the return: a black
-// screen with the sound playing. So: on the way to the background the render thread stops presenting; back in the
-// foreground (SDL_APP_DIDENTERFOREGROUND: the new surface exists by then) it binds its context again -- SDL_GL_MakeCurrent
-// with the window's current surface -- and presents again. Without a render thread (the context on the pumping thread)
-// SDL's own backup / restore does it and nothing is done here. An SDL event watch: called where the event is sent.
+// Android: minimising the app destroys the window's EGL surface (SDLActivity surfaceDestroyed -> SDL_EGL_DestroySurface,
+// then ANativeWindow_release) and coming back makes a new one; SDL moves its GL context off and onto the surface only on
+// the thread that pumps its events -- the game thread here -- while the context lives on the render thread. History:
+// 0.25.1 kept the context on the destroyed surface (a black screen after the return); 0.25.2 released it only on the
+// return, so the driver freed a surface whose native window Android had already released: the game closed.
+// Now, on the way out (SDL_APP_WILLENTERBACKGROUND, sent from onPause -- before surfaceDestroyed), the render thread moves
+// its context off the window at once, onto no surface (EGL_KHR_surfaceless_context) or a 1x1 pbuffer, so SDL destroys a
+// surface no thread holds, exactly what SDL waits for on its own thread; drawing into the frame target goes on and the
+// swaps are skipped. Back in the foreground (SDL_APP_DIDENTERFOREGROUND: the new surface exists by then) the render thread
+// binds the context to the window's new surface through SDL (released first: SDL skips a bind it believes current).
+// Without a render thread SDL's own backup / restore does it all and nothing is done here.
+EGLSurface g_park_pbuffer = EGL_NO_SURFACE;
+
+void ParkContextOffWindow() {
+    EGLDisplay dpy = eglGetCurrentDisplay();
+    EGLContext ctx = eglGetCurrentContext();
+    if (dpy == EGL_NO_DISPLAY || ctx == EGL_NO_CONTEXT) return;
+    const char* ext = eglQueryString(dpy, EGL_EXTENSIONS);
+    const char* how = "no surface";
+    EGLBoolean ok = EGL_FALSE;
+    if (ext && std::strstr(ext, "EGL_KHR_surfaceless_context")) ok = eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, ctx);
+    if (!ok) {
+        EGLint id = 0, n = 0;
+        eglQueryContext(dpy, ctx, EGL_CONFIG_ID, &id);
+        const EGLint pick[] = {EGL_CONFIG_ID, id, EGL_NONE};
+        EGLConfig cfg = nullptr;
+        if (eglChooseConfig(dpy, pick, &cfg, 1, &n) && n == 1) {
+            const EGLint size[] = {EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE};
+            if (g_park_pbuffer == EGL_NO_SURFACE) g_park_pbuffer = eglCreatePbufferSurface(dpy, cfg, size);
+            if (g_park_pbuffer != EGL_NO_SURFACE) ok = eglMakeCurrent(dpy, g_park_pbuffer, g_park_pbuffer, ctx);
+            how = "a 1x1 pbuffer";
+        }
+    }
+    if (!ok) {
+        // nowhere to park it: released altogether (the window surface must not stay held); GL waits for the return
+        ok = eglMakeCurrent(dpy, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
+        how = "released (no surfaceless context, no pbuffer)";
+    }
+    std::fprintf(stderr, "[te.gfx] the app to the background: the render thread's context off the window (%s%s)\n", how,
+                 ok ? "" : " -- FAILED");
+}
+
+// Runs fn on the render thread and waits at most `ms` (the Android UI thread must not hang behind a busy render thread)
+bool OnRenderWithin(std::function<void()> fn, int ms) {
+    auto& rt = g.rt;
+    if (!rt.started || OnRenderThread()) { fn(); return true; }
+    uint64_t ticket;
+    {
+        std::lock_guard<std::mutex> lock(rt.mutex);
+        rt.jobs.push_back(std::move(fn));
+        ticket = ++rt.jobs_posted;
+    }
+    rt.wake.notify_one();
+    std::unique_lock<std::mutex> lock(rt.mutex);
+    return rt.done.wait_for(lock, std::chrono::milliseconds(ms), [&] { return rt.jobs_done >= ticket; });
+}
+
 int AppLifecycleWatch(void*, SDL_Event* e) {
     if (!g.rt.started || !g.dev) return 0;
     switch (e->type) {
         case SDL_APP_WILLENTERBACKGROUND:
         case SDL_APP_DIDENTERBACKGROUND:
-            if (!g.surface_lost.exchange(true, std::memory_order_acq_rel))
-                std::fprintf(stderr, "[te.gfx] the app to the background: presents paused (the window's surface goes away)\n");
+            if (!g.surface_lost.exchange(true, std::memory_order_acq_rel)) {
+                if (!OnRenderWithin([] { ParkContextOffWindow(); }, 1500))
+                    std::fprintf(stderr, "[te.gfx] the app to the background: the render thread did not answer within 1.5 s\n");
+            }
             break;
         case SDL_APP_DIDENTERFOREGROUND:
             if (g.surface_lost.load(std::memory_order_acquire)) {
                 PostRender([] {
-                    // released first: SDL_GL_MakeCurrent returns at once when the thread already has this window and
-                    // context ("already current" by SDL's own bookkeeping) -- the rebind alone never reached EGL and the
-                    // context stayed on the destroyed surface (0.25.1). Released, the bind goes to eglMakeCurrent with the
-                    // window's new surface, as SDL's own restore does on its pumping thread.
+                    // released through SDL first: SDL_GL_MakeCurrent skips a bind it believes current (its own
+                    // bookkeeping still names the window); the bind then goes to eglMakeCurrent with the new surface
                     ps2e_draw_bind_thread(g.dev, 0);
                     const bool bound = ps2e_draw_bind_thread(g.dev, 1) != 0;
+                    if (g_park_pbuffer != EGL_NO_SURFACE) {
+                        eglDestroySurface(eglGetCurrentDisplay(), g_park_pbuffer);
+                        g_park_pbuffer = EGL_NO_SURFACE;
+                    }
                     g.surface_lost.store(false, std::memory_order_release);
                     std::fprintf(stderr, "[te.gfx] the app back in the foreground: the render thread's context on the new surface %s "
                                          "(%llu present(s) skipped meanwhile)\n", bound ? "bound" : "NOT bound",
@@ -6651,9 +6707,9 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
     Draw& open = ::OpenDraw(m.bucket, st);
     open.verts.reserve(open.verts.size() + size_t(count) * 6);
     for (int i = 0; i < count; ++i) {
-        const float x0 = q[i].x0 / 16.f - ox, y0 = q[i].y0 / 16.f - oy, x1 = q[i].x1 / 16.f - ox, y1 = q[i].y1 / 16.f - oy;
-        float u0, v0, u1, v1;
-        te::text::GlyphTexels(q[i].u0, q[i].v0, q[i].u1, q[i].v1, filtered, tw, th, &u0, &v0, &u1, &v1);
+        float x0, y0, x1, y1, u0, v0, u1, v1;
+        te::text::GlyphQuad(q[i].x0 / 16.f - ox, q[i].y0 / 16.f - oy, q[i].x1 / 16.f - ox, q[i].y1 / 16.f - oy, q[i].u0, q[i].v0,
+                            q[i].u1, q[i].v1, filtered, tw, th, &x0, &y0, &x1, &y1, &u0, &v0, &u1, &v1);
         const uint32_t colour = q[i].colour;
         open.verts.push_back(Vertex(x0, y0, u0, v0, colour));
         open.verts.push_back(Vertex(x1, y0, u1, v0, colour));
@@ -6668,9 +6724,9 @@ void ps2e_gfx2_text_quads(ps2e_u32 material, ps2e_u32 quads, ps2e_s32 count) {
     d.state = st;
     d.verts.reserve(size_t(count) * 6);
     for (int i = 0; i < count; ++i) {
-        const float x0 = q[i].x0 / 16.f - ox, y0 = q[i].y0 / 16.f - oy, x1 = q[i].x1 / 16.f - ox, y1 = q[i].y1 / 16.f - oy;
-        float u0, v0, u1, v1;
-        te::text::GlyphTexels(q[i].u0, q[i].v0, q[i].u1, q[i].v1, filtered, tw, th, &u0, &v0, &u1, &v1);
+        float x0, y0, x1, y1, u0, v0, u1, v1;
+        te::text::GlyphQuad(q[i].x0 / 16.f - ox, q[i].y0 / 16.f - oy, q[i].x1 / 16.f - ox, q[i].y1 / 16.f - oy, q[i].u0, q[i].v0,
+                            q[i].u1, q[i].v1, filtered, tw, th, &x0, &y0, &x1, &y1, &u0, &v0, &u1, &v1);
         const uint32_t colour = q[i].colour;
         d.verts.push_back(Vertex(x0, y0, u0, v0, colour));
         d.verts.push_back(Vertex(x1, y0, u1, v0, colour));
