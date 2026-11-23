@@ -181,6 +181,13 @@ jobs:
           javac -encoding UTF-8 -d "$RUNNER_TEMP/saves" android/game/app/src/main/java/com/twinsanityevolved/game/SaveManager.java tools/android/TestSaves.java
           java -cp "$RUNNER_TEMP/saves" com.twinsanityevolved.game.TestSaves 2>&1 | tee "$LOG_DIR/save-manager.log"
 
+      - name: Launcher tools (the game log's pace and perf lines, the session history, the failure lines)
+        shell: bash
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d "$RUNNER_TEMP/tools" android/game/app/src/main/java/com/twinsanityevolved/game/ToolsCore.java tools/android/TestTools.java
+          java -cp "$RUNNER_TEMP/tools" com.twinsanityevolved.game.TestTools 2>&1 | tee "$LOG_DIR/launcher-tools.log"
+
       - name: CHD disc images (libchdr at the pinned commit) against the same image as an ISO
         shell: bash
         run: |
