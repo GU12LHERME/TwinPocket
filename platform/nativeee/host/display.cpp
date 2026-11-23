@@ -98,12 +98,13 @@ uint32_t AnisoIndex(int anisotropy) {
     return i;
 }
 
-// THE GRAPHICS PRESETS (Android): only what exists and is validated -- the filter (bilinear), the anisotropy (up to the
-// driver's maximum), the draw distance, the anti-aliasing (off: not validated on the device yet), the dithering (off).
-// The resolution, the frame rate, the shape, the audio and the controls are never a preset's.
-//   original: off, original;  balanced: 4x, medium;  quality: 16x, max.  Custom = none of them matches.
-struct Preset { int anisotropy; uint32_t distance; };
-constexpr Preset kPresets[] = {{1, 0}, {4, 1}, {16, 3}};
+// THE GRAPHICS PRESETS (Android): only what exists and is validated -- the resolution (4x validated on the RP6, 0.26.1:
+// 60 fps in play), the filter (bilinear), the anisotropy (up to the driver's maximum), the draw distance, the
+// anti-aliasing (off: not validated on the device yet), the dithering (off). The frame rate, the shape, the audio and the
+// controls are never a preset's.
+//   original: 1x, off, original;  balanced: 2x, 4x, medium;  quality: 4x, 16x, max.  Custom = none of them matches.
+struct Preset { int scale; int anisotropy; uint32_t distance; };
+constexpr Preset kPresets[] = {{1, 1, 0}, {2, 4, 1}, {4, 16, 3}};
 int AnisoClamped(int a) {
     const int max = std::max(1, gfx::MaxAnisotropy());
     int best = 1;
@@ -113,7 +114,7 @@ int AnisoClamped(int a) {
 uint32_t PresetNow() {
     for (uint32_t i = 0; i < 3; ++i) {
         const Preset& p = kPresets[i];
-        if (g_settings.texture_filter == 2 && AnisoClamped(g_settings.anisotropy) == AnisoClamped(p.anisotropy) &&
+        if (g_settings.scale == std::min(p.scale, kMaxScale) && g_settings.texture_filter == 2 && AnisoClamped(g_settings.anisotropy) == AnisoClamped(p.anisotropy) &&
             te::port_settings::DrawDistanceChoice() == p.distance && te::port_settings::Fxaa() == 0 && te::port_settings::Dithering() == 0)
             return i;
     }
@@ -439,6 +440,8 @@ void Set(uint32_t row, uint32_t choice) {
     case RowPreset: {
         if (choice >= 3) return;   // custom is what the rows say; choosing it changes nothing (the row snaps back)
         const Preset& p = kPresets[choice];
+        g_settings.scale = std::min(p.scale, kMaxScale);
+        Persist("video.scale", std::to_string(g_settings.scale));
         Set(RowTextureFilter, 2);
         if (AnisoChoices()) {
             g_settings.anisotropy = AnisoClamped(p.anisotropy);

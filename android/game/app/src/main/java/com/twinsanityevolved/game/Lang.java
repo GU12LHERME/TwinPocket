@@ -245,8 +245,8 @@ final class Lang {
           "Original: the PS2's own dithered 16-bit output. Off: the port's smoother 24-bit picture");
         e("Original (PS2)", "Original (PS2)");
         e("Predefinição gráfica", "Graphics preset");
-        e("Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
-          "Original: as the game. Balanced: anisotropic 4x, LOD 2x. Quality: anisotropic 16x, LOD 4x. The resolution does not change (2x not validated yet)");
+        e("Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 4x.",
+          "Original: as on the PS2 (1x resolution). Balanced: 2x resolution, 4x anisotropic, 2x LOD. Quality: 4x resolution, 16x anisotropic, 4x LOD.");
         e("Equilibrado", "Balanced");
         e("Restaurar apenas gráficos", "Restore graphics only");
         e("Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",

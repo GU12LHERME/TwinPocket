@@ -1430,15 +1430,15 @@ public final class LauncherActivity extends Activity {
             });
     }
 
-    // ---- graphics presets: the filter, the anisotropy, the LOD, FXAA and dithering together (the game's 'graphics preset'
-    // row is the same, display.cpp); the resolution, the frame rate, the shape, the audio and the controls never change ----
+    // ---- graphics presets: the resolution, the filter, the anisotropy, the LOD, FXAA and dithering together (the game's
+    // 'graphics preset' row is the same, display.cpp); the frame rate, the shape, the audio and the controls never change ----
     static final String[] PRESET_NAMES = {"Original", "Equilibrado", "Qualidade", "Personalizado"};
-    static final String[][] PRESETS = {   // anisotropy, LOD
-        {"1", "original"}, {"4", "medium"}, {"16", "max"}};
+    static final String[][] PRESETS = {   // anisotropy, LOD, resolution
+        {"1", "original", "1"}, {"4", "medium", "2"}, {"16", "max", "4"}};
 
     private int presetNow(Settings st) {
         for (int i = 0; i < PRESETS.length; i++) {
-            if (st.get(Settings.TEXTURE_FILTER, "bilinear").equals("bilinear") && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
+            if (st.get(Settings.SCALE, "1").equals(PRESETS[i][2]) && st.get(Settings.TEXTURE_FILTER, "bilinear").equals("bilinear") && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
                     && st.get(Settings.DRAW_DISTANCE, "original").equals(PRESETS[i][1]) && st.get(Settings.FXAA, "off").equals("off")
                     && st.get(Settings.DITHERING, "off").equals("off"))
                 return i;
@@ -1449,11 +1449,12 @@ public final class LauncherActivity extends Activity {
 
     private Item presetRow(final Settings st) {
         Item it = row("Predefinição gráfica",
-            "Original: como o jogo. Equilibrado: anisotrópica 4x, LOD 2x. Qualidade: anisotrópica 16x, LOD 4x. A resolução não muda (2x ainda não validado)",
+            "Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 4x.",
             chooser(T(PRESET_NAMES[presetNow(st)])), false);
         it.onStep = d -> {
             int now = presetNow(st);
             int next = now == 3 ? (d > 0 ? 0 : 2) : (now + d + 3) % 3;
+            st.set(Settings.SCALE, PRESETS[next][2]);
             st.set(Settings.TEXTURE_FILTER, "bilinear");
             st.set(Settings.ANISOTROPY, PRESETS[next][0]);
             st.set(Settings.DRAW_DISTANCE, PRESETS[next][1]);
