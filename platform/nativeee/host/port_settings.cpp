@@ -121,8 +121,10 @@ void Configure(const std::string& ini_text) {
     {
         std::string v;
         g.fxaa = ps2r::SettingsFile::GetFromText(ini_text, "android.fxaa", &v) && v == "on" ? 1u : 0u;
-        g.dithering = ps2r::SettingsFile::GetFromText(ini_text, "android.dithering", &v) && v == "original" ? 1u : 0u;
-        if (g.fxaa || g.dithering) te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
+        // the dithering: the PS2's 16-bit output with its own dithering, always (1.7.0: no longer an option; ps2r.ini's
+        // android.dithering is not read -- the launcher writes "original")
+        g.dithering = 1u;
+        te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
     }
     ApplySticks();
     {
@@ -262,7 +264,6 @@ void Set(uint32_t row, uint32_t choice) {
         ApplySticks();
         SetDrawDistance(kDefaultDistance);
         SetFxaa(0);
-        SetDithering(0);
         te::display::Set(te::display::RowFrameRate, 1);   // 60 first: vsync is refused while uncapped
         te::display::Set(te::display::RowVSync, te::display::kDefaultVSync ? 1u : 0u);
 #if defined(__ANDROID__)
@@ -311,14 +312,9 @@ void SetFxaa(uint32_t choice) {
     Persist("android.fxaa", choice ? "on" : "off");
     te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
 }
-uint32_t DitheringChoices() { return Count() ? 2u : 0u; }
+uint32_t DitheringChoices() { return 0; }   // not shown (1.7.0): the PS2's dithering always
 uint32_t Dithering() { return g.dithering; }
-void SetDithering(uint32_t choice) {
-    if (choice > 1) return;
-    g.dithering = choice;
-    Persist("android.dithering", choice ? "original" : "off");
-    te_graphics_set_present_options(int(g.dithering), int(g.fxaa));
-}
+void SetDithering(uint32_t) {}   // (fixed: the PS2's)
 
 uint32_t DrawDistanceChoices() { return Count() ? kDistanceShown : 0; }
 uint32_t DrawDistanceChoice() { return g.distance; }

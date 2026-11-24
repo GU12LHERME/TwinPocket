@@ -42,6 +42,11 @@ bool Uncapped() { return g_settings.frame_rate == int(Pacer::Rate::Uncapped); }
 // beach hub at the 50 Hz lock's 25 or below. Beyond 2x the screen gains nothing: the present's bilinear quad onto the
 // 960x544 screen reads every pixel of a 2x frame, 71 % of a 3x one and 50 % of a 4x one.
 constexpr int kMaxScale = 2;
+#elif defined(__ANDROID__)
+// Android's RESOLUTION row offers 1x to 3x (1.7.0): 3x (the 512x448 frame at 1536x1344) already covers the 1080-line
+// screens it is played on (the Retroid Pocket 6's 1920x1080); 4x only spent GPU time and heat on pixels the present's
+// downscale throws away. A ps2r.ini naming 4x is read as 3x (the launcher rewrites it).
+constexpr int kMaxScale = 3;
 #else
 constexpr int kMaxScale = 4;
 #endif
@@ -98,14 +103,14 @@ uint32_t AnisoIndex(int anisotropy) {
     return i;
 }
 
-// THE GRAPHICS PRESETS (Android): only what exists and is validated -- the resolution (4x validated on the RP6, 0.26.1:
-// 60 fps in play), the filter (bilinear), the anisotropy (up to the driver's maximum), the draw distance, the
-// anti-aliasing (off: not validated on the device yet), the dithering (off). The frame rate, the shape, the audio and the
-// controls are never a preset's.
-//   original: 1x, off, original;  balanced: 2x, 4x, medium;  quality: 4x, 16x, long (3x: max left the menus in 0.27.0).
+// THE GRAPHICS PRESETS (Android): only what exists and is validated -- the resolution (3x at most since 1.7.0), the
+// filter (bilinear), the anisotropy (up to the driver's maximum), the draw distance, the anti-aliasing (off: not validated
+// on the device yet). The dithering is the PS2's always on Android (1.7.0: not an option, not a preset's). The frame rate,
+// the shape, the audio and the controls are never a preset's.
+//   original: 1x, off, original;  balanced: 2x, 4x, medium;  quality: 3x, 16x, long.
 //   Custom = none of them matches.
 struct Preset { int scale; int anisotropy; uint32_t distance; };
-constexpr Preset kPresets[] = {{1, 1, 0}, {2, 4, 1}, {4, 16, 2}};
+constexpr Preset kPresets[] = {{1, 1, 0}, {2, 4, 1}, {3, 16, 2}};
 int AnisoClamped(int a) {
     const int max = std::max(1, gfx::MaxAnisotropy());
     int best = 1;
@@ -116,7 +121,7 @@ uint32_t PresetNow() {
     for (uint32_t i = 0; i < 3; ++i) {
         const Preset& p = kPresets[i];
         if (g_settings.scale == std::min(p.scale, kMaxScale) && g_settings.texture_filter == 2 && AnisoClamped(g_settings.anisotropy) == AnisoClamped(p.anisotropy) &&
-            te::port_settings::DrawDistanceChoice() == p.distance && te::port_settings::Fxaa() == 0 && te::port_settings::Dithering() == 0)
+            te::port_settings::DrawDistanceChoice() == p.distance && te::port_settings::Fxaa() == 0)
             return i;
     }
     return 3;   // custom
@@ -142,6 +147,13 @@ void Configure(const Settings& settings) {
     }
     std::fprintf(stderr, "[twinsanityevolved] vita: resolution %dx%s (the RESOLUTION row: 1x | 2x, 2x the console's "
                          "maximum)\n", g_settings.scale, g_settings.scale == 2 ? ": the frame drawn at four times the pixels of 1x" : "");
+#endif
+#if defined(__ANDROID__)
+    if (g_settings.scale > kMaxScale) {
+        std::fprintf(stderr, "[twinsanityevolved] android: resolution %dx read as %dx (the row's maximum since 1.7.0)\n",
+                     g_settings.scale, kMaxScale);
+        g_settings.scale = kMaxScale;
+    }
 #endif
     g_settings.texture_filter = std::clamp(g_settings.texture_filter, 0, 3);
     g_settings.anisotropy = g_settings.anisotropy >= 16 ? 16 : g_settings.anisotropy >= 8 ? 8 : g_settings.anisotropy >= 4 ? 4
@@ -281,7 +293,7 @@ uint32_t Choices(uint32_t row) {
     case RowAnisotropy: return AnisoChoices();
     case RowAntiAliasing: return te::port_settings::FxaaChoices();
     case RowDithering: return te::port_settings::DitheringChoices();
-    case RowPreset: return te::port_settings::DitheringChoices() ? 4u : 0u;   // (Android: the port rows exist)
+    case RowPreset: return te::port_settings::FxaaChoices() ? 4u : 0u;   // (Android: the port rows exist)
     default: return 0;
     }
 }
@@ -345,8 +357,14 @@ std::string ChoiceLabel(uint32_t row, uint32_t choice) {
         return choice < uint32_t(kAspects) ? MS(ids[choice]) : "";
     }
     case RowScale: {
+#if defined(__ANDROID__)
+        // with the frame each one draws (the game's 512x448 picture: 1.7.0), as the launcher's row shows it
+        static const char* const kAndroid[] = {"1x 512x448", "2x 1024x896", "3x 1536x1344"};
+        return choice < 3 ? kAndroid[choice] : "";
+#else
         static const Id ids[] = {Id::Scale1x, Id::Scale2x, Id::Scale3x, Id::Scale4x};
         return choice < 4 ? MS(ids[choice]) : "";
+#endif
     }
     case RowTextureFilter: {
         static const Id ids[] = {Id::FilterTitle, Id::FilterPoint, Id::FilterBilinear};
@@ -469,7 +487,6 @@ void Set(uint32_t row, uint32_t choice) {
         }
         te::port_settings::SetDrawDistance(p.distance);
         te::port_settings::SetFxaa(0);
-        te::port_settings::SetDithering(0);
         std::fprintf(stderr, "[twinsanityevolved] display: graphics preset %s\n", choice == 0 ? "original" : choice == 1 ? "balanced" : "quality");
         break;
     }
