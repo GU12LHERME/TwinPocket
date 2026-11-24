@@ -67,3 +67,8 @@ Based on [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), N
 Crash Twinsanity belongs to its respective rights holders. This project is unaffiliated and distributes no game data.
 
 For detailed measurements and technical information, see the [complete Portuguese documentation](README.pt-BR.md).
+
+
+## Help and security
+
+[FAQ](docs/FAQ.md) · [Troubleshooting / Solução de problemas](docs/TROUBLESHOOTING.md) · [Security / Segurança](SECURITY.md)
