@@ -504,6 +504,13 @@ jobs:
             echo "Instalação: baixe TwinsanityPocket-${version}.apk e instale. Atualiza por cima da 1.5.0 em diante (mesma assinatura)."
             echo "Assinatura (SHA-256 do certificado): 0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac"
           } > "$RUNNER_TEMP/release.md"
-          gh release create "$tag" "android-game-out/TwinsanityPocket-${version}.apk" \
-            --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
-          echo "PASS  release ${tag} published"
+          # a Release made on github.com for this tag (its "create the tag on publish") gets the APK and the notes; with no
+          # Release yet, one is made
+          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$tag" "android-game-out/TwinsanityPocket-${version}.apk" --repo "$GITHUB_REPOSITORY" --clobber
+            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md"
+          else
+            gh release create "$tag" "android-game-out/TwinsanityPocket-${version}.apk" \
+              --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
+          fi
+          echo "PASS  release ${tag}: TwinsanityPocket-${version}.apk and the notes"
