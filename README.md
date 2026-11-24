@@ -1,95 +1,69 @@
+**English** | [Português (Brasil)](README.pt-BR.md)
+
 # Twinsanity Pocket
 
-**Port nativo de Crash Twinsanity (PS2) para Android ARM64.** Não é um emulador: o código do jogo é compilado para o
-aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testado no **Retroid Pocket 6**.
+Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game code is compiled for the device and runs using your own disc image. Developed and tested on the Retroid Pocket 6.
 
-> Nenhum dado do jogo está neste repositório nem no aplicativo. Você precisa da sua própria imagem do disco (ISO ou CHD).
+> No game data is included in the repository or APK. Bring your own ISO or CHD disc image.
 
 ## Download
 
-Baixe o APK ARM64 da [última versão](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) e instale.
-As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves, configurações e a imagem do jogo.
+[Download the latest APK](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) · [GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Release notes (Portuguese)](RELEASE-NOTES.txt)
 
-| | |
+| Requirement | Details |
 |---|---|
-| Requisitos | Android 7.0+, processador ARM64 (arm64-v8a), OpenGL ES 3.2 |
-| Jogo | a sua imagem do Crash Twinsanity, ISO ou CHD (versão USA testada) |
-| Pacote | `com.twinsanitypocket.android` |
-| Assinatura | SHA-256 do certificado `0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac` |
+| Android | 7.0 or later |
+| Architecture | arm64-v8a |
+| Graphics | OpenGL ES 3.2 |
+| Game | Crash Twinsanity ISO or CHD (USA tested) |
+| Package | com.twinsanitypocket.android |
 
-[GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](RELEASE-NOTES.txt) · [Como contribuir](CONTRIBUTING.md)
+Updates from version 1.5.0 onward use the same signing certificate and preserve saves and settings.
 
-## Como usar
+## Usage
 
-1. Abra o app e, na aba **Jogar**, toque em **Selecionar** e escolha a sua ISO ou CHD (o app faz uma cópia para o
-   armazenamento dele; nenhuma permissão de armazenamento é pedida).
-2. Aperte **JOGAR**. No jogo, *Menu principal → quit game* volta para o launcher.
+1. Open the app and select your ISO or CHD in the Play tab. The app copies the image into its own storage.
+2. Start the game. Main menu → quit game returns to the launcher.
 
-O launcher é todo navegável por controle (XInput) ou toque e tem as abas **Jogar**, **Gráficos**, **Controles**,
-**Saves**, **Sistema** e **Ferramentas** (relatório de desempenho, falhas, histórico de sessões e exportação de um ZIP
-de diagnóstico, sem saves nem dados do jogo).
+The launcher supports touch and XInput controllers, graphics settings, saves, system settings and diagnostic reports.
 
-## Desempenho (Retroid Pocket 6)
+## Features and performance
 
-Medido no aparelho com os relatórios do próprio app (Snapdragon 8 Gen 2, Adreno 740, Android 13):
+- Internal resolution 1x, 2x or 3x; 4:3 or native 16:9; 30 or 60 FPS; VSync.
+- Anisotropic filtering, FXAA and adjustable level of detail.
+- Original, Balanced and Quality presets.
+- Performance reports, crash diagnostics and session history.
 
-- **60 FPS estáveis** em resolução interna 3x (1536×1344), anisotrópica 16x e distância de detalhe longa
-- GPU ~2,3 ms por quadro (de 16,7 ms), CPU ~1,2 núcleo, memória ~560 MB
-- bateria em ~30–33 °C, consumo ~3,9 W em jogo, sem aquecimento (estado térmico "nenhum")
-- áudio sem falhas, inclusive ao minimizar e voltar; sem engasgos ao entrar nas fases (ISO ou CHD)
+Project reports on the Retroid Pocket 6 show stable 60 FPS at 3x resolution, 16x anisotropic filtering and long detail distance. Other devices and PAL disc images have not been tested.
 
-Outros aparelhos (principalmente com GPU Mali ou PowerVR) e a versão PAL não foram testados.
+## Known limitations
 
-## Gráficos
+A short startup pause before the title screen and higher CPU usage during video cutscenes.
 
-- Resolução interna 1x (512×448, a do PS2), 2x (1024×896) ou 3x (1536×1344)
-- Proporção 4:3 ou 16:9 (o widescreen do próprio jogo, sem esticar), 30 ou 60 FPS, VSync
-- Filtragem anisotrópica, FXAA e distância de detalhe (LOD) até 3x
-- Predefinições Original / Equilibrado / Qualidade; dithering do PS2 sempre ligado
+## Development
 
-## Limitações conhecidas
+The [twinsanity-reversed](https://github.com/Smartkin/twinsanity-reversed) decompilation is compiled to wasm32 and translated to C using wasm2c, running on NativeEE with OpenGL ES 3.2, OpenSL ES and SDL2. The Android launcher uses Java.
 
-- Uma pausa de ~2 s ao abrir o jogo, antes da tela título (inofensiva)
-- As cutscenes em vídeo usam mais CPU do que o ideal
-
-## Como é feito
-
-O jogo é a decompilação [twinsanity-reversed](https://github.com/Smartkin/twinsanity-reversed) (`game/`), compilada
-para wasm32 e convertida em C com wasm2c, sobre o motor NativeEE (`engine/`) com OpenGL ES 3.2, OpenSL ES e SDL2.
-O NDK compila tudo em `libmain.so`; o launcher (`android/game`) é Java puro.
-
-| Pasta | O que é |
+| Directory | Purpose |
 |---|---|
-| `android/game/` | o aplicativo Android: launcher, ferramentas, build do APK ([README](android/game/README.md), [notas da versão](android/game/NOTAS-DA-VERSAO.txt)) |
-| `runner/te_android*.cpp` | a entrada do jogo no Android e os diagnósticos nativos |
-| `platform/nativeee/host/` | a ponte entre o jogo e o motor (gráficos, áudio, disco, configurações) |
-| `engine/` | o motor NativeEE |
-| `game/` | a decompilação do jogo |
-| `.github/workflows/android-game-arm64.yml` | o build do APK, os testes e a publicação das versões |
+| android/game/ | Android launcher and APK build |
+| runner/ | Native entry points and diagnostics |
+| platform/nativeee/host/ | Game-to-engine bridge |
+| engine/ | NativeEE engine |
+| game/ | Game decompilation |
 
-O APK é gerado pelo GitHub Actions. A publicação de novas versões ocorre por tag numérica correspondente à versão do APK. Consulte [android/game/README.md](android/game/README.md) para compilar localmente.
+See [Android build instructions](android/game/README.md) and [original upstream README](docs/TwinsanityEvolved-README.md).
 
-## Créditos e licenças
+## Releases
 
-Twinsanity Pocket é um fork de [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), o port para PC e
-PS Vita, cujo README original está em [docs/TwinsanityEvolved-README.md](docs/TwinsanityEvolved-README.md).
+Update the app version and release notes, then create a matching numeric version tag. GitHub Actions publishes the signed ARM64 APK and SHA256SUMS.txt. Existing releases are preserved.
 
-- TwinsanityEvolved e NativeEE — MIT ([LICENSE](LICENSE))
-- twinsanity-reversed — a decompilação do jogo
-- SDL2 — zlib · libchdr — BSD 3-Clause
-- FFmpeg 6.1.2 — LGPL v2.1 ou posterior, compilado sem partes GPL ou nonfree ([FFmpeg-LICENSE.md](FFmpeg-LICENSE.md),
-  receita em `tools/android/ffmpeg_android.sh`)
-- Avisos de terceiros: [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)
+## Contributing and credits
 
-Crash Twinsanity é marca de seus respectivos donos. Este projeto não é afiliado a eles e não distribui nenhum dado do
-jogo.
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
----
+Based on [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), NativeEE and twinsanity-reversed. See [MIT license](LICENSE), [FFmpeg license](FFmpeg-LICENSE.md) and [third-party notices](THIRD_PARTY_NOTICES.md).
 
-*English: Twinsanity Pocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
-twinsanity-reversed decompilation on the NativeEE engine and tested on the Retroid Pocket 6. Bring your own disc image
-(ISO or CHD); no game data is included. Download the APK from the [releases](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest).*
+Crash Twinsanity belongs to its respective rights holders. This project is unaffiliated and distributes no game data.
 
-## Publicação de versões
-
-Atualize a versão do aplicativo e as notas de atualização antes de criar uma tag numérica correspondente (por exemplo, `2.0.0`). O GitHub Actions gera o APK ARM64 assinado e publica a release com `SHA256SUMS.txt`. Releases existentes não são substituídas. Builds comuns ficam nos artefatos do Actions.
+For detailed measurements and technical information, see the [complete Portuguese documentation](README.pt-BR.md).
