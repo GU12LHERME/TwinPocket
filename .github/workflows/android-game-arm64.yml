@@ -12,9 +12,9 @@ on:
   push:
     branches:
       - android-game-arm64
-    # a version tag (v1.8.0 / 1.8.0) on the branch: the same build, then the GitHub Release with its APK (the last step)
+    # a version tag (1.8.0: no 'v' -- the upstream release.yml builds the PC / Vita packages on v* tags) on the branch: the
+    # same build, then the GitHub Release with its APK (the last step)
     tags:
-      - 'v*'
       - '[0-9]*'
 
 permissions:
