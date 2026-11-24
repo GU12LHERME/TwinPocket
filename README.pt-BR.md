@@ -19,7 +19,7 @@ As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves,
 | Pacote | `com.twinsanitypocket.android` |
 | Assinatura | SHA-256 do certificado `0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac` |
 
-[GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](RELEASE-NOTES.txt) · [Como contribuir](CONTRIBUTING.md)
+[GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](android/game/NOTAS-DA-VERSAO.txt) · [Como contribuir](CONTRIBUTING.md)
 
 ## Como usar
 
@@ -37,7 +37,7 @@ Medido no aparelho com os relatórios do próprio app (Snapdragon 8 Gen 2, Adren
 
 - **60 FPS estáveis** em resolução interna 3x (1536×1344), anisotrópica 16x e distância de detalhe longa
 - GPU ~2,3 ms por quadro (de 16,7 ms), CPU ~1,2 núcleo, memória ~560 MB
-- bateria em ~30–33 °C, consumo ~3,9 W em jogo, sem aquecimento (estado térmico "nenhum")
+- bateria em ~30–33 °C, consumo ~3,9 W nas sessões de jogo medidas (estado térmico "nenhum")
 - áudio sem falhas, inclusive ao minimizar e voltar; sem engasgos ao entrar nas fases (ISO ou CHD)
 
 Outros aparelhos (principalmente com GPU Mali ou PowerVR) e a versão PAL não foram testados.
@@ -53,6 +53,7 @@ Outros aparelhos (principalmente com GPU Mali ou PowerVR) e a versão PAL não f
 
 - Uma pausa de ~2 s ao abrir o jogo, antes da tela título (inofensiva)
 - As cutscenes em vídeo usam mais CPU do que o ideal
+- O aquecimento inesperado relatado na tela de Start ainda precisa de validação específica; as medições em jogo não comprovam o comportamento do menu.
 
 ## Como é feito
 
