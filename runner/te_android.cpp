@@ -142,17 +142,19 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
             runner_args.emplace_back(argv[i] ? argv[i] : "");
         }
     }
-    // THE HITCH DIAGNOSIS (the performance report, 1.6.1): every game-thread tick over 50 ms gets its line ("tick: boundary N
-    // took X ms (...)") with the port's load work in it (te_load_census.h: textures decoded / made, model parts, native
-    // meshes, the waits) and the game thread's sections sampled in it -- "(own code)" the game's code, the rest the port's
-    // (te_prof.h: a sampler thread every 2 ms, its report every 600 presents). At most 40 tick lines a census window. The
-    // report's hitch list reads them: the port preparing resources, or the game's own work. Never over a variable already
-    // set (an adb / launcher --te-env choice wins).
+    // THE DISC READER THREAD (1.7.0): the reads the game asks for in play -- the area's music window (~4 MB), the streamed
+    // banks -- go to the disc reader (disc_reader.cpp, te::io: the Vita's default) instead of the game thread. The 1.6.1
+    // reports on the RP6: with a CHD image each area entry blocked the game thread ~190 ms then ~75-100 ms in "disc read
+    // (stream)" (93-98 % of those ticks: the CHD's hunks decompressed for the music window; prepare_max_ms 195.8), with an
+    // ISO 7.9 ms. The reader reads the window in pieces and the music starts when its first blocks are in; the loads at the
+    // device's speed behind the loading picture are unchanged. TE_DISC_ASYNC=0 (adb / --te-env) restores the inline reads.
+    ::setenv("TE_DISC_ASYNC", "1", 0);
+    // THE SLOW-TICK LINE (the performance report): every game-thread tick over 50 ms gets its line ("tick: boundary N took
+    // X ms (...)") with the port's load work in it (te_load_census.h: textures decoded / made, model parts, native meshes,
+    // the waits); at most 40 a census window. Nothing is measured beyond what the game thread already times. (1.6.1's
+    // sampler, TE_PROF at 2 ms, found the disc reads above; it is off again: TE_PROF=1 by hand still turns it on.)
     ::setenv("TE_TICK_LOG_MS", "50", 0);
     ::setenv("TE_TICK_LOG_CAP", "40", 0);
-    ::setenv("TE_PROF", "1", 0);
-    ::setenv("TE_PROF_US", "2000", 0);
-    ::setenv("TE_PROF_EVERY", "600", 0);
     // THE SETTINGS FILE: ps2r.ini, the one the game's menus and the launcher's settings both read and write -- the game
     // folder's own when there is one (portable), else <game>/userdata/ps2r.ini (where the runner's rules put it beside the
     // memory cards); named to the runner with --config so the launcher (Settings.java: the same rule) and the game agree.
