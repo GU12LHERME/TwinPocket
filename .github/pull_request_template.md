@@ -1,8 +1,8 @@
-## Resumo
+## Summary / Resumo
 
-## Alterações
+## Changes / Alterações
 
-## Validação
-- [ ] Testes relevantes executados ou motivo informado.
-- [ ] Documentação atualizada quando necessário.
-- [ ] Nenhum segredo ou imagem de disco protegida incluído.
+## Validation / Validação
+- [ ] Relevant tests run or reason provided / Testes executados ou motivo informado.
+- [ ] Documentation updated if needed / Documentação atualizada quando necessário.
+- [ ] No secrets or copyrighted disc images / Sem segredos ou imagens protegidas.
