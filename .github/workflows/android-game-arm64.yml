@@ -402,7 +402,8 @@ jobs:
           grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
           grep -q "launchable-activity: name='com.twinsanityevolved.game.LauncherActivity'" "$LOG_DIR/apk-badging.log"
           grep -q "application-label:'Twinsanity Pocket'" "$LOG_DIR/apk-badging.log"
-          grep -q "application-icon-640:'res/mipmap-anydpi-v26/ic_crash_launcher.xml'" "$LOG_DIR/apk-badging.log" || grep -q "application-icon-.*ic_crash_launcher" "$LOG_DIR/apk-badging.log"
+          # the icon (a release build shortens resource paths -- res/xx.xml -- so its presence, not its file name)
+          grep -q "application-icon-640:'res/" "$LOG_DIR/apk-badging.log"
           echo "PASS  the launcher icon opens LauncherActivity (Java only; the game runs in the :game process)" | tee -a "$LOG_DIR/libmain-evidence.txt"
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump xmltree "$apk" AndroidManifest.xml > "$LOG_DIR/apk-manifest.txt"
           grep -q ':game' "$LOG_DIR/apk-manifest.txt" && grep -q ':probe' "$LOG_DIR/apk-manifest.txt" && grep -q 'LogProvider' "$LOG_DIR/apk-manifest.txt"
