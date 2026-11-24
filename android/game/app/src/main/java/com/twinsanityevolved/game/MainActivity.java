@@ -1,6 +1,8 @@
 package com.twinsanityevolved.game;
 
 import android.content.pm.ActivityInfo;
+import android.view.Display;
+import android.view.WindowManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -29,7 +31,45 @@ public final class MainActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
         hideSystemBars();
         if (!mBrokenLibraries) telemetry = new Telemetry(this);
+        preferSixtyHertz(true);
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
+    }
+
+    // THE DISPLAY'S REFRESH RATE: the game presents 60 pictures a second; on a 120 Hz panel (the Retroid Pocket 6 at its
+    // default) each one is held for an uneven number of refreshes and the panel scans twice as often for nothing. The game's
+    // window asks for the panel's 60 Hz mode at the same resolution (preferredDisplayModeId; preferredRefreshRate 60 as
+    // well, for a system that picks the rate itself). The launcher keeps the system's rate. Where the panel has no 60 Hz
+    // mode, or the system refuses, nothing else changes: the report's refresh_hz shows what the panel ran at.
+    private void preferSixtyHertz(boolean log) {
+        try {
+            Display d = Build.VERSION.SDK_INT >= 30 ? getDisplay() : getWindowManager().getDefaultDisplay();
+            if (d == null) return;
+            Display.Mode cur = d.getMode();
+            Display.Mode sixty = null;
+            StringBuilder modes = new StringBuilder();
+            for (Display.Mode m : d.getSupportedModes()) {
+                if (modes.length() > 0) modes.append(", ");
+                modes.append(m.getPhysicalWidth()).append('x').append(m.getPhysicalHeight()).append(' ')
+                     .append(String.format(java.util.Locale.US, "%.1f", m.getRefreshRate())).append(" Hz");
+                boolean sameSize = m.getPhysicalWidth() == cur.getPhysicalWidth() && m.getPhysicalHeight() == cur.getPhysicalHeight();
+                if (sameSize && Math.abs(m.getRefreshRate() - 60f) < 1f) sixty = m;
+            }
+            WindowManager.LayoutParams lp = getWindow().getAttributes();
+            if (sixty != null) lp.preferredDisplayModeId = sixty.getModeId();
+            lp.preferredRefreshRate = 60f;
+            getWindow().setAttributes(lp);
+            if (log) {
+                String line = "[te.android] display: asked for 60 Hz" + (sixty != null ? " (mode " + sixty.getModeId() + ")" : " (no 60 Hz mode at this size)")
+                    + "; the panel at " + String.format(java.util.Locale.US, "%.1f", d.getRefreshRate()) + " Hz now; modes " + modes;
+                Diag.log(this, "game", line);
+                try {
+                    TeDiag.nativeLog(line);
+                } catch (Throwable ignored) {   // (libmain.so not loaded: the Java log has it)
+                }
+            }
+        } catch (Throwable t) {
+            Diag.log(this, "game", "display: the 60 Hz request failed: " + t);
+        }
     }
 
     // THE ORIENTATION: fixed in the device's standard landscape, as the manifest says. SDL asks for one when the game's
@@ -74,6 +114,7 @@ public final class MainActivity extends SDLActivity {
     @Override
     protected void onResume() {
         hideSystemBars();   // before SDL resumes: the surface comes back at the screen's size
+        preferSixtyHertz(false);
         super.onResume();
         if (telemetry != null) telemetry.start();
     }
