@@ -5,9 +5,9 @@ aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testad
 
 > Nenhum dado do jogo está neste repositório nem no aplicativo. Você precisa da sua própria imagem do disco (ISO ou CHD).
 
-## Baixar
+## Download
 
-Baixe o `TwinsanityPocket-<versão>.apk` da [última versão](../../releases/latest) e instale.
+Baixe o `TwinsanityPocket-<versão>.apk` da [última versão](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) e instale.
 As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves, configurações e a imagem do jogo.
 
 | | |
@@ -16,6 +16,8 @@ As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves,
 | Jogo | a sua imagem do Crash Twinsanity, ISO ou CHD (versão USA testada) |
 | Pacote | `com.twinsanitypocket.android` |
 | Assinatura | SHA-256 do certificado `0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac` |
+
+[GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](RELEASE-NOTES.txt) · [Como contribuir](CONTRIBUTING.md)
 
 ## Como usar
 
@@ -88,4 +90,4 @@ jogo.
 
 *English: Twinsanity Pocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
 twinsanity-reversed decompilation on the NativeEE engine and tested on the Retroid Pocket 6. Bring your own disc image
-(ISO or CHD); no game data is included. Download the APK from the [releases](../../releases/latest).*
+(ISO or CHD); no game data is included. Download the APK from the [releases](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest).*
