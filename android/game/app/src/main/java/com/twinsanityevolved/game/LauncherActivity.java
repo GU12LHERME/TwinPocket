@@ -1883,6 +1883,8 @@ public final class LauncherActivity extends Activity {
                 if (line.contains("[te.gfx] pace") || line.contains("[te.gfx] lod") || line.contains("[te.android] perf") || line.contains("android settings:")
                         || line.contains("[te.android] frames") || line.contains("[te.gfx] gpu frame") || line.contains("[te.android] config")
                         || line.contains("[te.android] power")
+                        || line.contains("[te.android] hitch") || line.contains("[te.android] display") || line.contains("] tick: boundary")
+                        || line.contains("[te.load]") || line.contains("[te.prof]") || line.contains("] area: '")
                         || line.contains("] display: aspect"))
                     pf.append(line).append('\n');
             }

@@ -142,6 +142,17 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
             runner_args.emplace_back(argv[i] ? argv[i] : "");
         }
     }
+    // THE HITCH DIAGNOSIS (the performance report, 1.6.1): every game-thread tick over 50 ms gets its line ("tick: boundary N
+    // took X ms (...)") with the port's load work in it (te_load_census.h: textures decoded / made, model parts, native
+    // meshes, the waits) and the game thread's sections sampled in it -- "(own code)" the game's code, the rest the port's
+    // (te_prof.h: a sampler thread every 2 ms, its report every 600 presents). At most 40 tick lines a census window. The
+    // report's hitch list reads them: the port preparing resources, or the game's own work. Never over a variable already
+    // set (an adb / launcher --te-env choice wins).
+    ::setenv("TE_TICK_LOG_MS", "50", 0);
+    ::setenv("TE_TICK_LOG_CAP", "40", 0);
+    ::setenv("TE_PROF", "1", 0);
+    ::setenv("TE_PROF_US", "2000", 0);
+    ::setenv("TE_PROF_EVERY", "600", 0);
     // THE SETTINGS FILE: ps2r.ini, the one the game's menus and the launcher's settings both read and write -- the game
     // folder's own when there is one (portable), else <game>/userdata/ps2r.ini (where the runner's rules put it beside the
     // memory cards); named to the runner with --config so the launcher (Settings.java: the same rule) and the game agree.

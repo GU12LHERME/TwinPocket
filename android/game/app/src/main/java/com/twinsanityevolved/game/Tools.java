@@ -295,7 +295,7 @@ final class Tools {
         double rmin = s.powerMin(ToolsCore.REFRESH), rmax = s.powerMax(ToolsCore.REFRESH);
         b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Atualização da tela"), rmax < 0 ? Lang.T("indisponível")
             : (Math.abs(rmax - rmin) < 0.05 ? ToolsCore.num(rmax, 1) + " Hz" : ToolsCore.num(rmin, 1) + "–" + ToolsCore.num(rmax, 1) + " Hz")));
-        if (s.displayMode != null) b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Modo de tela pedido"), s.displayMode));
+        if (s.displayMode != null) b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Tela"), s.displayMode));
         if (s.displayMode != null || !s.hitches.isEmpty()) {
             b.append(String.format(Locale.US, "  %-22s %d%s\n", Lang.T("Engasgos (> 50 ms)"), s.playHitches(),
                 s.playHitches() > 0 ? " · " + Lang.T("pior ") + ToolsCore.num(s.worstPlayHitch(), 0) + " ms" : ""));
@@ -330,6 +330,25 @@ final class Tools {
                     ToolsCore.num(h.gameMs, 0), ToolsCore.num(h.drawMs + h.swapMs, 0), ToolsCore.num(h.buildWaitMs, 0),
                     (h.shaders + h.programs) > 0 ? (h.shaders + h.programs) + "/" + ToolsCore.num(h.shaderMs, 0) : "0",
                     h.textures, h.meshes, area != null ? area : "—", Lang.T(h.cause(s))));
+            }
+            // the game thread's own tick lines for those hitches: the port's load work in them and the sampled sections
+            StringBuilder detail = new StringBuilder();
+            int details = 0;
+            for (ToolsCore.Hitch h : s.hitches) {
+                if (h.loading) continue;
+                ToolsCore.Tick t = s.tickNear(h.boundary);
+                if (t == null) continue;
+                if (details++ >= 40) {
+                    detail.append("  …\n");
+                    break;
+                }
+                detail.append(String.format(Locale.US, "  %d: %s ms · %s %s ms%s%s\n", h.present, ToolsCore.num(t.ms, 0),
+                    Lang.T("port"), ToolsCore.num(t.loadMs, 0), t.load.isEmpty() ? "" : " (" + t.load + ")",
+                    t.prof.isEmpty() ? "" : " · " + Lang.T("perfil: ") + t.prof));
+            }
+            if (details > 0) {
+                b.append('\n').append(Lang.T("ENGASGOS: A THREAD DO JOGO (\"(own code)\" = código do jogo; o resto, o port)")).append('\n');
+                b.append(detail);
             }
         }
         if (s.count() > 0) {

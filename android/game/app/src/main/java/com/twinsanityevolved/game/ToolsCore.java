@@ -24,7 +24,10 @@ import java.util.regex.Pattern;
  *   [te.android] hitch: present P boundary B: G ms; game X ms, drawing S + swap W ms, build wait Y ms; shaders C compiled + L linked (Z ms);
  *     textures made T, meshes made M; loading yes|no      (graphics.cpp NoteHitch: a frame over 50 ms)
  *   [twinsanity-pocket] area: 'name' @ boundary B (was 'old')        (mods.cpp: the game's area changes)
- *   [te.android] display: ... asked for 60 Hz ...                     (MainActivity: the display mode the game asked for)
+ *   [te.android] display: ...                                         (MainActivity: the panel's rate and modes)
+ *   [twinsanity-pocket] tick: boundary N took X ms (draw submit a, present b, pump c, game d) load: ...; ... prof: (own code) P%, name Q%
+ *     (time.cpp: a game-thread tick over TE_TICK_LOG_MS -- 50 on Android since 1.6.1 -- with the port's load work in it and
+ *     the sampled sections: "(own code)" is the game's code, the rest the port's)
  *   [YYYY-MM-DD HH:MM:SS] ... (the time stamp of the log's lines)
  */
 final class ToolsCore {
@@ -41,6 +44,15 @@ final class ToolsCore {
         String config;
     }
 
+    /** One slow tick of the game thread (time.cpp's tick line): its time, the port's load work in it, the sampled sections. */
+    static final class Tick {
+        long boundary;
+        double ms, gameMs = -1, loadMs;   // loadMs: the port's load work (decodes, makes, posts, waits) summed
+        String load = "", prof = "";
+        String top;                       // the most sampled section ("(own code)" = the game's code), null without samples
+        double topPct = -1;
+    }
+
     /** One frame over the hitch threshold and what it did (graphics.cpp NoteHitch). */
     static final class Hitch {
         long present, boundary;
@@ -54,7 +66,13 @@ final class ToolsCore {
             if (shaderMs >= ms * 0.3) return "compilação de shaders";
             if (buildWaitMs >= ms * 0.3) return "espera pela geometria";
             if (drawMs + swapMs >= ms * 0.5) return "renderização (envio / troca de quadro)";
-            if (gameMs >= ms * 0.6) return s.areaNear(boundary) != null ? "jogo: troca de área" : "jogo (CPU da thread do jogo)";
+            if (gameMs >= ms * 0.6) {
+                // the game thread's own tick line splits it: the port's load work, or the game's code
+                Tick t = s.tickNear(boundary);
+                if (t != null && t.loadMs >= t.ms * 0.4) return "jogo: o port preparando texturas / modelos";
+                if (t != null && "(own code)".equals(t.top) && t.topPct >= 50) return "jogo: código do próprio jogo";
+                return s.areaNear(boundary) != null ? "jogo: troca de área" : "jogo (CPU da thread do jogo)";
+            }
             return "indefinido";
         }
     }
@@ -76,6 +94,16 @@ final class ToolsCore {
         final List<Power> power = new ArrayList<>();
         boolean gpuUnavailable;     // the driver has no timer query
         final List<Hitch> hitches = new ArrayList<>();
+        final Map<Long, Tick> ticks = new LinkedHashMap<>();   // the slow game-thread ticks by boundary
+
+        /** The slow tick of a hitch's picture (its boundary or the one or two before), null when none was logged. */
+        Tick tickNear(long boundary) {
+            for (long b = boundary + 1; b >= boundary - 2; b--) {
+                Tick t = ticks.get(b);
+                if (t != null) return t;
+            }
+            return null;
+        }
         final List<long[]> areaAt = new ArrayList<>();      // {boundary} of each area change, with its name in areaNames
         final List<String> areaNames = new ArrayList<>();
         String displayMode;         // the game's display request line (null: an older build)
@@ -265,6 +293,9 @@ final class ToolsCore {
         "\\[te\\.android\\] hitch: present (\\d+) boundary (\\d+): " + NUM + " ms; game (-?[0-9.]+) ms, drawing " + NUM + " \\+ swap " + NUM
             + " ms, build wait (-?[0-9.]+) ms; shaders (\\d+) compiled \\+ (\\d+) linked \\(" + NUM + " ms\\); textures made (\\d+), meshes made (\\d+); loading (yes|no)");
     private static final Pattern AREA = Pattern.compile("\\] area: '([^']*)' @ boundary (\\d+)");
+    private static final Pattern TICK = Pattern.compile("\\] tick: boundary (\\d+) took " + NUM + " ms \\([^)]*game " + NUM + "\\)(.*)$");
+    private static final Pattern MS_IN = Pattern.compile("([0-9]+\\.[0-9]) ms");
+    private static final Pattern TOP = Pattern.compile("^\\s*(.+?) ([0-9.]+)%");
 
     /** The figures of one game log; stage: the stage file's text (null: unknown). */
     static Summary summarize(String log, String stage) {
@@ -285,6 +316,11 @@ final class ToolsCore {
             }
             if (line.contains("FATAL") || line.contains("Fatal signal")) s.fatalLines++;
             if (s.renderer == null && line.contains("[gl.es]")) s.renderer = line.substring(line.indexOf("[gl.es]")).trim();
+            if (line.contains("] tick: boundary ")) {
+                Matcher t = TICK.matcher(line);
+                if (t.find()) s.ticks.put(Long.parseLong(t.group(1)), tick(t));
+                continue;
+            }
             if (line.contains("] area: '")) {
                 Matcher a = AREA.matcher(line);
                 if (a.find()) {
@@ -379,6 +415,30 @@ final class ToolsCore {
             if (at >= 0) s.power.add(power(line.substring(at + 19)));
         }
         return s;
+    }
+
+    static Tick tick(Matcher t) {
+        Tick k = new Tick();
+        k.boundary = Long.parseLong(t.group(1));
+        k.ms = parse(t.group(2));
+        k.gameMs = parse(t.group(3));
+        String rest = t.group(4);
+        int p = rest.indexOf(" prof: ");
+        String load = p >= 0 ? rest.substring(0, p) : rest;
+        k.prof = p >= 0 ? rest.substring(p + 7).trim() : "";
+        int l = load.indexOf(" load: ");
+        k.load = l >= 0 ? load.substring(l + 7).trim() : "";
+        // the load work's own times: every "x.y ms" in it (decodes, makes, model parts, mesh posts, the waits)
+        Matcher m = MS_IN.matcher(k.load);
+        while (m.find()) k.loadMs += Double.parseDouble(m.group(1));
+        if (!k.prof.isEmpty()) {
+            Matcher top = TOP.matcher(k.prof.split(",")[0]);
+            if (top.find()) {
+                k.top = top.group(1).trim();
+                k.topPct = parse(top.group(2));
+            }
+        }
+        return k;
     }
 
     // the window of these presents (a line without its pace line makes one)

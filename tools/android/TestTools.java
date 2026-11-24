@@ -106,18 +106,27 @@ public final class TestTools {
             + "[te.android] hitch: present 9900 boundary 9950: 90.0 ms; game 10.0 ms, drawing 5.0 + swap 2.0 ms, build wait 60.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 40; loading no\n"
             + "[te.android] hitch: present 30000 boundary 30050: 80.0 ms; game 70.0 ms, drawing 2.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
             + "[te.android] hitch: present 700 boundary 700: 900.0 ms; game -1.0 ms, drawing 1.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading yes\n";
-        ToolsCore.Summary hs = ToolsCore.summarize(p0 + h6, null);
-        check(hs.hitches.size() == 5 && hs.playHitches() == 4, "1.6.0: hitches read, the loading one apart");
+        // 1.6.1: the game thread's tick lines split a game-side hitch
+        String t61 = "[twinsanity-pocket] tick: boundary 30049 took 72.0 ms (draw submit 0.0, present 1.0, pump 0.2, game 70.8) prof: (own code) 81% (29), texture decode 8% (3)\n"
+            + "[twinsanity-pocket] area: 'levels\\earth\\cavern\\cavent' @ boundary 40000 (was '')\n"
+            + "[te.android] hitch: present 40010 boundary 40005: 190.0 ms; game 170.0 ms, drawing 2.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[twinsanity-pocket] tick: boundary 40004 took 168.0 ms (draw submit 0.0, present 1.0, pump 0.2, game 166.8) load: textures 40 decoded (900 KB, 50.5 ms), made 40 (waited 10.0 ms); model parts 120 (30.0 ms; waits 2.0 ms) prof: texture decode 45% (38), (own code) 40% (34)\n";
+        ToolsCore.Summary hs = ToolsCore.summarize(p0 + h6 + t61, null);
+        check(hs.playHitches() == 5, "1.6.0: hitches read, the loading one apart");
         check(hs.worstPlayHitch() == 205.2, "1.6.0: the worst play hitch");
         check(hs.hitches.get(0).cause(hs).equals("jogo: troca de área") && "levels\\earth\\hub\\huba".equals(hs.areaNear(15420)), "1.6.0: a hitch after an area change");
         check(hs.hitches.get(1).cause(hs).equals("compilação de shaders"), "1.6.0: a shader hitch");
         check(hs.hitches.get(2).cause(hs).equals("espera pela geometria"), "1.6.0: a geometry hitch");
-        check(hs.hitches.get(3).cause(hs).equals("jogo (CPU da thread do jogo)"), "1.6.0: a game-thread hitch away from area changes");
+
         check(hs.hitches.get(4).cause(hs).equals("tela de carregamento"), "1.6.0: the loading picture's frame");
-        check(hs.causes().size() == 4 && !hs.causes().containsKey("tela de carregamento"), "1.6.0: causes counted outside the loading");
+        check(hs.hitches.size() == 6 && hs.hitches.get(3).cause(hs).equals("jogo: código do próprio jogo"), "1.6.1: a tick of the game's own code");
+        check(hs.hitches.get(5).cause(hs).equals("jogo: o port preparando texturas / modelos"), "1.6.1: a tick of the port's load work");
+        ToolsCore.Tick tk = hs.tickNear(40005);
+        check(tk != null && Math.abs(tk.loadMs - 92.5) < 0.01 && "texture decode".equals(tk.top) && tk.topPct == 45, "1.6.1: the tick's load work and top section " + (tk == null ? "" : tk.loadMs + " " + tk.top));
+        check(hs.causes().size() == 5 && !hs.causes().containsKey("tela de carregamento"), "1.6.0: causes counted outside the loading");
         check(hs.displayMode != null && hs.displayMode.startsWith("asked for 60 Hz"), "1.6.0: the display request read");
         String[] c6 = ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(hs, "1.6.0", "3", "60", "bilinear", "long", "k6"), 50)).get(0);
-        check(c6.length == ToolsCore.COLUMNS && c6[ToolsCore.COL_HITCHES].equals("4") && c6[ToolsCore.COL_HITCH_MAX].equals("205"), "1.6.0: hitch columns");
+        check(c6.length == ToolsCore.COLUMNS && c6[ToolsCore.COL_HITCHES].equals("5") && c6[ToolsCore.COL_HITCH_MAX].equals("205"), "1.6.0: hitch columns");
         check(ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(q, "1.5.0", "3", "60", "bilinear", "long", "k5"), 50)).get(0)[ToolsCore.COL_HITCHES].equals("—"),
             "1.6.0: a log without hitch support reads — (unknown), not 0");
 

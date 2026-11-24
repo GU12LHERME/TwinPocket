@@ -269,8 +269,13 @@ final class Lang {
         e("Atualização da tela", "Display refresh");
         e("CONFIGURAÇÕES GRÁFICAS (janelas de ~10 s)", "GRAPHICS SETTINGS (~10 s windows)");
         e("JANELAS", "WINDOWS");
+        e("Tela", "Display");
+        e("port", "port");
+        e("perfil: ", "profile: ");
+        e("ENGASGOS: A THREAD DO JOGO (\"(own code)\" = código do jogo; o resto, o port)", "HITCHES: THE GAME THREAD (\"(own code)\" = the game's code; the rest, the port)");
+        e("jogo: o port preparando texturas / modelos", "game: the port preparing textures / models");
+        e("jogo: código do próprio jogo", "game: the game's own code");
         e("eng.", "hitch.");
-        e("Modo de tela pedido", "Display mode asked");
         e("Engasgos (> 50 ms)", "Hitches (> 50 ms)");
         e("ENGASGOS (quadros acima de 50 ms)", "HITCHES (frames over 50 ms)");
         e("tela de carregamento (esperado)", "loading picture (expected)");
