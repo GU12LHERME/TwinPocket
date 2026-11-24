@@ -2,7 +2,6 @@ package com.twinsanityevolved.game;
 
 import android.content.pm.ActivityInfo;
 import android.view.Display;
-import android.view.WindowManager;
 import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
@@ -31,44 +30,33 @@ public final class MainActivity extends SDLActivity {
         super.onCreate(savedInstanceState);
         hideSystemBars();
         if (!mBrokenLibraries) telemetry = new Telemetry(this);
-        preferSixtyHertz(true);
+        logDisplay();
         Diag.log(this, "game", "MainActivity.onCreate done (SDL libraries " + (mBrokenLibraries ? "NOT loaded" : "loaded") + ")");
     }
 
-    // THE DISPLAY'S REFRESH RATE: the game presents 60 pictures a second; on a 120 Hz panel (the Retroid Pocket 6 at its
-    // default) each one is held for an uneven number of refreshes and the panel scans twice as often for nothing. The game's
-    // window asks for the panel's 60 Hz mode at the same resolution (preferredDisplayModeId; preferredRefreshRate 60 as
-    // well, for a system that picks the rate itself). The launcher keeps the system's rate. Where the panel has no 60 Hz
-    // mode, or the system refuses, nothing else changes: the report's refresh_hz shows what the panel ran at.
-    private void preferSixtyHertz(boolean log) {
+    // THE DISPLAY'S REFRESH RATE: left to the system (the Retroid Pocket 6: 120 Hz). 1.6.0 asked for the panel's 60 Hz mode;
+    // the device's report showed it taken but the frames less even (the game paces its 60 pictures on its own clock: at 60 Hz
+    // a picture just late waits a whole 16.7 ms refresh instead of 8.3), so 1.6.1 asks for nothing. The panel's rate and
+    // modes still go to the game's log ([te.android] display), for the report.
+    private void logDisplay() {
         try {
             Display d = Build.VERSION.SDK_INT >= 30 ? getDisplay() : getWindowManager().getDefaultDisplay();
             if (d == null) return;
-            Display.Mode cur = d.getMode();
-            Display.Mode sixty = null;
             StringBuilder modes = new StringBuilder();
             for (Display.Mode m : d.getSupportedModes()) {
                 if (modes.length() > 0) modes.append(", ");
                 modes.append(m.getPhysicalWidth()).append('x').append(m.getPhysicalHeight()).append(' ')
                      .append(String.format(java.util.Locale.US, "%.1f", m.getRefreshRate())).append(" Hz");
-                boolean sameSize = m.getPhysicalWidth() == cur.getPhysicalWidth() && m.getPhysicalHeight() == cur.getPhysicalHeight();
-                if (sameSize && Math.abs(m.getRefreshRate() - 60f) < 1f) sixty = m;
             }
-            WindowManager.LayoutParams lp = getWindow().getAttributes();
-            if (sixty != null) lp.preferredDisplayModeId = sixty.getModeId();
-            lp.preferredRefreshRate = 60f;
-            getWindow().setAttributes(lp);
-            if (log) {
-                String line = "[te.android] display: asked for 60 Hz" + (sixty != null ? " (mode " + sixty.getModeId() + ")" : " (no 60 Hz mode at this size)")
-                    + "; the panel at " + String.format(java.util.Locale.US, "%.1f", d.getRefreshRate()) + " Hz now; modes " + modes;
-                Diag.log(this, "game", line);
-                try {
-                    TeDiag.nativeLog(line);
-                } catch (Throwable ignored) {   // (libmain.so not loaded: the Java log has it)
-                }
+            String line = "[te.android] display: the system's rate, the panel at " + String.format(java.util.Locale.US, "%.1f", d.getRefreshRate())
+                + " Hz; modes " + modes;
+            Diag.log(this, "game", line);
+            try {
+                TeDiag.nativeLog(line);
+            } catch (Throwable ignored) {   // (libmain.so not loaded: the Java log has it)
             }
         } catch (Throwable t) {
-            Diag.log(this, "game", "display: the 60 Hz request failed: " + t);
+            Diag.log(this, "game", "display: " + t);
         }
     }
 
@@ -114,7 +102,6 @@ public final class MainActivity extends SDLActivity {
     @Override
     protected void onResume() {
         hideSystemBars();   // before SDL resumes: the surface comes back at the screen's size
-        preferSixtyHertz(false);
         super.onResume();
         if (telemetry != null) telemetry.start();
     }
