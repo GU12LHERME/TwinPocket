@@ -61,7 +61,8 @@ android {
         release {
             minifyEnabled false
             shrinkResources false
-            signingConfig (tpKeystore != null && !tpKeystore.isEmpty()) ? signingConfigs.pocket : signingConfigs.debug
+            if (tpKeystore != null && !tpKeystore.isEmpty()) signingConfig signingConfigs.pocket
+            else signingConfig signingConfigs.debug
         }
     }
 
