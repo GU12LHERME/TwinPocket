@@ -8,7 +8,7 @@ Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game c
 
 ## Download
 
-[Download the latest APK](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) · [GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Release notes (Portuguese)](RELEASE-NOTES.txt)
+[Download the latest APK](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) · [GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Release notes (Portuguese)](android/game/NOTAS-DA-VERSAO.txt)
 
 | Requirement | Details |
 |---|---|
@@ -38,7 +38,7 @@ Project reports on the Retroid Pocket 6 show stable 60 FPS at 3x resolution, 16x
 
 ## Known limitations
 
-A short startup pause before the title screen and higher CPU usage during video cutscenes.
+A short startup pause before the title screen and higher CPU usage during video cutscenes. The reported unexpected heating on the Start screen still needs targeted validation; the gameplay temperature measurements do not establish menu behavior.
 
 ## Development
 
