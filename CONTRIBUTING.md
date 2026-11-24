@@ -1,3 +1,9 @@
+# Contributing
+
+Report bugs and suggestions in [Issues](https://github.com/GU12LHERME/TwinsanityPocket/issues). Create a separate branch, run relevant tests, document results and preserve third-party licenses. Never upload credentials, personal data or copyrighted disc images.
+
+---
+
 # Contribuindo com o Twinsanity Pocket
 
 Relate problemas e sugestões na [aba Issues](https://github.com/GU12LHERME/TwinsanityPocket/issues).
