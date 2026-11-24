@@ -483,7 +483,7 @@ jobs:
           retention-days: 14
 
       - name: Publish the GitHub Release (a version tag, or a Release already made for this version)
-        if: github.event_name == 'push'
+        if: github.event_name == 'push' && github.ref_type == 'tag'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -491,20 +491,11 @@ jobs:
           set -euo pipefail
           version="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" "$LOG_DIR/apk-badging.log" | head -1)"
           test -n "$version"
-          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
-            # a version tag (v1.8.0 or 1.8.0): it names the APK's own version, or nothing is published
-            tag="${GITHUB_REF_NAME}"
-            [ "${tag#v}" = "$version" ] || { echo "FAIL  tag ${tag} is not the APK's versionName ${version}"; exit 1; }
-          else
-            # a branch push: only into a Release someone already made for this version (its tag v<version> or <version>);
-            # a branch push never makes a Release or a tag
-            tag=""
-            for t in "v${version}" "${version}"; do
-              if gh release view "$t" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then tag="$t"; break; fi
-            done
-            if [ -z "$tag" ]; then echo "no Release for ${version}: nothing published"; exit 0; fi
-          fi
-          cp android-game-out/TwinsanityPocket.apk "android-game-out/TwinsanityPocket-${version}.apk"
+          tag="$GITHUB_REF_NAME"
+          [ "$tag" = "$version" ]
+          apk="TwinsanityPocket-${version}-arm64-v8a.apk"
+          cp android-game-out/TwinsanityPocket.apk "$apk"
+          sha256sum "$apk" > SHA256SUMS.txt
           # the release notes: this version's section of android/game/NOTAS-DA-VERSAO.txt
           awk -v v="VERSÃO ${version} " 'index($0, v) == 1 {on = 1} on && /^VERSÃO / && index($0, v) != 1 {exit} on' \
             android/game/NOTAS-DA-VERSAO.txt > "$RUNNER_TEMP/notes.txt"
@@ -512,16 +503,13 @@ jobs:
           {
             cat "$RUNNER_TEMP/notes.txt"
             echo
-            echo "Instalação: baixe TwinsanityPocket-${version}.apk e instale. Atualiza por cima da 1.5.0 em diante (mesma assinatura)."
+            echo "Instalação: baixe $apk e instale. Atualiza por cima da 1.5.0 em diante (mesma assinatura)."
+            echo "Confira a integridade do APK em SHA256SUMS.txt."
+            echo "Build $GITHUB_RUN_NUMBER · commit $GITHUB_SHA"
             echo "Assinatura (SHA-256 do certificado): 0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac"
           } > "$RUNNER_TEMP/release.md"
-          # a Release made on github.com for this tag (its "create the tag on publish") gets the APK and the notes; with no
-          # Release yet, one is made
           if gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release upload "$tag" "android-game-out/TwinsanityPocket-${version}.apk" --repo "$GITHUB_REPOSITORY" --clobber
-            gh release edit "$tag" --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md"
-          else
-            gh release create "$tag" "android-game-out/TwinsanityPocket-${version}.apk" \
-              --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
+            echo "Release existente preservada."
+            exit 0
           fi
-          echo "PASS  release ${tag}: TwinsanityPocket-${version}.apk and the notes"
+          gh release create "$tag" "$apk" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket $version" --notes-file "$RUNNER_TEMP/release.md" --verify-tag --latest
