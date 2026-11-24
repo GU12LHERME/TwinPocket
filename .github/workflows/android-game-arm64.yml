@@ -12,6 +12,9 @@ on:
   push:
     branches:
       - android-game-arm64
+    # a version tag (v1.8.0 ...) on the branch: the same build, then the GitHub Release with its APK (the last step)
+    tags:
+      - 'v*'
 
 permissions:
   contents: read
@@ -25,6 +28,8 @@ jobs:
     name: Game module + engine + runner -> libmain.so -> APK
     runs-on: ubuntu-24.04
     timeout-minutes: 180
+    permissions:
+      contents: write   # the Release on a version tag (the only write; a branch push only reads)
     env:
       ANDROID_NDK_VERSION: 30.0.16248370
       ANDROID_API: '24'
@@ -475,3 +480,30 @@ jobs:
             android-game-logs/
           if-no-files-found: warn
           retention-days: 14
+
+      - name: Publish the GitHub Release (version tags only)
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="${GITHUB_REF_NAME}"
+          version="${tag#v}"
+          # the tag names the APK's own version, or nothing is published
+          grep -q "versionName='${version}'" "$LOG_DIR/apk-badging.log" \
+            || { echo "FAIL  tag ${tag} is not the APK's versionName"; grep "versionName" "$LOG_DIR/apk-badging.log"; exit 1; }
+          cp android-game-out/TwinsanityPocket.apk "android-game-out/TwinsanityPocket-${version}.apk"
+          # the release notes: this version's section of android/game/NOTAS-DA-VERSAO.txt
+          awk -v v="VERSÃO ${version} " 'index($0, v) == 1 {on = 1} on && /^VERSÃO / && index($0, v) != 1 {exit} on' \
+            android/game/NOTAS-DA-VERSAO.txt > "$RUNNER_TEMP/notes.txt"
+          test -s "$RUNNER_TEMP/notes.txt"
+          {
+            cat "$RUNNER_TEMP/notes.txt"
+            echo
+            echo "Instalação: baixe TwinsanityPocket-${version}.apk e instale. Atualiza por cima da 1.5.0 em diante (mesma assinatura)."
+            echo "Assinatura (SHA-256 do certificado): 0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac"
+          } > "$RUNNER_TEMP/release.md"
+          gh release create "$tag" "android-game-out/TwinsanityPocket-${version}.apk" \
+            --repo "$GITHUB_REPOSITORY" --title "Twinsanity Pocket ${version}" --notes-file "$RUNNER_TEMP/release.md" --verify-tag
+          echo "PASS  release ${tag} published"
