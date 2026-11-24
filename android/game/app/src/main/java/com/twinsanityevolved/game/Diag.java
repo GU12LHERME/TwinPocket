@@ -92,6 +92,23 @@ final class Diag {
         }
     }
 
+    /** The first `bytes` bytes of a file as text (null when it does not exist): a log's head without reading it whole. */
+    static String readHead(File f, int bytes) {
+        if (f == null || !f.isFile()) return null;
+        try (FileInputStream in = new FileInputStream(f)) {
+            byte[] data = new byte[(int) Math.min(f.length(), bytes)];
+            int n = 0;
+            while (n < data.length) {
+                int r = in.read(data, n, data.length - n);
+                if (r <= 0) break;
+                n += r;
+            }
+            return new String(data, 0, n, StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
     static String tailLines(File f, int lines) {
         String s = readFile(f, 0);
         if (s == null) return null;

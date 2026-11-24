@@ -50,12 +50,14 @@ final class Tools {
         for (String name : new String[] {"previous-game.log", "latest-game.log"}) {
             File f = new File(dir, name);
             if (!f.isFile() || f.length() == 0) continue;
-            String log = Diag.readFile(f, 0);
-            ToolsCore.Summary s = ToolsCore.summarize(log, name.startsWith("latest") ? stage : null);
+            // the key from the log's first stamp alone: a session already in the history costs a 4 KB read, not a parse
+            String first = ToolsCore.firstStamp(Diag.readHead(f, 4096));
+            if (first != null && text != null && ToolsCore.hasSession(text, first + "#" + f.length())) continue;
+            ToolsCore.Summary s = summaryOf(f, name.startsWith("latest") ? stage : null);
             if (s.start == null) continue;
             String key = s.start + "#" + f.length();
             if (text != null && ToolsCore.hasSession(text, key)) continue;
-            if (name.startsWith("previous")) s.endState = guessEnd(log);
+            if (name.startsWith("previous")) s.endState = guessEnd(Diag.readFile(f, 0));
             String line = ToolsCore.sessionLine(s, version, st.get(Settings.SCALE, "1"), st.get(Settings.FRAME_RATE, "60"),
                 st.get(Settings.TEXTURE_FILTER, "bilinear"), st.get(Settings.DRAW_DISTANCE, "original"), key);
             text = ToolsCore.trimmed(text, line, KEEP_SESSIONS);
@@ -74,7 +76,22 @@ final class Tools {
 
     static ToolsCore.Summary lastSession(Context c) {
         File dir = Diag.logsDir(c);
-        return ToolsCore.summarize(Diag.readFile(new File(dir, "latest-game.log"), 0), Diag.readFile(new File(dir, "stage-game.txt"), 2000));
+        return summaryOf(new File(dir, "latest-game.log"), Diag.readFile(new File(dir, "stage-game.txt"), 2000));
+    }
+
+    // THE SUMMARIES, KEPT (1.7.0): a game log is ~1 MB after a long session and its summary a regex pass over every line;
+    // Ferramentas, the report, Desempenho and the history each asked for it again. Kept per file (its path, length, time
+    // and the stage text it was read with) until the file changes: a second ask is free.
+    private static final java.util.Map<String, ToolsCore.Summary> summaries = new java.util.HashMap<>();
+
+    static synchronized ToolsCore.Summary summaryOf(File f, String stage) {
+        String key = f.getAbsolutePath() + "|" + f.length() + "|" + f.lastModified() + "|" + (stage == null ? "" : stage.trim());
+        ToolsCore.Summary s = summaries.get(key);
+        if (s != null) return s;
+        s = ToolsCore.summarize(f.isFile() ? Diag.readFile(f, 0) : null, stage);
+        if (summaries.size() > 4) summaries.clear();
+        summaries.put(key, s);
+        return s;
     }
 
     // ---- the device ------------------------------------------------------------------------------------------------

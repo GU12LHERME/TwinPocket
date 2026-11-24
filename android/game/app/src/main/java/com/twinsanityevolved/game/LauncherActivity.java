@@ -162,11 +162,10 @@ public final class LauncherActivity extends Activity {
         new Choice(Settings.FXAA, "Antisserrilhado (FXAA)",
             "Suaviza bordas serrilhadas na imagem final; pode suavizar um pouco textos e o HUD",
             "off", new String[] {"off", "on"}, new String[] {"Desligado — padrão", "FXAA"}),
-        new Choice(Settings.DITHERING, "Dithering",
-            "Original: a saída de 16 bits com dithering do próprio PS2. Desligado: a imagem de 24 bits do port, mais lisa",
-            "off", new String[] {"off", "original"}, new String[] {"Desligado — padrão", "Original (PS2)"}),
-        new Choice(Settings.SCALE, "Resolução interna", "Mais alta: imagem mais nítida e mais trabalho para a GPU",
-            "1", new String[] {"1", "2", "3", "4"}, new String[] {"1x (nativa do PS2)", "2x", "3x", "4x"}),
+        // (1.7.0: the dithering is the PS2's, always -- not an option; the resolution 3x at most, with the frame it draws)
+        new Choice(Settings.SCALE, "Resolução interna",
+            "A imagem do jogo (512×448 no PS2) desenhada em mais pixels: mais nítida, mais trabalho para a GPU. 3x já cobre uma tela 1080p",
+            "1", new String[] {"1", "2", "3"}, new String[] {"1x · 512×448 (nativa do PS2)", "2x · 1024×896", "3x · 1536×1344"}),
         new Choice(Settings.ASPECT, "Proporção da tela",
             "16:9 liga o widescreen do jogo (imagem mais larga, sem esticar); 4:3 é a imagem original. O jogo acompanha sozinho",
             "16:9", new String[] {"4:3", "16:9"}, new String[] {"Original (4:3)", "Widescreen (16:9) — padrão"}),
@@ -720,7 +719,7 @@ public final class LauncherActivity extends Activity {
                 choiceRows(st, GRAPHICS, Settings.SCALE, Settings.ASPECT, Settings.FRAME_RATE, Settings.VSYNC, Settings.FPS_COUNTER);
                 section("QUALIDADE");
                 presetItem = presetRow(st);
-                choiceRows(st, GRAPHICS, Settings.ANISOTROPY, Settings.FXAA, Settings.DITHERING, Settings.DRAW_DISTANCE);
+                choiceRows(st, GRAPHICS, Settings.ANISOTROPY, Settings.FXAA, Settings.DRAW_DISTANCE);
                 break;
             case TAB_CONTROLS:
                 tabAbout = "Os analógicos mudam na hora, também pelo jogo (Opções → android settings).";
@@ -791,12 +790,24 @@ public final class LauncherActivity extends Activity {
         Item pick = row("Selecionar", "Copia a SUA imagem do jogo (ISO ou CHD) para o app, sem permissão de armazenamento", "›", false);
         pick.onA = this::pickIso;
         pick.enabled = () -> !copying;
+        // the graphics the next start uses, at a glance (A: the Gráficos tab)
+        Item gfx = row("Gráficos", "Predefinição, resolução interna, proporção e taxa de quadros do próximo jogo. A abre a aba Gráficos.",
+            graphicsSummary(new Settings(this)), false);
+        gfx.onA = () -> showTab(TAB_GRAPHICS);
         lastRun = text("", 12, SUBTLE, false);
         lastRun.setPadding(dp(4), dp(14), dp(4), 0);
         page.addView(lastRun);
         tabAbout = "A imagem do disco é sua: o app copia a ISO ou o CHD para o armazenamento dele, sem pedir permissões. "
                 + "Nenhum dado do jogo vem no aplicativo.";
         updatePlayState();
+    }
+
+    // "Qualidade · 3x 1536×1344 · 16:9 · 60 FPS": the Jogar tab's line (the settings as the game will read them)
+    private String graphicsSummary(Settings st) {
+        String scale = st.get(Settings.SCALE, "1");
+        int s = scale.equals("2") ? 2 : scale.equals("3") ? 3 : 1;
+        return T(PRESET_NAMES[presetNow(st)]) + " · " + s + "x " + (512 * s) + "×" + (448 * s) + " · " + st.get(Settings.ASPECT, "16:9")
+            + " · " + st.get(Settings.FRAME_RATE, "60") + " FPS";
     }
 
     private void systemPage(Settings st) {
@@ -1392,17 +1403,16 @@ public final class LauncherActivity extends Activity {
             });
     }
 
-    // ---- graphics presets: the resolution, the filter, the anisotropy, the LOD, FXAA and dithering together (the game's
+    // ---- graphics presets: the resolution, the filter, the anisotropy, the LOD and FXAA together (the game's
     // 'graphics preset' row is the same, display.cpp); the frame rate, the shape, the audio and the controls never change ----
     static final String[] PRESET_NAMES = {"Original", "Equilibrado", "Qualidade", "Personalizado"};
     static final String[][] PRESETS = {   // anisotropy, LOD, resolution
-        {"1", "original", "1"}, {"4", "medium", "2"}, {"16", "long", "4"}};
+        {"1", "original", "1"}, {"4", "medium", "2"}, {"16", "long", "3"}};
 
     private int presetNow(Settings st) {
         for (int i = 0; i < PRESETS.length; i++) {
             if (st.get(Settings.SCALE, "1").equals(PRESETS[i][2]) && st.get(Settings.ANISOTROPY, "1").equals(PRESETS[i][0])
-                    && st.get(Settings.DRAW_DISTANCE, "original").equals(PRESETS[i][1]) && st.get(Settings.FXAA, "off").equals("off")
-                    && st.get(Settings.DITHERING, "off").equals("off"))
+                    && st.get(Settings.DRAW_DISTANCE, "original").equals(PRESETS[i][1]) && st.get(Settings.FXAA, "off").equals("off"))
                 return i;
         }
         return 3;
@@ -1411,7 +1421,7 @@ public final class LauncherActivity extends Activity {
 
     private Item presetRow(final Settings st) {
         Item it = row("Predefinição gráfica",
-            "Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 3x.",
+            "Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 3x, anisotrópica 16x, LOD 3x.",
             chooser(T(PRESET_NAMES[presetNow(st)])), false);
         it.onStep = d -> {
             int now = presetNow(st);
@@ -1420,7 +1430,6 @@ public final class LauncherActivity extends Activity {
             st.set(Settings.ANISOTROPY, PRESETS[next][0]);
             st.set(Settings.DRAW_DISTANCE, PRESETS[next][1]);
             st.set(Settings.FXAA, "off");
-            st.set(Settings.DITHERING, "off");
             Diag.log(this, "main", "graphics preset " + PRESET_NAMES[next]);
             rebuild();
         };
@@ -1430,7 +1439,7 @@ public final class LauncherActivity extends Activity {
     // Recovery: the graphic options alone back to the Android profile (a black screen or a failed start after a graphics
     // change); the audio, the controls, the language, the ISO and the saves are not touched
     private void confirmRestoreGraphics() {
-        dialog(T("Restaurar apenas gráficos?"), T("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão."),
+        dialog(T("Restaurar apenas gráficos?"), T("Resolução, proporção, FPS, VSync, anisotrópica, FXAA, LOD e contador voltam ao padrão."),
             null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
                 if (w != 0) return;
                 Settings st = new Settings(this);
@@ -1445,7 +1454,7 @@ public final class LauncherActivity extends Activity {
 
     private void confirmRestore() {
         dialog(T("Restaurar configurações padrão?"),
-            T("Proporção 16:9, VSync ligado, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, ")
+            T("Proporção 16:9, VSync ligado, anisotrópica e FXAA desligados, resolução 1x, 60 FPS, contador desligado, LOD original, ")
                 + T("analógicos no padrão. A ISO e os saves não mudam."),
             null, new String[] {T("Restaurar"), T("Cancelar")}, 1, 1, w -> {
                 if (w != 0) return;

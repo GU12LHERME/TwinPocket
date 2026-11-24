@@ -130,6 +130,10 @@ public final class TestTools {
         check(ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(q, "1.5.0", "3", "60", "bilinear", "long", "k5"), 50)).get(0)[ToolsCore.COL_HITCHES].equals("—"),
             "1.6.0: a log without hitch support reads — (unknown), not 0");
 
+        // 1.7.0: the history key from a log's head alone
+        check("2026-11-23 10:00:00".equals(ToolsCore.firstStamp("no stamp here\n[2026-11-23 10:00:00] x\n[2026-11-23 10:00:05] y\n")), "1.7.0: first stamp");
+        check(ToolsCore.firstStamp("nothing\n") == null && ToolsCore.firstStamp(null) == null, "1.7.0: no stamp");
+
         List<String> fail = ToolsCore.failureLines("ok\n[x] FATAL signal 11 (SIGSEGV)\nfine\njava.lang.IllegalStateException: y\n", 10);
         check(fail.size() == 2, "two failure lines (" + fail.size() + ")");
         check(ToolsCore.stageWords("crash signal 11").equals("Travou") && ToolsCore.stageWords(null).startsWith("Nenhuma"), "stage words");

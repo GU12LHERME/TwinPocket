@@ -117,8 +117,9 @@ final class Lang {
           "Sharper floor and wall textures at an angle; limited to the driver's maximum (the log says what was applied)");
         e("Desligada — padrão", "Off — default");
         e("Resolução interna", "Internal resolution");
-        e("Mais alta: imagem mais nítida e mais trabalho para a GPU", "Higher: a sharper picture and more work for the GPU");
-        e("1x (nativa do PS2)", "1x (the PS2's own)");
+        e("A imagem do jogo (512×448 no PS2) desenhada em mais pixels: mais nítida, mais trabalho para a GPU. 3x já cobre uma tela 1080p",
+          "The game's picture (512×448 on the PS2) drawn in more pixels: sharper, more work for the GPU. 3x already covers a 1080p screen");
+        e("1x · 512×448 (nativa do PS2)", "1x · 512×448 (the PS2's own)");
         e("Proporção da tela", "Aspect ratio");
         e("Original (4:3)", "Original (4:3)");
         e("Widescreen (16:9) — padrão", "Widescreen (16:9) — default");
@@ -190,20 +191,16 @@ final class Lang {
         e("Suaviza bordas serrilhadas na imagem final; pode suavizar um pouco textos e o HUD",
           "Smooths jagged edges in the final picture; may soften text and the HUD slightly");
         e("FXAA", "FXAA");
-        e("Dithering", "Dithering");
-        e("Original: a saída de 16 bits com dithering do próprio PS2. Desligado: a imagem de 24 bits do port, mais lisa",
-          "Original: the PS2's own dithered 16-bit output. Off: the port's smoother 24-bit picture");
-        e("Original (PS2)", "Original (PS2)");
         e("Predefinição gráfica", "Graphics preset");
-        e("Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 4x, anisotrópica 16x, LOD 3x.",
-          "Original: as on the PS2 (1x resolution). Balanced: 2x resolution, 4x anisotropic, 2x LOD. Quality: 4x resolution, 16x anisotropic, 3x LOD.");
+        e("Original: como no PS2 (resolução 1x). Equilibrado: resolução 2x, anisotrópica 4x, LOD 2x. Qualidade: resolução 3x, anisotrópica 16x, LOD 3x.",
+          "Original: as on the PS2 (1x resolution). Balanced: 2x resolution, 4x anisotropic, 2x LOD. Quality: 3x resolution, 16x anisotropic, 3x LOD.");
         e("Equilibrado", "Balanced");
         e("Restaurar apenas gráficos", "Restore graphics only");
         e("Para tela preta ou falha ao iniciar: só as opções gráficas voltam ao padrão (áudio, controles, idioma e saves ficam)",
           "For a black screen or a failed start: only the graphic options go back to their defaults (audio, controls, language and saves stay)");
         e("Restaurar apenas gráficos?", "Restore the graphics only?");
-        e("Filtro, resolução, proporção, FPS, VSync, anisotrópica, FXAA, dithering, LOD e contador voltam ao padrão.",
-          "Filter, resolution, aspect, FPS, VSync, anisotropic, FXAA, dithering, LOD and counter go back to their defaults.");
+        e("Resolução, proporção, FPS, VSync, anisotrópica, FXAA, LOD e contador voltam ao padrão.",
+          "Resolution, aspect, FPS, VSync, anisotropic, FXAA, LOD and counter go back to their defaults.");
         e("Gráficos restaurados", "Graphics restored");
         e("Qualidade", "Quality");
         e("Personalizado", "Custom");
@@ -269,6 +266,10 @@ final class Lang {
         e("Atualização da tela", "Display refresh");
         e("CONFIGURAÇÕES GRÁFICAS (janelas de ~10 s)", "GRAPHICS SETTINGS (~10 s windows)");
         e("JANELAS", "WINDOWS");
+        e("Predefinição, resolução interna, proporção e taxa de quadros do próximo jogo. A abre a aba Gráficos.",
+          "Preset, internal resolution, aspect and frame rate of the next game. A opens the Graphics tab.");
+        e("2x · 1024×896", "2x · 1024×896");
+        e("3x · 1536×1344", "3x · 1536×1344");
         e("Tela", "Display");
         e("port", "port");
         e("perfil: ", "profile: ");
@@ -354,8 +355,8 @@ final class Lang {
 
         e("16:9 liga o widescreen do jogo (imagem mais larga, sem esticar); 4:3 é a imagem original. O jogo acompanha sozinho",
           "16:9 turns the game's widescreen on (a wider picture, not stretched); 4:3 is the original picture. The game follows by itself");
-        e("Proporção 16:9, VSync ligado, anisotrópica, FXAA e dithering desligados, resolução 1x, 60 FPS, contador desligado, LOD original, ",
-          "16:9 shape, VSync on, anisotropic, FXAA and dithering off, 1x resolution, 60 FPS, counter off, original LOD, ");
+        e("Proporção 16:9, VSync ligado, anisotrópica e FXAA desligados, resolução 1x, 60 FPS, contador desligado, LOD original, ",
+          "16:9 shape, VSync on, anisotropic and FXAA off, 1x resolution, 60 FPS, counter off, original LOD, ");
         e("analógicos no padrão. A ISO e os saves não mudam.", "sticks at their defaults. The ISO and the saves do not change.");
         e("O ícone personalizado foi removido", "The custom icon was removed");
 

@@ -190,6 +190,11 @@ final class Settings {
         if (rate != null && !rate.equals("30") && !rate.equals("60")) set(FRAME_RATE, "60");
         String window = get(FULLSCREEN, null);
         if (window != null && !window.equals("fullscreen")) set(FULLSCREEN, "fullscreen");
+        // 1.7.0: the resolution is 3x at most (4x read as 3x by the game too), and the dithering the PS2's, always (no
+        // longer an option: the file says so, for the reports)
+        String scale = get(SCALE, null);
+        if (scale != null && !scale.equals("1") && !scale.equals("2") && !scale.equals("3")) set(SCALE, "3");
+        if (!"original".equals(get(DITHERING, null))) set(DITHERING, "original");
     }
 
     /** Every launch: the file's values put into the launcher's ranges (normalize). */

@@ -529,6 +529,16 @@ final class ToolsCore {
         return String.format(Locale.US, "%." + decimals + "f", v);
     }
 
+    /** The first time stamp of a log's text ("2026-11-23 22:10:20"), null when none: the history key without a parse. */
+    static String firstStamp(String head) {
+        if (head == null) return null;
+        for (String line : head.split("\n")) {
+            Matcher m = STAMP.matcher(line);
+            if (m.find()) return m.group(1);
+        }
+        return null;
+    }
+
     /** A config line's settings by name ("preset quality, scale 4x, ..." -> preset=quality, scale=4x, ...). */
     static Map<String, String> configFields(String config) {
         Map<String, String> m = new LinkedHashMap<>();
