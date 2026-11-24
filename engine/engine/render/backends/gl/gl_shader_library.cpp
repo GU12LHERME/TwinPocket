@@ -4,6 +4,7 @@
 #include "engine/platform/host/platform.h"
 #include PS2R_GL_HEADER
 
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <cstdlib>
@@ -253,9 +254,13 @@ uint32_t GlShaderLibrary::CompileShader(uint32_t type, const char* source) {
 #if PS2R_HOST_VITA
     std::fflush(stderr);
 #endif
+    const auto compile_t0 = std::chrono::steady_clock::now();
     glCompileShader(shader);
     GLint ok = 0;
     glGetShaderiv(shader, GL_COMPILE_STATUS, &ok);
+    ++Census().shaders_compiled;
+    Census().shader_us += uint64_t(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - compile_t0).count());
 #if PS2R_HOST_VITA
     std::fflush(stderr);
 #endif
@@ -314,9 +319,13 @@ uint32_t GlShaderLibrary::LinkProgram(uint32_t vert, uint32_t frag) {
     glBindAttribLocation(program, 13, "a_mesh3");
     std::fflush(stderr);
 #endif
+    const auto link_t0 = std::chrono::steady_clock::now();
     glLinkProgram(program);
     GLint ok = 0;
     glGetProgramiv(program, GL_LINK_STATUS, &ok);
+    ++Census().programs_linked;
+    Census().shader_us += uint64_t(
+        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - link_t0).count());
 #if PS2R_HOST_VITA
     std::fflush(stderr);
 #endif

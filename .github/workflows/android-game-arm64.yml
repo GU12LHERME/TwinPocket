@@ -339,8 +339,8 @@ jobs:
             echo "PASS  exported to Java: TeDiag.nativeLog (the telemetry samples into the game's log)" | tee -a "$ev"
           else echo "FAIL  TeDiag.nativeLog not exported" | tee -a "$ev"; fail=1; fi
           if grep -q 'gpu frame: avg' "$LOG_DIR/libmain-strings.txt" && grep -q 'frames: presents' "$LOG_DIR/libmain-strings.txt" \
-             && grep -q 'config: presents' "$LOG_DIR/libmain-strings.txt"; then
-            echo "PASS  performance report lines linked (frame times, the frame's GPU time, the settings)" | tee -a "$ev"
+             && grep -q 'config: presents' "$LOG_DIR/libmain-strings.txt" && grep -q 'hitch: present' "$LOG_DIR/libmain-strings.txt"; then
+            echo "PASS  performance report lines linked (frame times, the frame's GPU time, the settings, the hitches)" | tee -a "$ev"
           else echo "FAIL  the performance report's lines are not in libmain.so" | tee -a "$ev"; fail=1; fi
           if grep -q 'init_array' <("$NDK_LLVM/llvm-readelf" -S "$so"); then echo "PASS  .init_array present (the early diagnostics constructor)" | tee -a "$ev"; fi
           echo "== engine namespaces linked (symbol count per ps2r:: namespace)" | tee -a "$ev"

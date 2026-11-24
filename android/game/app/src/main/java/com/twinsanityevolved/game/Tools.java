@@ -265,7 +265,7 @@ final class Tools {
     /** The last run's performance: the summary (min / average / max), the settings, then one row per ~10 s window and per
      *  telemetry sample. null when the run has no measurement yet. Plain Java on purpose (ToolsCore's figures). */
     static String performanceText(ToolsCore.Summary s) {
-        if (s.count() == 0 && s.power.isEmpty()) return null;
+        if (s.count() == 0 && s.power.isEmpty() && s.hitches.isEmpty()) return null;
         StringBuilder b = new StringBuilder();
         b.append(Lang.T("RESUMO (mín / média / máx)")).append('\n');
         row3(b, Lang.T("FPS"), s.min(ToolsCore.FPS), s.avg(ToolsCore.FPS), s.max(ToolsCore.FPS), 1, "");
@@ -295,11 +295,42 @@ final class Tools {
         double rmin = s.powerMin(ToolsCore.REFRESH), rmax = s.powerMax(ToolsCore.REFRESH);
         b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Atualização da tela"), rmax < 0 ? Lang.T("indisponível")
             : (Math.abs(rmax - rmin) < 0.05 ? ToolsCore.num(rmax, 1) + " Hz" : ToolsCore.num(rmin, 1) + "–" + ToolsCore.num(rmax, 1) + " Hz")));
+        if (s.displayMode != null) b.append(String.format(Locale.US, "  %-22s %s\n", Lang.T("Modo de tela pedido"), s.displayMode));
+        if (s.displayMode != null || !s.hitches.isEmpty()) {
+            b.append(String.format(Locale.US, "  %-22s %d%s\n", Lang.T("Engasgos (> 50 ms)"), s.playHitches(),
+                s.playHitches() > 0 ? " · " + Lang.T("pior ") + ToolsCore.num(s.worstPlayHitch(), 0) + " ms" : ""));
+        }
         java.util.Map<String, Integer> configs = s.configCounts();
         if (!configs.isEmpty()) {
             b.append('\n').append(Lang.T("CONFIGURAÇÕES GRÁFICAS (janelas de ~10 s)")).append('\n');
             for (java.util.Map.Entry<String, Integer> e : configs.entrySet())
                 b.append("  ").append(e.getValue()).append("× ").append(e.getKey()).append('\n');
+        }
+        if (!s.hitches.isEmpty()) {
+            b.append('\n').append(Lang.T("ENGASGOS (quadros acima de 50 ms)")).append('\n');
+            for (java.util.Map.Entry<String, Integer> e : s.causes().entrySet())
+                b.append("  ").append(e.getValue()).append("× ").append(Lang.T(e.getKey())).append('\n');
+            int loading = s.hitches.size() - s.playHitches();
+            if (loading > 0) b.append("  ").append(loading).append("× ").append(Lang.T("tela de carregamento (esperado)")).append('\n');
+            b.append(String.format(Locale.US, "%-8s %-7s %-7s %-7s %-6s %-7s %-4s %-4s %-5s %s\n", "quadro", "ms", "jogo", "render", "geom.", "shader",
+                "tex", "malha", Lang.T("área"), Lang.T("causa")));
+            int shown = 0;
+            for (ToolsCore.Hitch h : s.hitches) {
+                if (h.loading) continue;
+                if (shown++ >= 60) {
+                    b.append("  …\n");
+                    break;
+                }
+                String area = s.areaNear(h.boundary);
+                if (area != null) {
+                    int slash = Math.max(area.lastIndexOf('\\'), area.lastIndexOf('/'));
+                    area = area.substring(slash + 1);
+                }
+                b.append(String.format(Locale.US, "%-8d %-7s %-7s %-7s %-6s %-7s %-4d %-4d %-5s %s\n", h.present, ToolsCore.num(h.ms, 0),
+                    ToolsCore.num(h.gameMs, 0), ToolsCore.num(h.drawMs + h.swapMs, 0), ToolsCore.num(h.buildWaitMs, 0),
+                    (h.shaders + h.programs) > 0 ? (h.shaders + h.programs) + "/" + ToolsCore.num(h.shaderMs, 0) : "0",
+                    h.textures, h.meshes, area != null ? area : "—", Lang.T(h.cause(s))));
+            }
         }
         if (s.count() > 0) {
             b.append('\n').append(Lang.T("JANELAS")).append('\n');

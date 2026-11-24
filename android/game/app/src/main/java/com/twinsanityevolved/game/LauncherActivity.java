@@ -963,9 +963,9 @@ public final class LauncherActivity extends Activity {
             if (rows.isEmpty()) b.append(T("Nenhuma sessão registrada ainda: as sessões entram aqui depois de jogar."));
             else {
                 // (a line older than the 1.4.0 report has no p95 / GPU / temperature / power columns: "—")
-                String fmt = "%-16s %-8s %-10s %-9s %-6s %-6s %-6s %-6s %-5s %-6s %-6s %-6s %s\n";
+                String fmt = "%-16s %-8s %-10s %-9s %-6s %-6s %-6s %-6s %-5s %-6s %-6s %-6s %-5s %-5s %s\n";
                 b.append(String.format(Locale.US, fmt, T("início"), T("versão"), T("duração"), T("fim"), "FPS", "min", "p95", "GPU",
-                    "CPU", "MB", "°C", "W", T("config.")));
+                    "CPU", "MB", "°C", "W", "Hz", T("eng."), T("config.")));
                 for (int i = rows.size() - 1; i >= 0; i--) {
                     String[] f = rows.get(i);
                     long secs = -1;
@@ -976,7 +976,8 @@ public final class LauncherActivity extends Activity {
                         + f[11] + "fps " + f[13];
                     b.append(String.format(Locale.US, fmt, f[0].length() >= 16 ? f[0].substring(0, 16) : f[0], f[1], ToolsCore.duration(secs),
                         f[3], f[4], f[5], ToolsCore.col(f, ToolsCore.COL_P95), ToolsCore.col(f, ToolsCore.COL_GPU), f[8], f[9],
-                        ToolsCore.col(f, ToolsCore.COL_TEMP_MAX), ToolsCore.col(f, ToolsCore.COL_WATTS), config));
+                        ToolsCore.col(f, ToolsCore.COL_TEMP_MAX), ToolsCore.col(f, ToolsCore.COL_WATTS), ToolsCore.col(f, ToolsCore.COL_REFRESH),
+                        ToolsCore.col(f, ToolsCore.COL_HITCHES), config));
                 }
             }
             final String body = b.toString();

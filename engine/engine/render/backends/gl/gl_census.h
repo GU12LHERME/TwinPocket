@@ -113,6 +113,9 @@ struct GlCensus {
     // vitaGL's chain), their bytes and the drawing thread's time waiting for vitaGL's level transfers before the write
     // (only when the platform does not skip them: the transfers skipped are counted), and the authored levels past the
     // chain vitaGL holds (none expected: the PS2's chains stop where an axis reaches 1, as vitaGL's)
+    // GLSL compiled and programs linked (GlShaderLibrary::CompileShader / LinkProgram) and the drawing thread's time in them:
+    // a program made in play is a stall (the Android port's hitch line reads them per present)
+    uint64_t shaders_compiled = 0, programs_linked = 0, shader_us = 0;
     uint64_t tex_made = 0, tex_no_storage = 0, tex_chains = 0, tex_chain_misaligned = 0;
     uint64_t tex_levels_authored = 0, tex_level_bytes = 0, tex_level_wait_us = 0, tex_levels_dropped = 0;
     uint64_t tex_level_transfers_skipped = 0, tex_levels_beyond_chain = 0;

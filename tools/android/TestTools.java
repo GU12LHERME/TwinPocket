@@ -98,6 +98,29 @@ public final class TestTools {
             "P0: a 1.2.0 history line kept and read beside the new ones");
         check(ToolsCore.hasSession(ToolsCore.trimmed(hist, l0, 50), "2026-11-23 11:00:00#99"), "P0: the key still found");
 
+        // 1.6.0: the hitch lines, the area changes, the display request
+        String h6 = "[2026-11-23 12:00:00] [te.android] display: asked for 60 Hz (mode 2); the panel at 120.0 Hz now; modes 1920x1080 60.0 Hz, 1920x1080 120.0 Hz\n"
+            + "[twinsanity-pocket] area: 'levels\\earth\\hub\\huba' @ boundary 15361 (was 'levels\\earth\\hub\\beach')\n"
+            + "[te.android] hitch: present 15400 boundary 15420: 115.3 ms; game 108.0 ms, drawing 2.0 + swap 1.5 ms, build wait 0.2 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 3; loading no\n"
+            + "[te.android] hitch: present 9100 boundary 9150: 205.2 ms; game 20.0 ms, drawing 150.0 + swap 2.0 ms, build wait 1.0 ms; shaders 2 compiled + 1 linked (140.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[te.android] hitch: present 9900 boundary 9950: 90.0 ms; game 10.0 ms, drawing 5.0 + swap 2.0 ms, build wait 60.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 40; loading no\n"
+            + "[te.android] hitch: present 30000 boundary 30050: 80.0 ms; game 70.0 ms, drawing 2.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[te.android] hitch: present 700 boundary 700: 900.0 ms; game -1.0 ms, drawing 1.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading yes\n";
+        ToolsCore.Summary hs = ToolsCore.summarize(p0 + h6, null);
+        check(hs.hitches.size() == 5 && hs.playHitches() == 4, "1.6.0: hitches read, the loading one apart");
+        check(hs.worstPlayHitch() == 205.2, "1.6.0: the worst play hitch");
+        check(hs.hitches.get(0).cause(hs).equals("jogo: troca de área") && "levels\\earth\\hub\\huba".equals(hs.areaNear(15420)), "1.6.0: a hitch after an area change");
+        check(hs.hitches.get(1).cause(hs).equals("compilação de shaders"), "1.6.0: a shader hitch");
+        check(hs.hitches.get(2).cause(hs).equals("espera pela geometria"), "1.6.0: a geometry hitch");
+        check(hs.hitches.get(3).cause(hs).equals("jogo (CPU da thread do jogo)"), "1.6.0: a game-thread hitch away from area changes");
+        check(hs.hitches.get(4).cause(hs).equals("tela de carregamento"), "1.6.0: the loading picture's frame");
+        check(hs.causes().size() == 4 && !hs.causes().containsKey("tela de carregamento"), "1.6.0: causes counted outside the loading");
+        check(hs.displayMode != null && hs.displayMode.startsWith("asked for 60 Hz"), "1.6.0: the display request read");
+        String[] c6 = ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(hs, "1.6.0", "3", "60", "bilinear", "long", "k6"), 50)).get(0);
+        check(c6.length == ToolsCore.COLUMNS && c6[ToolsCore.COL_HITCHES].equals("4") && c6[ToolsCore.COL_HITCH_MAX].equals("205"), "1.6.0: hitch columns");
+        check(ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(q, "1.5.0", "3", "60", "bilinear", "long", "k5"), 50)).get(0)[ToolsCore.COL_HITCHES].equals("—"),
+            "1.6.0: a log without hitch support reads — (unknown), not 0");
+
         List<String> fail = ToolsCore.failureLines("ok\n[x] FATAL signal 11 (SIGSEGV)\nfine\njava.lang.IllegalStateException: y\n", 10);
         check(fail.size() == 2, "two failure lines (" + fail.size() + ")");
         check(ToolsCore.stageWords("crash signal 11").equals("Travou") && ToolsCore.stageWords(null).startsWith("Nenhuma"), "stage words");

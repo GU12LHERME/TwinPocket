@@ -21,6 +21,10 @@ import java.util.regex.Pattern;
  *   [te.android] config: presents A-B: preset P, scale Nx, anisotropy Mx, draw distance D, aspect A, frame rate F, vsync V
  *   [te.android] power: temp_c=T current_ma=I voltage_v=V power_w=W source=battery|charger level=L thermal=S headroom=H refresh_hz=R
  *     (MainActivity's Telemetry, every 10 s; "na" where the device does not tell)
+ *   [te.android] hitch: present P boundary B: G ms; game X ms, drawing S + swap W ms, build wait Y ms; shaders C compiled + L linked (Z ms);
+ *     textures made T, meshes made M; loading yes|no      (graphics.cpp NoteHitch: a frame over 50 ms)
+ *   [twinsanity-pocket] area: 'name' @ boundary B (was 'old')        (mods.cpp: the game's area changes)
+ *   [te.android] display: ... asked for 60 Hz ...                     (MainActivity: the display mode the game asked for)
  *   [YYYY-MM-DD HH:MM:SS] ... (the time stamp of the log's lines)
  */
 final class ToolsCore {
@@ -35,6 +39,24 @@ final class ToolsCore {
         long late = -1, veryLate = -1;
         double gpuAvg = -1, gpuMin = -1, gpuMax = -1;
         String config;
+    }
+
+    /** One frame over the hitch threshold and what it did (graphics.cpp NoteHitch). */
+    static final class Hitch {
+        long present, boundary;
+        double ms, gameMs = -1, drawMs, swapMs, buildWaitMs, shaderMs;
+        long shaders, programs, textures, meshes;
+        boolean loading;
+
+        /** The likeliest cause, from the frame's own figures: the share of the frame each part took. */
+        String cause(Summary s) {
+            if (loading) return "tela de carregamento";
+            if (shaderMs >= ms * 0.3) return "compilação de shaders";
+            if (buildWaitMs >= ms * 0.3) return "espera pela geometria";
+            if (drawMs + swapMs >= ms * 0.5) return "renderização (envio / troca de quadro)";
+            if (gameMs >= ms * 0.6) return s.areaNear(boundary) != null ? "jogo: troca de área" : "jogo (CPU da thread do jogo)";
+            return "indefinido";
+        }
     }
 
     /** One telemetry sample (every 10 s in the game's process); -1 / null: the device does not tell. */
@@ -53,6 +75,43 @@ final class ToolsCore {
         int fatalLines;
         final List<Power> power = new ArrayList<>();
         boolean gpuUnavailable;     // the driver has no timer query
+        final List<Hitch> hitches = new ArrayList<>();
+        final List<long[]> areaAt = new ArrayList<>();      // {boundary} of each area change, with its name in areaNames
+        final List<String> areaNames = new ArrayList<>();
+        String displayMode;         // the game's display request line (null: an older build)
+
+        /** The hitches outside the loading pictures (those are expected to be long). */
+        int playHitches() {
+            int n = 0;
+            for (Hitch h : hitches) if (!h.loading) n++;
+            return n;
+        }
+
+        double worstPlayHitch() {
+            double m = -1;
+            for (Hitch h : hitches) if (!h.loading) m = Math.max(m, h.ms);
+            return m;
+        }
+
+        /** How many play hitches each cause has, in a stable order. */
+        Map<String, Integer> causes() {
+            Map<String, Integer> n = new LinkedHashMap<>();
+            for (Hitch h : hitches) {
+                if (h.loading) continue;
+                String c = h.cause(this);
+                n.put(c, n.getOrDefault(c, 0) + 1);
+            }
+            return n;
+        }
+
+        /** The area the game changed to within the 3 s before the boundary (or just after), null when none. */
+        String areaNear(long boundary) {
+            for (int i = areaAt.size() - 1; i >= 0; i--) {
+                long b = areaAt.get(i)[0];
+                if (b <= boundary + 30 && b >= boundary - 180) return areaNames.get(i);
+            }
+            return null;
+        }
 
         /** The settings most windows were measured with (null: none logged) and how many distinct settings the session had. */
         String mainConfig() {
@@ -202,6 +261,10 @@ final class ToolsCore {
     private static final Pattern GPU = Pattern.compile("\\[te\\.gfx\\] gpu frame: avg " + NUM + " ms, min " + NUM + ", max " + NUM);
     private static final Pattern CONFIG = Pattern.compile("\\[te\\.android\\] config: presents (\\d+)-(\\d+): (.+)$");
     private static final Pattern KV = Pattern.compile("([a-z_]+)=([^ ]+)");
+    private static final Pattern HITCH = Pattern.compile(
+        "\\[te\\.android\\] hitch: present (\\d+) boundary (\\d+): " + NUM + " ms; game (-?[0-9.]+) ms, drawing " + NUM + " \\+ swap " + NUM
+            + " ms, build wait (-?[0-9.]+) ms; shaders (\\d+) compiled \\+ (\\d+) linked \\(" + NUM + " ms\\); textures made (\\d+), meshes made (\\d+); loading (yes|no)");
+    private static final Pattern AREA = Pattern.compile("\\] area: '([^']*)' @ boundary (\\d+)");
 
     /** The figures of one game log; stage: the stage file's text (null: unknown). */
     static Summary summarize(String log, String stage) {
@@ -222,6 +285,14 @@ final class ToolsCore {
             }
             if (line.contains("FATAL") || line.contains("Fatal signal")) s.fatalLines++;
             if (s.renderer == null && line.contains("[gl.es]")) s.renderer = line.substring(line.indexOf("[gl.es]")).trim();
+            if (line.contains("] area: '")) {
+                Matcher a = AREA.matcher(line);
+                if (a.find()) {
+                    s.areaAt.add(new long[] {Long.parseLong(a.group(2))});
+                    s.areaNames.add(a.group(1));
+                }
+                continue;
+            }
             if (!line.contains("[te.")) continue;
             Matcher p = PACE.matcher(line);
             if (p.find()) {
@@ -278,6 +349,30 @@ final class ToolsCore {
                 Window w = window(s, byRange, c.group(1) + "-" + c.group(2));
                 w.config = c.group(3).trim();
                 last = w;
+                continue;
+            }
+            Matcher h = HITCH.matcher(line);
+            if (h.find()) {
+                Hitch x = new Hitch();
+                x.present = Long.parseLong(h.group(1));
+                x.boundary = Long.parseLong(h.group(2));
+                x.ms = parse(h.group(3));
+                x.gameMs = Double.parseDouble(h.group(4));
+                x.drawMs = parse(h.group(5));
+                x.swapMs = parse(h.group(6));
+                x.buildWaitMs = Math.max(0, Double.parseDouble(h.group(7)));
+                x.shaders = Long.parseLong(h.group(8));
+                x.programs = Long.parseLong(h.group(9));
+                x.shaderMs = parse(h.group(10));
+                x.textures = Long.parseLong(h.group(11));
+                x.meshes = Long.parseLong(h.group(12));
+                x.loading = h.group(13).equals("yes");
+                s.hitches.add(x);
+                continue;
+            }
+            int da = line.indexOf("[te.android] display:");
+            if (da >= 0) {
+                s.displayMode = line.substring(da + 21).trim();
                 continue;
             }
             int at = line.indexOf("[te.android] power:");
@@ -391,10 +486,10 @@ final class ToolsCore {
     static final String SESSIONS_HEADER =
         "# start\tversion\tduration_s\tend\tavg_fps\tmin_fps\tavg_frame_ms\tworst_gap_ms\tavg_cpu_one_core\tpeak_mb\tscale\tframe_rate\tfilter\tdraw_distance\tfatal_lines\tkey"
             + "\tpreset\tanisotropy\tp95_frame_ms\tp99_frame_ms\tjitter_ms\tlate_frames\tgpu_avg_ms\tgpu_max_ms\ttemp_avg_c\ttemp_max_c"
-            + "\tpower_avg_w\tthermal_max\trefresh_hz\tconfig";
+            + "\tpower_avg_w\tthermal_max\trefresh_hz\tconfig\thitches\thitch_max_ms";
     static final int COL_KEY = 15, COL_PRESET = 16, COL_ANISO = 17, COL_P95 = 18, COL_P99 = 19, COL_JITTER = 20, COL_LATE = 21,
         COL_GPU = 22, COL_GPU_MAX = 23, COL_TEMP = 24, COL_TEMP_MAX = 25, COL_WATTS = 26, COL_THERMAL = 27, COL_REFRESH = 28,
-        COL_CONFIG = 29, COLUMNS = 30;
+        COL_CONFIG = 29, COL_HITCHES = 30, COL_HITCH_MAX = 31, COLUMNS = 32;
 
     /** The history's line for one session; key: what tells this log apart from the others (its first stamp and size).
      *  scale / frameRate / drawDistance: ps2r.ini's, used only when the log names no settings (an older build's log). */
@@ -414,7 +509,9 @@ final class ToolsCore {
             s.gpuUnavailable ? "na" : num(s.avg(GPU_AVG), 2), s.gpuUnavailable ? "na" : num(s.max(GPU_MAX), 2),
             num(s.powerAvg(TEMP), 1), num(s.powerMax(TEMP), 1), num(s.powerAvg(WATTS), 2),
             s.powerMax(THERMAL) >= 0 ? Integer.toString((int) s.powerMax(THERMAL)) : "—", num(s.powerMax(REFRESH), 1),
-            clean(config != null ? config : "?")};
+            clean(config != null ? config : "?"),
+            // (a log from before 1.6.0 has no hitch lines: unknown, not none -- the display line came with them)
+            s.displayMode == null && s.hitches.isEmpty() ? "—" : Integer.toString(s.playHitches()), num(s.worstPlayHitch(), 0)};
         return String.join("\t", f);
     }
 

@@ -120,6 +120,7 @@ extern "C" size_t vglMemFree(int type);
 #include "te_mesh_builder.h"
 #include "te_prof.h"
 #include "te_services.h"
+#include "te_loading.h"
 #include "te_sync.h"
 #include "te_tick_lock.h"
 #include "vita_gpu_census.h"
@@ -316,6 +317,8 @@ struct Gfx {
                                                    // tick, 1 = 60 Hz, 2 / 3 = the 30 / 20 Hz lock: drawn in full, held that
                                                    // many refreshes; only 0 / 1 pictures are ever replaced before drawn)
         uint32_t pool_ordinal = 0;                 // the Vita: the state pool's ordinal of this picture (StatePool::recording)
+        double game_ms = -1;                       // Android: the game thread's work on this picture since the pacer released
+                                                   // it (te::Clock::MsSinceRelease at the hand-over; the hitch line's)
     };
     struct RenderThread {
 #if defined(__vita__)
@@ -4718,6 +4721,58 @@ struct FrameTimes {
     }
 };
 FrameTimes g_frame_times;
+
+// THE HITCH LINE (the Android port's performance report): a present more than TE_GFX_HITCH_MS (default 50) after the one
+// before it gets one line with what that frame did -- the game thread's work on its picture, the drawing thread's
+// submission and swap, the time waiting for geometry builds, the shaders compiled / programs linked and their time, the
+// textures and native meshes made, the boundary (the [twinsanity-pocket] area lines' clock) and whether the game was in
+// a load at the device's speed (its loading picture: long frames expected). The cost when nothing is long: a few counter
+// loads a present. At most kMaxLines lines a session (then one line saying so).
+struct HitchWatch {
+    static constexpr int kMaxLines = 400;
+    double threshold_ms = 50.0;
+    bool configured = false, primed = false;
+    int lines = 0;
+    // the last presented frame's figures (RenderFrame, on the thread that presents)
+    double submit_ms = 0, present_ms = 0, game_ms = -1;
+    uint64_t boundary = 0;
+    // the counters at the present before
+    int64_t waited_ns = 0;
+    uint64_t compiled = 0, linked = 0, shader_us = 0, textures = 0, meshes = 0;
+};
+HitchWatch g_hitch;
+
+void NoteHitch(double gap, uint64_t presents, int64_t waited_ns) {
+    HitchWatch& h = g_hitch;
+    if (!h.configured) {
+        h.configured = true;
+        if (std::getenv("TE_GFX_HITCH_MS")) h.threshold_ms = double(EnvLong("TE_GFX_HITCH_MS", 50));
+    }
+    const ps2r::render::GlCensus& c = ps2r::render::Census();
+    ps2e_draw_texture_memory tm{};
+    if (g.dev) ps2e_draw_texture_memory_census(g.dev, &tm, 0);
+    if (h.primed && h.threshold_ms > 0 && gap > h.threshold_ms && h.lines <= HitchWatch::kMaxLines) {
+        if (h.lines++ == HitchWatch::kMaxLines) {
+            std::fprintf(stderr, "[te.android] hitch: more than %d this session; no more lines\n", HitchWatch::kMaxLines);
+        } else {
+            std::fprintf(stderr,
+                         "[te.android] hitch: present %llu boundary %llu: %.1f ms; game %.1f ms, drawing %.1f + swap %.1f ms, build wait %.1f ms; "
+                         "shaders %llu compiled + %llu linked (%.1f ms); textures made %llu, meshes made %llu; loading %s\n",
+                         (unsigned long long)presents, (unsigned long long)h.boundary, gap, h.game_ms, h.submit_ms, h.present_ms,
+                         double(waited_ns - h.waited_ns) / 1e6, (unsigned long long)(c.shaders_compiled - h.compiled),
+                         (unsigned long long)(c.programs_linked - h.linked), double(c.shader_us - h.shader_us) / 1000.0,
+                         (unsigned long long)(tm.made - h.textures), (unsigned long long)(c.meshes_created - h.meshes),
+                         te::loading::DeviceSpeed() ? "yes" : "no");
+        }
+    }
+    h.primed = true;
+    h.waited_ns = waited_ns;
+    h.compiled = c.shaders_compiled;
+    h.linked = c.programs_linked;
+    h.shader_us = c.shader_us;
+    h.textures = tm.made;
+    h.meshes = c.meshes_created;
+}
 #endif
 
 // TE_GFX_SCALE_AB=N (diagnosis): the internal scale switched between the configured one and 1 every N presents (the
@@ -4761,6 +4816,7 @@ void NotePace(uint64_t presents) {
         g_pace.present_ms += g.last_present_ms;
 #if defined(__ANDROID__)
         g_frame_times.Note(gap);
+        NoteHitch(gap, presents, pool.waited_ns.load(std::memory_order_relaxed));
 #endif
     }
     ++g_pace.frames;
@@ -5265,6 +5321,13 @@ void RenderFrame(Gfx::Frame& f, Show show) {
 #endif
     const auto t2 = Steady::now();
     g.last_present_call_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
+#if defined(__ANDROID__)
+    // the hitch line's figures of this frame (NoteHitch reads them in NotePresented below, on this thread)
+    g_hitch.submit_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+    g_hitch.present_ms = g.last_present_call_ms;
+    g_hitch.game_ms = f.game_ms;
+    g_hitch.boundary = f.harness_key;
+#endif
     if (!OnRenderThread()) {
         g.last_submit_ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
         g.last_present_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
@@ -5703,6 +5766,9 @@ void PresentFrame(bool send) {
             f.harness_key = harness_key;
             f.items.clear();   // this picture's draws for the interpolator are listed on the render thread when needed
             f.picture = ++g.pictures_handed;   // its ordinal (the game thread's count: the render thread's g.pictures lags it)
+#if defined(__ANDROID__)
+            f.game_ms = te::Services::Get().clock().MsSinceRelease();
+#endif
             // the pacer edge of the field this picture follows (the presenter's clock for the frames between pictures)
             f.have_edge = te::Services::Get().clock().LatestFieldEdge(&f.edge_ns, &f.field);
             if (rt.interp_diag && f.picture % 200 == 0)
@@ -5745,6 +5811,9 @@ void PresentFrame(bool send) {
         sync.screen_h = ScreenH();
         sync.harness_key = harness_key;
         sync.picture = 0;
+#if defined(__ANDROID__)
+        sync.game_ms = te::Services::Get().clock().MsSinceRelease();
+#endif
         // (eager textures, no drawing thread: the decoded ones made here, the rest at their first draw)
         if (EagerTexturesOn()) MakeReadyTextures(nullptr);
         ExpandDeferred(sync.buckets, g.deferred, g.deferred_used);

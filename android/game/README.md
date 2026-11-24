@@ -79,10 +79,14 @@ plays. The lines (all in `latest-game.log`):
 | `[te.android] frames` | `graphics.cpp` FrameTimes | frame time avg / min / max, p50 / p95 / p99, jitter (standard deviation), gaps over 1.5x and 2.5x the median -- a 0.1 ms histogram, one increment a present |
 | `[te.gfx] gpu frame` | `gl_gpu_timers.cpp` GlFrameGpuTime | the GPU's time of a frame: one GL_TIME_ELAPSED query around a whole frame, 1 frame in 4, read back later (never waited for); disjoint results dropped; "unavailable" once without EXT_disjoint_timer_query. `TE_GFX_FRAME_GPU=0` off, `=N` 1 in N |
 | `[te.android] config` | `display.cpp` PerfConfig | the graphic settings the window was measured with (preset, scale, anisotropy, draw distance, aspect, frame rate, vsync) |
+| `[te.android] hitch` | `graphics.cpp` NoteHitch | a frame over 50 ms (`TE_GFX_HITCH_MS`): the game thread's work on its picture, the drawing thread's submission and swap, the wait for geometry builds, shaders compiled / programs linked and their time, textures and meshes made, its boundary (matched with the `area:` lines) and whether a loading picture was up; at most 400 a session |
+| `[te.android] display` | `MainActivity` | the 60 Hz mode the game asked for, the panel's rate then and its modes |
 | `[te.android] power` | `Telemetry.java` (game process, every 10 s, through `TeDiag.nativeLog`) | battery temperature, current (mA), voltage, estimated power (W, on the battery only), power source, level, thermal status (API 29) and headroom (API 30), the display's refresh rate; `na` where the device does not tell |
 
 The summary shows minimum / average / maximum where it applies. `sessions.tsv` keeps the original 16 columns (older lines
 stay readable) and adds: preset, anisotropy, p95 / p99 frame ms, jitter, late frames, GPU avg / max ms, battery temperature
-avg / max, average power, worst thermal status, refresh rate and the session's main settings.
+avg / max, average power, worst thermal status, refresh rate and the session's main settings; since 1.6.0 the hitches
+outside loading pictures and the worst one. Desempenho lists each hitch with its likeliest cause (shaders, geometry,
+rendering, the game thread -- after an area change or not -- or a loading picture), from the frame's own figures.
 
 The smoke APKs in `android/sdl2-smoke` and `android/nativeee-smoke` are separate development tests, not the port.

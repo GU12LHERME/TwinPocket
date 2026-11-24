@@ -2,6 +2,14 @@ TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
 
+VERSÃO 1.6.0 — 23/11/2026
+- Tela em 60 Hz durante o jogo: o RP6 rodava a tela em 120 Hz com o jogo a 60 FPS, deixando
+  os quadros irregulares e gastando bateria. O launcher continua na taxa do sistema.
+- Registro de engasgos: cada quadro acima de 50 ms aparece em Ferramentas → Desempenho com o
+  que aconteceu nele (jogo, renderização, geometria, shaders, texturas, troca de área) e a
+  causa mais provável. Só medição: os engasgos ainda não foram corrigidos.
+- Histórico de sessões com as colunas Hz e engasgos.
+
 VERSÃO 1.5.0 — 23/11/2026
 - Identificador novo: com.twinsanitypocket.android, com assinatura fixa. A partir desta
   versão toda atualização instala por cima, mantendo saves, configurações e a ISO.
