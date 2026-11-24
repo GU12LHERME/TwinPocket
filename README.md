@@ -7,7 +7,7 @@ aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testad
 
 ## Download
 
-Baixe o `TwinsanityPocket-<versão>.apk` da [última versão](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) e instale.
+Baixe o APK ARM64 da [última versão](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) e instale.
 As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves, configurações e a imagem do jogo.
 
 | | |
@@ -67,9 +67,7 @@ O NDK compila tudo em `libmain.so`; o launcher (`android/game`) é Java puro.
 | `game/` | a decompilação do jogo |
 | `.github/workflows/android-game-arm64.yml` | o build do APK, os testes e a publicação das versões |
 
-O APK é gerado pelo GitHub Actions a cada push no branch `android-game-arm64`. Uma tag de versão sem "v"
-(por exemplo `1.8.0`), ou um Release criado para a versão do APK, publica o APK no Release com as notas da versão.
-Para compilar localmente, veja [android/game/README.md](android/game/README.md).
+O APK é gerado pelo GitHub Actions. A publicação de novas versões ocorre por tag numérica correspondente à versão do APK. Consulte [android/game/README.md](android/game/README.md) para compilar localmente.
 
 ## Créditos e licenças
 
@@ -91,3 +89,7 @@ jogo.
 *English: Twinsanity Pocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
 twinsanity-reversed decompilation on the NativeEE engine and tested on the Retroid Pocket 6. Bring your own disc image
 (ISO or CHD); no game data is included. Download the APK from the [releases](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest).*
+
+## Publicação de versões
+
+Atualize a versão do aplicativo e as notas de atualização antes de criar uma tag numérica correspondente (por exemplo, `2.0.0`). O GitHub Actions gera o APK ARM64 assinado e publica a release com `SHA256SUMS.txt`. Releases existentes não são substituídas. Builds comuns ficam nos artefatos do Actions.
