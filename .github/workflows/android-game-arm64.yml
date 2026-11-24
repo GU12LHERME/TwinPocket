@@ -12,9 +12,10 @@ on:
   push:
     branches:
       - android-game-arm64
-    # a version tag (v1.8.0 ...) on the branch: the same build, then the GitHub Release with its APK (the last step)
+    # a version tag (v1.8.0 / 1.8.0) on the branch: the same build, then the GitHub Release with its APK (the last step)
     tags:
       - 'v*'
+      - '[0-9]*'
 
 permissions:
   contents: read
@@ -481,18 +482,28 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
-      - name: Publish the GitHub Release (version tags only)
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish the GitHub Release (a version tag, or a Release already made for this version)
+        if: github.event_name == 'push'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag="${GITHUB_REF_NAME}"
-          version="${tag#v}"
-          # the tag names the APK's own version, or nothing is published
-          grep -q "versionName='${version}'" "$LOG_DIR/apk-badging.log" \
-            || { echo "FAIL  tag ${tag} is not the APK's versionName"; grep "versionName" "$LOG_DIR/apk-badging.log"; exit 1; }
+          version="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" "$LOG_DIR/apk-badging.log" | head -1)"
+          test -n "$version"
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            # a version tag (v1.8.0 or 1.8.0): it names the APK's own version, or nothing is published
+            tag="${GITHUB_REF_NAME}"
+            [ "${tag#v}" = "$version" ] || { echo "FAIL  tag ${tag} is not the APK's versionName ${version}"; exit 1; }
+          else
+            # a branch push: only into a Release someone already made for this version (its tag v<version> or <version>);
+            # a branch push never makes a Release or a tag
+            tag=""
+            for t in "v${version}" "${version}"; do
+              if gh release view "$t" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then tag="$t"; break; fi
+            done
+            if [ -z "$tag" ]; then echo "no Release for ${version}: nothing published"; exit 0; fi
+          fi
           cp android-game-out/TwinsanityPocket.apk "android-game-out/TwinsanityPocket-${version}.apk"
           # the release notes: this version's section of android/game/NOTAS-DA-VERSAO.txt
           awk -v v="VERSÃO ${version} " 'index($0, v) == 1 {on = 1} on && /^VERSÃO / && index($0, v) != 1 {exit} on' \
