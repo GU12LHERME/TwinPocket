@@ -266,6 +266,9 @@ final class Lang {
         e("Atualização da tela", "Display refresh");
         e("CONFIGURAÇÕES GRÁFICAS (janelas de ~10 s)", "GRAPHICS SETTINGS (~10 s windows)");
         e("JANELAS", "WINDOWS");
+        e("Código-fonte completo do aplicativo, com as receitas de compilação (incluindo a do FFmpeg): ", "The app's complete source code, with its build recipes (FFmpeg's included): ");
+        e("app minimizado (esperado)", "app minimised (expected)");
+        e("app minimizado", "app minimised");
         e("Predefinição, resolução interna, proporção e taxa de quadros do próximo jogo. A abre a aba Gráficos.",
           "Preset, internal resolution, aspect and frame rate of the next game. A opens the Graphics tab.");
         e("2x · 1024×896", "2x · 1024×896");

@@ -59,9 +59,13 @@ final class ToolsCore {
         double ms, gameMs = -1, drawMs, swapMs, buildWaitMs, shaderMs;
         long shaders, programs, textures, meshes;
         boolean loading;
+        boolean minimized;   // the frame around the app going to the background / coming back (its surface away)
+
+        boolean inPlay() { return !loading && !minimized; }
 
         /** The likeliest cause, from the frame's own figures: the share of the frame each part took. */
         String cause(Summary s) {
+            if (minimized) return "app minimizado";
             if (loading) return "tela de carregamento";
             if (shaderMs >= ms * 0.3) return "compilação de shaders";
             if (buildWaitMs >= ms * 0.3) return "espera pela geometria";
@@ -108,16 +112,16 @@ final class ToolsCore {
         final List<String> areaNames = new ArrayList<>();
         String displayMode;         // the game's display request line (null: an older build)
 
-        /** The hitches outside the loading pictures (those are expected to be long). */
+        /** The hitches in play: not behind a loading picture, not the app minimised (those are expected to be long). */
         int playHitches() {
             int n = 0;
-            for (Hitch h : hitches) if (!h.loading) n++;
+            for (Hitch h : hitches) if (h.inPlay()) n++;
             return n;
         }
 
         double worstPlayHitch() {
             double m = -1;
-            for (Hitch h : hitches) if (!h.loading) m = Math.max(m, h.ms);
+            for (Hitch h : hitches) if (h.inPlay()) m = Math.max(m, h.ms);
             return m;
         }
 
@@ -125,7 +129,7 @@ final class ToolsCore {
         Map<String, Integer> causes() {
             Map<String, Integer> n = new LinkedHashMap<>();
             for (Hitch h : hitches) {
-                if (h.loading) continue;
+                if (!h.inPlay()) continue;
                 String c = h.cause(this);
                 n.put(c, n.getOrDefault(c, 0) + 1);
             }
@@ -308,7 +312,23 @@ final class ToolsCore {
         if (log == null) return s;
         Map<String, Window> byRange = new LinkedHashMap<>();   // a window's lines are matched by their presents
         Window last = null;
+        // the app minimised: the hitch just before "the app to the background" (its swap blocked as the surface went), those
+        // while it is away and the first after "back in the foreground" are the minimise's, not play's
+        boolean away = false;
+        int afterBack = 0, lineNo = 0, lastHitchLine = -10;
+        Hitch lastHitch = null;
         for (String line : log.split("\n")) {
+            lineNo++;
+            if (line.contains("the app to the background")) {
+                away = true;
+                if (lastHitch != null && lineNo - lastHitchLine <= 3) lastHitch.minimized = true;
+                continue;
+            }
+            if (line.contains("the app back in the foreground")) {
+                away = false;
+                afterBack = 1;
+                continue;
+            }
             Matcher st = STAMP.matcher(line);
             if (st.find()) {
                 if (s.start == null) s.start = st.group(1);
@@ -403,6 +423,12 @@ final class ToolsCore {
                 x.textures = Long.parseLong(h.group(11));
                 x.meshes = Long.parseLong(h.group(12));
                 x.loading = h.group(13).equals("yes");
+                if (away || afterBack > 0) {
+                    x.minimized = true;
+                    if (!away) afterBack--;
+                }
+                lastHitch = x;
+                lastHitchLine = lineNo;
                 s.hitches.add(x);
                 continue;
             }

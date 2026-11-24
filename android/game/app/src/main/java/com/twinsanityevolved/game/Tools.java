@@ -327,13 +327,18 @@ final class Tools {
             b.append('\n').append(Lang.T("ENGASGOS (quadros acima de 50 ms)")).append('\n');
             for (java.util.Map.Entry<String, Integer> e : s.causes().entrySet())
                 b.append("  ").append(e.getValue()).append("× ").append(Lang.T(e.getKey())).append('\n');
-            int loading = s.hitches.size() - s.playHitches();
+            int loading = 0, minimized = 0;
+            for (ToolsCore.Hitch h : s.hitches) {
+                if (h.minimized) minimized++;
+                else if (h.loading) loading++;
+            }
             if (loading > 0) b.append("  ").append(loading).append("× ").append(Lang.T("tela de carregamento (esperado)")).append('\n');
+            if (minimized > 0) b.append("  ").append(minimized).append("× ").append(Lang.T("app minimizado (esperado)")).append('\n');
             b.append(String.format(Locale.US, "%-8s %-7s %-7s %-7s %-6s %-7s %-4s %-4s %-5s %s\n", "quadro", "ms", "jogo", "render", "geom.", "shader",
                 "tex", "malha", Lang.T("área"), Lang.T("causa")));
             int shown = 0;
             for (ToolsCore.Hitch h : s.hitches) {
-                if (h.loading) continue;
+                if (!h.inPlay()) continue;
                 if (shown++ >= 60) {
                     b.append("  …\n");
                     break;
@@ -352,7 +357,7 @@ final class Tools {
             StringBuilder detail = new StringBuilder();
             int details = 0;
             for (ToolsCore.Hitch h : s.hitches) {
-                if (h.loading) continue;
+                if (!h.inPlay()) continue;
                 ToolsCore.Tick t = s.tickNear(h.boundary);
                 if (t == null) continue;
                 if (details++ >= 40) {

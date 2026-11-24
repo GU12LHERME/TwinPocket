@@ -16,7 +16,7 @@ cmake --preset android-arm64-game \
   -DTE_ANDROID_FFMPEG_PREFIX=$PWD/build-android-deps/ffmpeg
 cmake --build --preset android-arm64-game
 mkdir -p jni/arm64-v8a && cp build-android-arm64-game/libmain.so build-android-deps/sdl2/lib/libSDL2.so jni/arm64-v8a/
-gradle -p android/game -Psdl2SourceDir=<SDL2 source> -PnativeLibsDir=$PWD/jni assembleDebug
+gradle -p android/game -Psdl2SourceDir=<SDL2 source> -PnativeLibsDir=$PWD/jni assembleRelease   # (TP_KEYSTORE: the fixed key)
 ```
 
 ## Identity, signing and updates
@@ -29,7 +29,8 @@ they are other apps: their saves come over with Saves → Exportar in the old ap
 The key lives only in the repository's Actions secrets `TP_KEYSTORE_B64` (the PKCS12 keystore, base64) and
 `TP_KEYSTORE_PASSWORD` (alias `twinsanitypocket`); `build.gradle` signs with it when `TP_KEYSTORE` names the file, and the
 workflow refuses an APK whose certificate is not SHA-256 `0b8284df…21820fac`. A local build without the key is signed with
-Gradle's debug key (it will not install over a CI build). Losing the key means the next version cannot update the
+Gradle's debug key (it will not install over a CI build). Since 1.8.0 CI ships the release build type: not debuggable,
+not shrunk (R8 off: SDL's Java side is reached by name through JNI), libmain.so's symbols kept. Losing the key means the next version cannot update the
 installed one: keep the owner's backup of the keystore.
 
 What else stays as it was:

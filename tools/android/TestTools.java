@@ -130,6 +130,18 @@ public final class TestTools {
         check(ToolsCore.sessions(ToolsCore.trimmed("", ToolsCore.sessionLine(q, "1.5.0", "3", "60", "bilinear", "long", "k5"), 50)).get(0)[ToolsCore.COL_HITCHES].equals("—"),
             "1.6.0: a log without hitch support reads — (unknown), not 0");
 
+        // 1.8.0: the hitches of a minimise are not play's
+        String mn = "[te.android] hitch: present 1922 boundary 2142: 520.8 ms; game 4.7 ms, drawing 11.9 + swap 508.8 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[te.gfx] the app to the background: the render thread's context off the window (no surface)\n"
+            + "[te.android] hitch: present 1923 boundary 2143: 75.4 ms; game 15.8 ms, drawing 57.2 + swap 0.0 ms, build wait 19.5 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[te.gfx] the app back in the foreground: the render thread's context on the new surface bound (1 present(s) skipped meanwhile)\n"
+            + "[te.android] hitch: present 1924 boundary 2144: 537.3 ms; game 10.2 ms, drawing 18.5 + swap 1.1 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n"
+            + "[x] other\n[x] other\n[x] other\n[x] other\n"
+            + "[te.android] hitch: present 3000 boundary 3100: 80.0 ms; game 70.0 ms, drawing 2.0 + swap 1.0 ms, build wait 0.0 ms; shaders 0 compiled + 0 linked (0.0 ms); textures made 0, meshes made 0; loading no\n";
+        ToolsCore.Summary ms = ToolsCore.summarize(mn, null);
+        check(ms.hitches.size() == 4 && ms.playHitches() == 1 && ms.worstPlayHitch() == 80.0, "1.8.0: a minimise's three hitches apart, the later one in play");
+        check(ms.hitches.get(0).cause(ms).equals("app minimizado"), "1.8.0: the hitch before the background line is the minimise's");
+
         // 1.7.0: the history key from a log's head alone
         check("2026-11-23 10:00:00".equals(ToolsCore.firstStamp("no stamp here\n[2026-11-23 10:00:00] x\n[2026-11-23 10:00:05] y\n")), "1.7.0: first stamp");
         check(ToolsCore.firstStamp("nothing\n") == null && ToolsCore.firstStamp(null) == null, "1.7.0: no stamp");

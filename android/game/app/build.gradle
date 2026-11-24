@@ -54,6 +54,22 @@ android {
         debug {
             if (tpKeystore != null && !tpKeystore.isEmpty()) signingConfig signingConfigs.pocket
         }
+        // THE RELEASE BUILD (1.8.0: what CI ships): not debuggable (ART compiles the launcher fully; no run-as into the app's
+        // data), signed with the same fixed key as before (an update installs over 1.5.0 - 1.7.0's debug builds), the
+        // code not shrunk or obfuscated (R8 off: SDL's Java side is called by name from libSDL2.so through JNI), libmain.so's
+        // symbols kept (packagingOptions: crash reports stay readable). A local build without the key signs with the debug key.
+        release {
+            minifyEnabled false
+            shrinkResources false
+            signingConfig (tpKeystore != null && !tpKeystore.isEmpty()) ? signingConfigs.pocket : signingConfigs.debug
+        }
+    }
+
+    // (the release build's lint pass would stop the build on a warning class the debug build never ran; the code is the
+    // same as the debug build's, checked by CI's own tests)
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
     }
 
     compileOptions {

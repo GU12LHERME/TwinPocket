@@ -384,7 +384,7 @@ jobs:
           export TP_KEYSTORE="$RUNNER_TEMP/twinsanity-pocket.keystore"
           printf '%s' "$TP_KEYSTORE_B64" | base64 -d > "$TP_KEYSTORE"
           test -s "$TP_KEYSTORE"
-          gradle --no-daemon --stacktrace -p android/game assembleDebug \
+          gradle --no-daemon --stacktrace -p android/game assembleRelease \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
           rm -f "$TP_KEYSTORE"
 
@@ -392,10 +392,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          apk="android/game/app/build/outputs/apk/debug/app-debug.apk"
+          apk="android/game/app/build/outputs/apk/release/app-release.apk"
           test -s "$apk"
           "${ANDROID_SDK_ROOT}/build-tools/35.0.0/aapt" dump badging "$apk" | tee "$LOG_DIR/apk-badging.log"
           grep -q "package: name='com.twinsanitypocket.android'" "$LOG_DIR/apk-badging.log"
+          # the release build (1.8.0): not debuggable
+          if grep -q "application-debuggable" "$LOG_DIR/apk-badging.log"; then echo "FAIL  the APK is debuggable (a debug build shipped?)"; exit 1; fi
+          echo "PASS  release build: not debuggable" | tee -a "$LOG_DIR/libmain-evidence.txt"
           grep -q "native-code: 'arm64-v8a'" "$LOG_DIR/apk-badging.log"
           grep -q "launchable-activity: name='com.twinsanityevolved.game.LauncherActivity'" "$LOG_DIR/apk-badging.log"
           grep -q "application-label:'Twinsanity Pocket'" "$LOG_DIR/apk-badging.log"
@@ -457,7 +460,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p android-game-out
-          cp android/game/app/build/outputs/apk/debug/app-debug.apk android-game-out/TwinsanityPocket.apk
+          cp android/game/app/build/outputs/apk/release/app-release.apk android-game-out/TwinsanityPocket.apk
           ls -la android-game-out
 
       - name: Upload APK, libmain.so and evidence

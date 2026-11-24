@@ -826,8 +826,10 @@ public final class LauncherActivity extends Activity {
                 + "• NativeEE — MIT License, Copyright (c) 2026 The NativeEE contributors\n"
                 + "• twinsanity-reversed (github.com/Smartkin/twinsanity-reversed)\n"
                 + "• SDL2 — zlib License\n"
-                + "• FFmpeg — LGPL v2.1 ou posterior\n"
+                + "• FFmpeg 6.1.2 — LGPL v2.1 ou posterior (ffmpeg.org/releases/ffmpeg-6.1.2.tar.xz)\n"
                 + "• libchdr — BSD 3-Clause License\n\n"
+                + T("Código-fonte completo do aplicativo, com as receitas de compilação (incluindo a do FFmpeg): ")
+                + "github.com/GU12LHERME/TwinsanityEvolved (android-game-arm64)\n\n"
                 + T("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco."),
             null, new String[] {T("OK")}, 0, 0, null));
         actionRow("Sair do aplicativo", "Fecha o Twinsanity Pocket (configurações, saves e a ISO ficam guardados)", this::confirmExit);

@@ -2,6 +2,38 @@ TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
 
+VERSÃO 1.8.0 — 24/11/2026 (versão estável)
+O que é: o port nativo do Crash Twinsanity (PS2) para Android ARM64. Não é um emulador:
+o jogo roda compilado para o aparelho, a partir da SUA cópia do disco.
+
+Requisitos
+- Android 7.0 ou mais novo, processador ARM64 (arm64-v8a), OpenGL ES 3.2.
+- A sua imagem do jogo, ISO ou CHD (versão USA, NTSC-U, testada). Nenhum dado do jogo vem
+  no aplicativo. ISO carrega um pouco mais rápido que CHD.
+
+Testado em
+- Retroid Pocket 6 (Snapdragon 8 Gen 2, Adreno 740, Android 13): 60 FPS estáveis em 3x,
+  anisotrópica 16x e LOD longo; bateria em ~30–33 °C; ~3,9 W em jogo.
+- Outros aparelhos (principalmente com GPU Mali ou PowerVR) e a versão PAL não foram
+  testados.
+
+Novidades desta versão
+- APK em modo release: o launcher roda otimizado e os dados do app ficam protegidos.
+  Mesma assinatura: instala por cima da 1.5.0 em diante, mantendo saves e configurações.
+- Relatório de desempenho: os quadros longos ao minimizar o app não contam mais como
+  engasgos do jogo.
+- Licenças: o app indica onde está o código-fonte completo, incluindo a receita do FFmpeg.
+
+Limitações conhecidas
+- Uma pausa de ~2 s ao abrir o jogo, antes da tela título (inofensiva).
+- As cutscenes em vídeo usam mais CPU do que o ideal (conversão de cor no processador).
+
+Licenças
+- TwinsanityEvolved e NativeEE (MIT), SDL2 (zlib), libchdr (BSD 3-Clause), FFmpeg 6.1.2
+  (LGPL v2.1 ou posterior, compilado sem partes GPL ou nonfree). Código-fonte completo,
+  com as receitas de compilação: github.com/GU12LHERME/TwinsanityEvolved, branch
+  android-game-arm64.
+
 VERSÃO 1.7.0 — 24/11/2026
 - Engasgos ao entrar nas fases corrigidos também com CHD: a música de cada área agora é lida
   do disco em segundo plano, fora da thread do jogo (com ISO já estava fluido).
