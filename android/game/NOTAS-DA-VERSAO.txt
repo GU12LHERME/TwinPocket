@@ -31,7 +31,7 @@ Limitações conhecidas
 Licenças
 - TwinsanityEvolved e NativeEE (MIT), SDL2 (zlib), libchdr (BSD 3-Clause), FFmpeg 6.1.2
   (LGPL v2.1 ou posterior, compilado sem partes GPL ou nonfree). Código-fonte completo,
-  com as receitas de compilação: github.com/GU12LHERME/TwinsanityEvolved, branch
+  com as receitas de compilação: github.com/GU12LHERME/TwinsanityPocket, branch
   android-game-arm64.
 
 VERSÃO 1.7.0 — 24/11/2026
