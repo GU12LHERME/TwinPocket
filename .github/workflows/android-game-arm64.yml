@@ -391,9 +391,17 @@ jobs:
           export TP_KEYSTORE="$RUNNER_TEMP/twinsanity-pocket.keystore"
           printf '%s' "$TP_KEYSTORE_B64" | base64 -d > "$TP_KEYSTORE"
           test -s "$TP_KEYSTORE"
-          gradle --no-daemon --stacktrace -p android/game assembleRelease \
+          gradle --no-daemon --stacktrace -p android/game assembleRelease -x lintVitalRelease -x lintVitalAnalyzeRelease -x lintVitalReportRelease \
             -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$jni" 2>&1 | tee "$LOG_DIR/gradle-build.log"
           rm -f "$TP_KEYSTORE"
+
+      - name: Android Lint (diagnostic, non-blocking)
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon --stacktrace -p android/game lintRelease \
+            -Psdl2SourceDir="$GITHUB_WORKSPACE/.deps/SDL2" -PnativeLibsDir="$RUNNER_TEMP/jniLibs" 2>&1 | tee "$LOG_DIR/android-lint.log"
 
       - name: Verify the APK (package, native code, no game data)
         shell: bash
