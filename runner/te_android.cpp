@@ -54,17 +54,25 @@ bool g_fiber_taken = false;
 }  // namespace
 
 extern "C" void* te_android_take_fiber_stack(size_t size) {
-    if (!g_fiber_region || g_fiber_taken || size + kFiberGuard > kFiberRegion) {
+    if (!g_fiber_region || g_fiber_taken || size > kFiberRegion - kFiberGuard) {
         te_android_log("game stack: no region from the game thread for %zu bytes (region %p, taken %d) -- a separate mapping is used",
                        size, static_cast<void*>(g_fiber_region), g_fiber_taken ? 1 : 0);
         return nullptr;
     }
-    g_fiber_taken = true;
     // the region's lowest page-aligned band no-access: the fiber's overflow faults there instead of writing into the
     // host's frames below
-    const uintptr_t page = static_cast<uintptr_t>(::sysconf(_SC_PAGESIZE));
+    const long page_size = ::sysconf(_SC_PAGESIZE);
+    if (page_size <= 0) return nullptr;
+    const uintptr_t page = static_cast<uintptr_t>(page_size);
     const uintptr_t lo = (reinterpret_cast<uintptr_t>(g_fiber_region) + page - 1) & ~(page - 1);
+    if (lo - reinterpret_cast<uintptr_t>(g_fiber_region) + kFiberGuard + size > kFiberRegion)
+        return nullptr;
     const int prot = ::mprotect(reinterpret_cast<void*>(lo), kFiberGuard, PROT_NONE);
+    if (prot != 0) {
+        te_android_log("game stack: guard protection failed");
+        return nullptr;
+    }
+    g_fiber_taken = true;
     uint8_t* stack = reinterpret_cast<uint8_t*>(lo + kFiberGuard);
     te_android_log("game stack: %zu bytes at [%p, %p) inside the game thread's stack (guard %s)", size, static_cast<void*>(stack),
                    static_cast<void*>(stack + size), prot == 0 ? "on" : "not set");
@@ -102,7 +110,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
                    internal ? internal : "(none)");
     const std::string files = external && *external ? external : internal && *internal ? internal : "";
     if (files.empty()) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket",
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinPocket",
                     std::string("O Android não informou a pasta do aplicativo (") + SDL_GetError() + "). O jogo não foi iniciado.");
         te_android_finished(3);
         return 3;
@@ -202,7 +210,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     std::string report;
     if (iso.empty() || !te::android::CheckDiscImage(iso, &report)) {
         const std::string why = iso.empty() ? how : report;
-        ShowMessage(SDL_MESSAGEBOX_WARNING, "Twinsanity Pocket - imagem do disco",
+        ShowMessage(SDL_MESSAGEBOX_WARNING, "TwinPocket - imagem do disco",
                     "Nenhuma imagem de disco utilizável foi encontrada, então o jogo não foi iniciado.\n\n"
                     "Volte ao inicializador, toque em \"Selecionar\" e escolha a SUA imagem do Crash Twinsanity "
                     "(PAL SLES-52568 ou NTSC-U SLUS-20909 v2.00) no gerenciador de arquivos.\n\nDetalhe: " + why);
@@ -227,8 +235,19 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
         int rc;
     } start{static_cast<int>(args.size()), cargs.data(), 99};
     pthread_attr_t attr;
-    pthread_attr_init(&attr);
-    pthread_attr_setstacksize(&attr, kGameThreadStack);
+    const int attr_rc = pthread_attr_init(&attr);
+    if (attr_rc != 0) {
+        te_android_log("pthread_attr_init failed: %d", attr_rc);
+        te_android_finished(4);
+        return 4;
+    }
+    const int stack_rc = pthread_attr_setstacksize(&attr, kGameThreadStack);
+    if (stack_rc != 0) {
+        pthread_attr_destroy(&attr);
+        te_android_log("pthread_attr_setstacksize failed: %d", stack_rc);
+        te_android_finished(4);
+        return 4;
+    }
     pthread_t game;
     const int created = pthread_create(&game, &attr, [](void* opaque) -> void* {
         auto* st = static_cast<GameStart*>(opaque);
@@ -247,6 +266,11 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
             pthread_attr_getstack(&self, &lo, &sz);
             pthread_attr_destroy(&self);
         }
+        if (!env || !lo || sz < kGameThreadStack) {
+            te_android_log("game thread: JNI or stack validation failed");
+            st->rc = 4;
+            return nullptr;
+        }
         // the game fiber's stack: a region of this frame (alloca), above everything the runner calls from here
         g_fiber_region = static_cast<uint8_t*>(alloca(kFiberRegion));
         g_fiber_taken = false;
@@ -260,7 +284,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     }, &start);
     pthread_attr_destroy(&attr);
     if (created != 0) {
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket", "Não foi possível criar a thread do jogo (erro " + std::to_string(created) + ").");
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinPocket", "Não foi possível criar a thread do jogo (erro " + std::to_string(created) + ").");
         te_android_finished(4);
         return 4;
     }
@@ -269,7 +293,7 @@ extern "C" __attribute__((visibility("default"))) int SDL_main(int argc, char** 
     std::fflush(stdout);
     std::fflush(stderr);
     if (rc != 0)
-        ShowMessage(SDL_MESSAGEBOX_ERROR, "Twinsanity Pocket",
+        ShowMessage(SDL_MESSAGEBOX_ERROR, "TwinPocket",
                     "O jogo terminou com o código " + std::to_string(rc) +
                         ". Volte ao inicializador e use \"Compartilhar relatório\" para enviar os logs.");
     te_android_finished(rc);

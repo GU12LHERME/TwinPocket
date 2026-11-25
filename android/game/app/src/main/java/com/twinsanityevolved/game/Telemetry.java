@@ -8,6 +8,7 @@ import android.os.BatteryManager;
 import android.os.Build;
 import android.os.PowerManager;
 import android.os.Process;
+import android.os.SystemClock;
 import android.view.Display;
 
 /**
@@ -33,21 +34,26 @@ final class Telemetry {
     private volatile boolean running;
     private Thread thread;
     private boolean nativeOk = true;
+    private long lastCpuMs = -1, lastElapsedMs = -1;
+    private final long startedMs = SystemClock.elapsedRealtime();
 
     Telemetry(Activity activity) {
         this.activity = activity;
         this.app = activity.getApplicationContext();
     }
 
-    void start() {
+    synchronized void start() {
         if (running) return;
         running = true;
+        lastCpuMs = Process.getElapsedCpuTime();
+        lastElapsedMs = SystemClock.elapsedRealtime();
+        nativeOk = true;
         thread = new Thread(this::loop, "te-telemetry");
         thread.setDaemon(true);
         thread.start();
     }
 
-    void stop() {
+    synchronized void stop() {
         running = false;
         Thread t = thread;
         if (t != null) t.interrupt();
@@ -56,13 +62,14 @@ final class Telemetry {
 
     private void loop() {
         Process.setThreadPriority(Process.THREAD_PRIORITY_BACKGROUND);
-        while (running && nativeOk) {
+        while (running && nativeOk && !Thread.currentThread().isInterrupted()) {
             try {
                 Thread.sleep(PERIOD_MS);
             } catch (InterruptedException e) {
                 break;
             }
-            if (!running) break;
+            synchronized (this) {
+            if (!running || thread != Thread.currentThread()) break;
             String line;
             try {
                 line = sample();
@@ -74,6 +81,7 @@ final class Telemetry {
             } catch (Throwable t) {   // libmain.so not loaded (a broken start): the sampler stops
                 nativeOk = false;
                 Diag.log(app, "game", "telemetry stopped: " + t);
+            }
             }
         }
     }
@@ -114,6 +122,14 @@ final class Telemetry {
             if (r > 0) refreshHz = r;
         }
 
-        return ToolsCore.powerLine(tempC, currentMa, voltageV, powerW, source, level, thermal, headroom, refreshHz);
+        long elapsed = SystemClock.elapsedRealtime();
+        long cpu = Process.getElapsedCpuTime();
+        double cores = lastElapsedMs >= 0 && elapsed > lastElapsedMs && cpu >= lastCpuMs
+                ? (double) (cpu - lastCpuMs) / (elapsed - lastElapsedMs) : -1;
+        lastCpuMs = cpu;
+        lastElapsedMs = elapsed;
+        return ToolsCore.powerLine(tempC, currentMa, voltageV, powerW, source, level, thermal, headroom, refreshHz)
+                + String.format(java.util.Locale.ROOT, " elapsed_s=%.1f process_cpu_cores=%s",
+                    (elapsed - startedMs) / 1000.0, cores < 0 ? "na" : String.format(java.util.Locale.ROOT, "%.3f", cores));
     }
 }

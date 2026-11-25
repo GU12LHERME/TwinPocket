@@ -48,7 +48,7 @@ public final class TestSaves {
         check(!new File(game, ".import-staging").exists(), "no staging folder left");
 
         // refused archives: nothing written
-        for (String bad : new String[] {"../evil", "memcards/../../evil", "/abs/memcards/x", "ps2r.ini", "other/x"}) {
+        for (String bad : new String[] {"../evil", "memcards/../../evil", "/abs/memcards/x", "ps2r.ini", "other/x", "memcards"}) {
             File z = new File(game, "../bad.zip");
             try (ZipOutputStream o = new ZipOutputStream(new FileOutputStream(z))) { o.putNextEntry(new ZipEntry(bad)); o.write(1); o.closeEntry(); }
             boolean refused = false;
@@ -60,6 +60,26 @@ public final class TestSaves {
         boolean refused = false;
         try { SaveManager.importZip(empty, game); } catch (IOException e) { refused = true; }
         check(refused && SaveManager.list(game).size() == 2, "a zip with no save is refused (the cards kept)");
+        // A file/directory conflict in a second card must leave both existing cards untouched.
+        File conflict = new File(game, "../conflict.zip");
+        try (ZipOutputStream o = new ZipOutputStream(new FileOutputStream(conflict))) {
+            for (String name : new String[]{"memcards/mc0/new/data", "memcards-mods/mc0", "memcards-mods/mc0/child"}) {
+                o.putNextEntry(new ZipEntry(name)); o.write(1); o.closeEntry();
+            }
+        }
+        refused = false;
+        try { SaveManager.importZip(conflict, game); } catch (IOException e) { refused = true; }
+        check(refused && new File(save, "data").length() == 5000
+            && new File(game, "memcards-mods/mc0/OTHER/data").length() == 10, "conflicting archive preserves both cards");
+        check(SaveManager.refuse("memcards-mods.replaced/mc0/data") != null, "reserved recovery name refused");
+        check(SaveManager.refuse("memcards//mc0/data") != null, "ambiguous path refused");
+        File dirPayload = new File(game, "../dir-payload.zip");
+        try (ZipOutputStream o = new ZipOutputStream(new FileOutputStream(dirPayload))) {
+            o.putNextEntry(new ZipEntry("memcards/")); o.write(1); o.closeEntry();
+        }
+        refused = false;
+        try { SaveManager.importZip(dirPayload, game); } catch (IOException e) { refused = true; }
+        check(refused && SaveManager.list(game).size() == 2, "directory payload refused");
         check(SaveManager.humanSize(5964).equals("6 KB"), "sizes shown readable");
 
         System.out.println(failures == 0 ? "TestSaves: ok" : "TestSaves: FAILED");

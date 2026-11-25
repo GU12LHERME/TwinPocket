@@ -23,8 +23,14 @@ public final class LogProvider extends ContentProvider {
 
     private File fileFor(Uri uri) throws FileNotFoundException {
         String name = uri.getLastPathSegment();
-        if (name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException(String.valueOf(uri));
+        if (uri.getPathSegments().size() != 1 || name == null || name.contains("/") || name.contains("..")) throw new FileNotFoundException(String.valueOf(uri));
         File f = new File(new File(getContext().getFilesDir(), "logs"), name);
+        try {
+            if (!f.getCanonicalFile().getParentFile().equals(new File(getContext().getFilesDir(), "logs").getCanonicalFile()))
+                throw new FileNotFoundException("invalid log path");
+        } catch (java.io.IOException e) {
+            throw new FileNotFoundException("invalid log path");
+        }
         if (!f.isFile()) throw new FileNotFoundException(f.getName());
         return f;
     }
@@ -36,6 +42,7 @@ public final class LogProvider extends ContentProvider {
 
     @Override
     public ParcelFileDescriptor openFile(Uri uri, String mode) throws FileNotFoundException {
+        if (!"r".equals(mode)) throw new FileNotFoundException("read only");
         return ParcelFileDescriptor.open(fileFor(uri), ParcelFileDescriptor.MODE_READ_ONLY);
     }
 
