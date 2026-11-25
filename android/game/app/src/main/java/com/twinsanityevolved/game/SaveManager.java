@@ -29,6 +29,7 @@ import java.util.zip.ZipOutputStream;
  * Nothing here runs while the game runs (the launcher refuses it then: the game writes the cards).
  */
 final class SaveManager {
+    static final int MAX_IMPORT_ENTRIES = 16384;
     static final long MAX_IMPORT_BYTES = 256L << 20;   // a memory card is 8 MB: far more than any real backup
 
     static final class Save {
@@ -52,7 +53,7 @@ final class SaveManager {
     private SaveManager() {}
 
     static boolean isCardFolder(String name) {
-        return name.equals("memcards") || name.startsWith("memcards-");
+        return name.equals("memcards") || (name.startsWith("memcards-") && name.length() > 9);
     }
 
     static List<File> cardFolders(File gameDir) {
@@ -138,7 +139,7 @@ final class SaveManager {
     }
 
     /** The card folders under gameDir into `out` as a .zip; the number of files written. */
-    static int exportZip(File gameDir, OutputStream out) throws IOException {
+    static synchronized int exportZip(File gameDir, OutputStream out) throws IOException {
         int files = 0;
         try (ZipOutputStream zip = new ZipOutputStream(out)) {
             for (File card : cardFolders(gameDir)) files += add(zip, card, card.getName());
@@ -174,7 +175,7 @@ final class SaveManager {
             return "caminho inválido: " + name;
         for (String part : name.split("/")) if (part.equals("..") || part.equals(".")) return "caminho inválido: " + name;
         String top = name.split("/")[0];
-        if (!isCardFolder(top)) return "não é um cartão de memória: " + name;
+        if (name.length() > 1024 || name.contains("//") || name.split("/").length > 32 || top.endsWith(".replaced") || !isCardFolder(top)) return "não é um cartão de memória: " + name;
         return null;
     }
 
@@ -182,14 +183,18 @@ final class SaveManager {
      * A .zip of card folders into gameDir: checked whole first (refuse(), the size cap; nothing written when an entry is
      * refused), then each card folder it holds replaces the one of the same name. The number of files written.
      */
-    static int importZip(File zipFile, File gameDir) throws IOException {
+    static synchronized int importZip(File zipFile, File gameDir) throws IOException {
         List<String> cards = new ArrayList<>();
         long total = 0;
         int files = 0;
+        int entries = 0;
+        java.util.Set<String> names = new java.util.HashSet<>();
         try (ZipInputStream in = new ZipInputStream(new FileInputStream(zipFile))) {
             ZipEntry e;
             byte[] buf = new byte[65536];
             while ((e = in.getNextEntry()) != null) {
+                if (++entries > MAX_IMPORT_ENTRIES) throw new IOException("backup com entradas demais");
+                if (!names.add(e.getName())) throw new IOException("entrada duplicada: " + e.getName());
                 String why = refuse(e.getName());
                 if (why != null) throw new IOException(why);
                 String top = e.getName().split("/")[0];
@@ -207,7 +212,7 @@ final class SaveManager {
         if (files == 0) throw new IOException("o arquivo não tem nenhum save");
         // checked: extracted into a staging folder, then each card swapped in
         File staging = new File(gameDir, ".import-staging");
-        deleteTree(staging);
+        if (staging.exists()) throw new IOException("importação anterior pendente; preserve a pasta para recuperação");
         if (!staging.mkdirs()) throw new IOException("não foi possível criar " + staging);
         try {
             try (ZipInputStream in = new ZipInputStream(new FileInputStream(zipFile))) {
@@ -228,24 +233,42 @@ final class SaveManager {
                     if (e.getTime() > 0) target.setLastModified(e.getTime());
                 }
             }
-            for (String card : cards) {
-                File now = new File(gameDir, card);
-                File old = new File(gameDir, card + ".replaced");
-                deleteTree(old);
-                if (now.exists() && !now.renameTo(old)) throw new IOException("não foi possível substituir " + card);
-                if (!new File(staging, card).renameTo(now)) {
-                    old.renameTo(now);   // the card as it was
-                    throw new IOException("não foi possível instalar " + card);
+            // Keep all originals until every replacement succeeds.
+            File originals = new File(staging, ".originals");
+            if (!originals.mkdir()) throw new IOException("não foi possível criar backup temporário");
+            List<String> moved = new ArrayList<>();
+            List<String> installed = new ArrayList<>();
+            try {
+                for (String card : cards) {
+                    File now = new File(gameDir, card);
+                    File old = new File(originals, card);
+                    if (now.exists()) {
+                        if (!now.renameTo(old)) throw new IOException("não foi possível substituir " + card);
+                        moved.add(card);
+                    }
+                    if (!new File(staging, card).renameTo(now))
+                        throw new IOException("não foi possível instalar " + card);
+                    installed.add(card);
                 }
-                deleteTree(old);
+            } catch (IOException failure) {
+                boolean restored = true;
+                for (String card : installed)
+                    if (!deleteTree(new File(gameDir, card))) restored = false;
+                for (String card : moved)
+                    if (!new File(originals, card).renameTo(new File(gameDir, card))) restored = false;
+                if (!restored) throw new IOException("restauração incompleta; originais preservados em " + originals, failure);
+                throw failure;
             }
+            deleteTree(originals);
         } finally {
-            deleteTree(staging);
+            File originals = new File(staging, ".originals");
+            String[] remaining = originals.list();
+            if (!originals.exists() || (remaining != null && remaining.length == 0)) deleteTree(staging);
         }
         return files;
     }
 
-    static boolean deleteTree(File f) {
+    static synchronized boolean deleteTree(File f) {
         if (!f.exists()) return true;
         File[] all = f.listFiles();
         if (all != null) for (File c : all) deleteTree(c);
