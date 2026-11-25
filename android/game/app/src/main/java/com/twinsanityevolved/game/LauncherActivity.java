@@ -425,7 +425,10 @@ public final class LauncherActivity extends Activity {
     @Override
     protected void onDestroy() {
         super.onDestroy();
-        io.shutdown();   // a read in flight finishes; its result finds no tab and is dropped
+        releaseHeld();
+        ui.removeCallbacksAndMessages(null);
+        beforeDraw.clear();
+        io.shutdownNow();   // discard queued read-only work; running work may finish
     }
 
     @Override
@@ -994,7 +997,7 @@ public final class LauncherActivity extends Activity {
                 }
             }
             final String body = b.toString();
-            runOnUiThread(() -> textDialog(T("Histórico de sessões"), body, true));
+            runOnUiThread(() -> { if (!isFinishing() && !isDestroyed() && hasWindowFocus()) textDialog(T("Histórico de sessões"), body, true); });
         });
     }
 
@@ -1002,7 +1005,7 @@ public final class LauncherActivity extends Activity {
         Toast.makeText(this, T("Verificando…"), Toast.LENGTH_SHORT).show();
         io.execute(() -> {
             final String out = Tools.runChecks(this, versionName());
-            runOnUiThread(() -> textDialog(T("Verificação dos componentes"), out, true));
+            runOnUiThread(() -> { if (!isFinishing() && !isDestroyed() && hasWindowFocus()) textDialog(T("Verificação dos componentes"), out, true); });
         });
     }
 
@@ -1917,6 +1920,7 @@ public final class LauncherActivity extends Activity {
         new Thread(() -> {
             final String report = writeReport();
             runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || !hasWindowFocus()) return;
                 refresh();
                 if (share) {
                     Intent send = new Intent(Intent.ACTION_SEND);
