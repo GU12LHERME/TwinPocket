@@ -194,15 +194,17 @@ final class SaveManager {
             byte[] buf = new byte[65536];
             while ((e = in.getNextEntry()) != null) {
                 if (++entries > MAX_IMPORT_ENTRIES) throw new IOException("backup com entradas demais");
-                if (!names.add(e.getName())) throw new IOException("entrada duplicada: " + e.getName());
+                if (!names.add(e.getName().replaceFirst("/$", ""))) throw new IOException("entrada duplicada: " + e.getName());
                 String why = refuse(e.getName());
                 if (why != null) throw new IOException(why);
                 String top = e.getName().split("/")[0];
+                if (!e.isDirectory() && e.getName().equals(top)) throw new IOException("cartão deve ser uma pasta");
                 if (!cards.contains(top)) cards.add(top);
-                if (!e.isDirectory()) {
-                    files++;
+                {
+                    if (!e.isDirectory()) files++;
                     int n;
                     while ((n = in.read(buf)) > 0) {
+                        if (e.isDirectory()) throw new IOException("diretório com dados");
                         total += n;
                         if (total > MAX_IMPORT_BYTES) throw new IOException("backup grande demais (mais de 256 MB)");
                     }
@@ -222,11 +224,11 @@ final class SaveManager {
                     if (!target.getCanonicalPath().startsWith(staging.getCanonicalPath() + File.separator))
                         throw new IOException("caminho inválido: " + e.getName());
                     if (e.isDirectory()) {
-                        target.mkdirs();
+                        if (!target.isDirectory() && !target.mkdirs()) throw new IOException("não foi possível criar pasta");
                         continue;
                     }
                     File parent = target.getParentFile();
-                    if (parent != null) parent.mkdirs();
+                    if (parent != null && !parent.isDirectory() && !parent.mkdirs()) throw new IOException("não foi possível criar pasta");
                     try (OutputStream out = new FileOutputStream(target)) {
                         copy(in, out);
                     }
