@@ -1,6 +1,6 @@
 [English](README.md) | **Português (Brasil)**
 
-# Twinsanity Pocket
+# TwinPocket
 
 **Port nativo de Crash Twinsanity (PS2) para Android ARM64.** Não é um emulador: o código do jogo é compilado para o
 aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testado no **Retroid Pocket 6**.
@@ -74,7 +74,7 @@ O APK é gerado pelo GitHub Actions. A publicação de novas versões ocorre por
 
 ## Créditos e licenças
 
-Twinsanity Pocket é um fork de [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), o port para PC e
+TwinPocket é um fork de [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), o port para PC e
 PS Vita, cujo README original está em [docs/TwinsanityEvolved-README.md](docs/TwinsanityEvolved-README.md).
 
 - TwinsanityEvolved e NativeEE — MIT ([LICENSE](LICENSE))
@@ -89,7 +89,7 @@ jogo.
 
 ---
 
-*English: Twinsanity Pocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
+*English: TwinPocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
 twinsanity-reversed decompilation on the NativeEE engine and tested on the Retroid Pocket 6. Bring your own disc image
 (ISO or CHD); no game data is included. Download the APK from the [releases](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest).*
 
