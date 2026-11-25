@@ -1,3 +1,7 @@
+1.8.1 — TwinPocket
+- Novo nome do aplicativo e launcher: TwinPocket.
+- Identificador do aplicativo e configuração de assinatura preservados.
+
 TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
