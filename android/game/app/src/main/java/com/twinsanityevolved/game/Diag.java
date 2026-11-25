@@ -43,7 +43,14 @@ final class Diag {
 
     static synchronized void log(Context c, String proc, String line) {
         Log.i(TAG, "[java:" + proc + "] " + line);
-        try (FileOutputStream out = new FileOutputStream(new File(logsDir(c), "java-" + proc + ".log"), true)) {
+        File file = new File(logsDir(c), "java-" + proc + ".log");
+        // Bound Java diagnostics without touching native session logs or saves.
+        if (file.length() >= 2L * 1024 * 1024) {
+            File previous = new File(file.getParentFile(), file.getName() + ".previous");
+            if (previous.exists()) previous.delete();
+            file.renameTo(previous);
+        }
+        try (FileOutputStream out = new FileOutputStream(file, true)) {
             out.write(("[" + now() + "] " + line + "\n").getBytes(StandardCharsets.UTF_8));
             out.getFD().sync();
         } catch (Exception ignored) {
