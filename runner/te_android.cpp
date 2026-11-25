@@ -54,12 +54,11 @@ bool g_fiber_taken = false;
 }  // namespace
 
 extern "C" void* te_android_take_fiber_stack(size_t size) {
-    if (!g_fiber_region || g_fiber_taken || size + kFiberGuard > kFiberRegion) {
+    if (!g_fiber_region || g_fiber_taken || size > kFiberRegion - kFiberGuard) {
         te_android_log("game stack: no region from the game thread for %zu bytes (region %p, taken %d) -- a separate mapping is used",
                        size, static_cast<void*>(g_fiber_region), g_fiber_taken ? 1 : 0);
         return nullptr;
     }
-    g_fiber_taken = true;
     // the region's lowest page-aligned band no-access: the fiber's overflow faults there instead of writing into the
     // host's frames below
     const long page_size = ::sysconf(_SC_PAGESIZE);
@@ -73,6 +72,7 @@ extern "C" void* te_android_take_fiber_stack(size_t size) {
         te_android_log("game stack: guard protection failed");
         return nullptr;
     }
+    g_fiber_taken = true;
     uint8_t* stack = reinterpret_cast<uint8_t*>(lo + kFiberGuard);
     te_android_log("game stack: %zu bytes at [%p, %p) inside the game thread's stack (guard %s)", size, static_cast<void*>(stack),
                    static_cast<void*>(stack + size), prot == 0 ? "on" : "not set");
