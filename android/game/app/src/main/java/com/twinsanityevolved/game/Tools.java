@@ -97,7 +97,7 @@ final class Tools {
     // ---- the device ------------------------------------------------------------------------------------------------
     static String deviceLines(Context c, String version) {
         StringBuilder b = new StringBuilder();
-        b.append("app: Twinsanity Pocket ").append(version).append(" (").append(c.getPackageName()).append(")\n");
+        b.append("app: TwinPocket ").append(version).append(" (").append(c.getPackageName()).append(")\n");
         b.append("device: ").append(Build.MANUFACTURER).append(' ').append(Build.MODEL).append(" (").append(Build.DEVICE).append(")\n");
         if (Build.VERSION.SDK_INT >= 31) b.append("soc: ").append(Build.SOC_MANUFACTURER).append(' ').append(Build.SOC_MODEL).append('\n');
         b.append("android: ").append(Build.VERSION.RELEASE).append(" (API ").append(Build.VERSION.SDK_INT).append("), ABIs ")
@@ -150,19 +150,21 @@ final class Tools {
 
         // storage: a file written, read back and removed in the app's own folder
         String storage;
+        File t = null;
         try {
-            File t = new File(c.getCacheDir(), "te-check.tmp");
-            byte[] data = "twinsanity pocket storage check".getBytes(StandardCharsets.UTF_8);
+            t = File.createTempFile("te-check-", ".tmp", c.getCacheDir());
+            byte[] data = "TwinPocket storage check".getBytes(StandardCharsets.UTF_8);
             try (java.io.FileOutputStream o = new java.io.FileOutputStream(t)) { o.write(data); o.getFD().sync(); }
             byte[] back = new byte[data.length];
             int n;
             try (FileInputStream in = new FileInputStream(t)) { n = in.read(back); }
             boolean ok = n == data.length && java.util.Arrays.equals(data, back);
-            t.delete();
             long free = new StatFs(c.getFilesDir().getAbsolutePath()).getAvailableBytes() / 1048576;
             storage = (ok ? (free < 500 ? "AVISO" : "OK") : "FALHA") + "  escrita e leitura " + (ok ? "corretas" : "diferentes") + ", " + free + " MB livres";
         } catch (Exception e) {
             storage = "FALHA  " + e;
+        } finally {
+            if (t != null) t.delete();
         }
         b.append("Armazenamento   ").append(storage).append('\n');
 
@@ -246,7 +248,7 @@ final class Tools {
             }
             n += put(z, "settings/ps2r.ini", new Settings(c).file());
             z.putNextEntry(new ZipEntry("LEIA-ME.txt"));
-            z.write(("Twinsanity Pocket " + version + " — registros técnicos (" + Diag.now() + ")\n"
+            z.write(("TwinPocket " + version + " — registros técnicos (" + Diag.now() + ")\n"
                 + "logs/report.txt: o relatório completo; logs/sessions.tsv: o histórico de sessões; logs/tests.txt: a última verificação;\n"
                 + "logs/device.txt: o aparelho; logs/latest-game.log e previous-game.log: as duas últimas execuções do jogo.\n"
                 + "Sem saves, cartões de memória ou imagem do disco.\n").getBytes(StandardCharsets.UTF_8));
