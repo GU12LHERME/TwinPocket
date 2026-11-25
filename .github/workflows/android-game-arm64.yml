@@ -12,9 +12,6 @@ on:
   push:
     branches:
       - android-game-arm64
-      - twinpocket-1.9-stability
-      - twinpocket-1.10-efficiency
-      - twinpocket-2.0-final
     # a version tag (1.8.0: no 'v' -- the upstream release.yml builds the PC / Vita packages on v* tags) on the branch: the
     # same build, then the GitHub Release with its APK (the last step)
     tags:
@@ -33,7 +30,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     permissions:
-      contents: write   # the Release on a version tag (the only write; a branch push only reads)
+      contents: write   # publish the final 2.0.0 release or a version tag
     env:
       ANDROID_NDK_VERSION: 30.0.16248370
       ANDROID_API: '24'
@@ -496,7 +493,7 @@ jobs:
           retention-days: 14
 
       - name: Publish the GitHub Release (a version tag, or a Release already made for this version)
-        if: github.event_name == 'push' && github.ref_type == 'tag'
+        if: github.event_name == 'push' && (github.ref_type == 'tag' || github.ref == 'refs/heads/android-game-arm64')
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -504,8 +501,13 @@ jobs:
           set -euo pipefail
           version="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" "$LOG_DIR/apk-badging.log" | head -1)"
           test -n "$version"
-          tag="$GITHUB_REF_NAME"
-          [ "$tag" = "$version" ]
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag="$GITHUB_REF_NAME"
+            [ "$tag" = "$version" ]
+          else
+            [ "$version" = "2.0.0" ] || exit 0
+            tag="$version"
+          fi
           apk="TwinPocket-${version}-arm64.apk"
           cp "android-game-out/$apk" "$apk"
           sha256sum "$apk" > SHA256SUMS.txt
@@ -525,4 +527,9 @@ jobs:
             echo "Release existente preservada."
             exit 0
           fi
-          gh release create "$tag" "$apk" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "TwinPocket $version" --notes-file "$RUNNER_TEMP/release.md" --verify-tag --latest
+          if [ "$GITHUB_REF_TYPE" = "tag" ]; then
+            tag_args=(--verify-tag)
+          else
+            tag_args=(--target "$GITHUB_SHA")
+          fi
+          gh release create "$tag" "$apk" SHA256SUMS.txt --repo "$GITHUB_REPOSITORY" --title "TwinPocket $version" --notes-file "$RUNNER_TEMP/release.md" "${tag_args[@]}" --latest
