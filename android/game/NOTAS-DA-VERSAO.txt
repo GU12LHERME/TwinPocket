@@ -1,4 +1,6 @@
 VERSÃO 2.0.0 — candidata final para Retroid Pocket 6
+- Revisão do ciclo de vida do launcher e validação adicional de arquivos ZIP de saves.
+- Ajuste defensivo na reserva da pilha nativa.
 - Consolida as alterações de estabilidade e diagnóstico das versões 1.9.0 e 1.10.0.
 - Mantém a engine, gráficos, áudio, controles, saves e suporte ISO/CHD.
 - Pacote com.twinpocket.android e configuração de assinatura preservados.
