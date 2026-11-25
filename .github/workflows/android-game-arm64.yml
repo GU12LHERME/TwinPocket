@@ -12,6 +12,7 @@ on:
   push:
     branches:
       - android-game-arm64
+      - twinpocket-1.9-stability
     # a version tag (1.8.0: no 'v' -- the upstream release.yml builds the PC / Vita packages on v* tags) on the branch: the
     # same build, then the GitHub Release with its APK (the last step)
     tags:
