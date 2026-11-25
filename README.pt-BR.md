@@ -16,7 +16,7 @@ As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves,
 |---|---|
 | Requisitos | Android 7.0+, processador ARM64 (arm64-v8a), OpenGL ES 3.2 |
 | Jogo | a sua imagem do Crash Twinsanity, ISO ou CHD (versão USA testada) |
-| Pacote | `com.twinsanitypocket.android` |
+| Pacote | `com.twinpocket.android` |
 | Assinatura | SHA-256 do certificado `0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac` |
 
 [GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](android/game/NOTAS-DA-VERSAO.txt) · [Como contribuir](CONTRIBUTING.md)
@@ -101,3 +101,5 @@ Atualize a versão do aplicativo e as notas de atualização antes de criar uma 
 ## Ajuda e segurança
 
 [FAQ](docs/FAQ.md) · [Troubleshooting / Solução de problemas](docs/TROUBLESHOOTING.md) · [Security / Segurança](SECURITY.md)
+
+**Migração da versão 1.8.0 ou anterior:** Exporte os saves antes de instalar a 1.8.1 e importe-os no TwinPocket. O novo pacote Android é um aplicativo separado; selecione novamente a imagem do jogo e as configurações.
