@@ -1,3 +1,17 @@
+VERSÃO 2.0.0 — candidata final para Retroid Pocket 6
+- Consolida as alterações de estabilidade e diagnóstico das versões 1.9.0 e 1.10.0.
+- Mantém a engine, gráficos, áudio, controles, saves e suporte ISO/CHD.
+- Pacote com.twinpocket.android e configuração de assinatura preservados.
+- A validação final do APK é necessária antes da publicação.
+- Limitações: pausa inicial de cerca de 2 s; temperatura do SoC não disponível nos relatórios; outros aparelhos e PAL não validados. Não há ganho energético comprovado.
+
+VERSÃO 1.10.0 — diagnóstico
+- Registro do tempo decorrido e uso total de CPU do processo; proteção contra sobreposição de coletores ao retomar o jogo.
+
+VERSÃO 1.9.0 — estabilidade
+- Importação de saves com tentativa de reversão em caso de falha e validações adicionais de ZIP.
+- Verificações adicionais na inicialização da thread nativa; lint separado do empacotamento.
+
 VERSÃO 1.8.1 — TwinPocket
 - Novo nome do aplicativo e launcher: TwinPocket.
 - Novo pacote: com.twinpocket.android. Instala como outro aplicativo; exporte e importe os saves antes de remover a versão anterior. Reconfigure as preferências e selecione a imagem do jogo novamente.
