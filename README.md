@@ -1,6 +1,6 @@
 **English** | [Português (Brasil)](README.pt-BR.md)
 
-# Twinsanity Pocket
+# TwinPocket
 
 Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game code is compiled for the device and runs using your own disc image. Developed and tested on the Retroid Pocket 6.
 
