@@ -467,7 +467,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p android-game-out
-          cp android/game/app/build/outputs/apk/release/app-release.apk android-game-out/TwinPocket.apk
+          version="$(sed -n "s/.*versionName='\([^']*\)'.*/\1/p" "$LOG_DIR/apk-badging.log" | head -1)"
+          test -n "$version"
+          cp android/game/app/build/outputs/apk/release/app-release.apk "android-game-out/TwinPocket-${version}-arm64.apk"
           ls -la android-game-out
 
       - name: Upload APK, libmain.so and evidence
@@ -494,7 +496,7 @@ jobs:
           tag="$GITHUB_REF_NAME"
           [ "$tag" = "$version" ]
           apk="TwinPocket-${version}-arm64.apk"
-          cp android-game-out/TwinPocket.apk "$apk"
+          cp "android-game-out/$apk" "$apk"
           sha256sum "$apk" > SHA256SUMS.txt
           # the release notes: this version's section of android/game/NOTAS-DA-VERSAO.txt
           awk -v v="VERSÃO ${version} " 'index($0, v) == 1 {on = 1} on && /^VERSÃO / && index($0, v) != 1 {exit} on' \
@@ -503,7 +505,7 @@ jobs:
           {
             cat "$RUNNER_TEMP/notes.txt"
             echo
-            echo "Instalação: baixe $apk e instale. Atualiza por cima da 1.5.0 em diante (mesma assinatura)."
+            echo "Instalação: baixe $apk e instale. Para migrar de 1.8.0 ou anterior, exporte e importe os saves; o pacote Android mudou."
             echo "Confira a integridade do APK em SHA256SUMS.txt."
             echo "Build $GITHUB_RUN_NUMBER · commit $GITHUB_SHA"
             echo "Assinatura (SHA-256 do certificado): 0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac"
