@@ -10,7 +10,7 @@ aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testad
 ## Download
 
 Baixe o APK ARM64 da [última versão](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest) e instale.
-As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves, configurações e a imagem do jogo.
+As atualizações desde a 1.8.1 usam o mesmo pacote e configuração de assinatura. Faça backup dos saves antes de atualizar.
 
 | | |
 |---|---|
