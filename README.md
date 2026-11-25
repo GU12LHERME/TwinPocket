@@ -1,6 +1,6 @@
 **English** | [Português (Brasil)](README.pt-BR.md)
 
-# Twinsanity Pocket
+# TwinPocket
 
 Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game code is compiled for the device and runs using your own disc image. Developed and tested on the Retroid Pocket 6.
 
@@ -16,7 +16,7 @@ Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game c
 | Architecture | arm64-v8a |
 | Graphics | OpenGL ES 3.2 |
 | Game | Crash Twinsanity ISO or CHD (USA tested) |
-| Package | com.twinsanitypocket.android |
+| Package | com.twinpocket.android |
 
 Updates from version 1.5.0 onward use the same signing certificate and preserve saves and settings.
 
@@ -72,3 +72,5 @@ For detailed measurements and technical information, see the [complete Portugues
 ## Help and security
 
 [FAQ](docs/FAQ.md) · [Troubleshooting / Solução de problemas](docs/TROUBLESHOOTING.md) · [Security / Segurança](SECURITY.md)
+
+**Migration from 1.8.0 or earlier:** Export saves before installing 1.8.1, then import them in TwinPocket. The new Android package is a separate app; select the game image and settings again.

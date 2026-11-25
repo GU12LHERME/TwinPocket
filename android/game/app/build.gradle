@@ -21,14 +21,14 @@ android {
     compileSdk 35
 
     defaultConfig {
-        // the application id since 1.5.0 (before: com.crashtwinsanity.android, and com.twinsanityevolved.game before that --
+        // the application id since 1.8.1 (previously com.twinsanitypocket.android) (before: com.crashtwinsanity.android, and com.twinsanityevolved.game before that --
         // other apps to Android: their saves come over through Saves -> Exportar / Importar)
-        applicationId "com.twinsanitypocket.android"
-        manifestPlaceholders = [appLabel: "Twinsanity Pocket"]
+        applicationId "com.twinpocket.android"
+        manifestPlaceholders = [appLabel: "TwinPocket"]
         minSdk 24
         targetSdk 33
-        versionCode 60
-        versionName "1.8.0"
+        versionCode 61
+        versionName "1.8.1"
         ndk {
             abiFilters "arm64-v8a"
         }
@@ -55,7 +55,7 @@ android {
             if (tpKeystore != null && !tpKeystore.isEmpty()) signingConfig signingConfigs.pocket
         }
         // THE RELEASE BUILD (1.8.0: what CI ships): not debuggable (ART compiles the launcher fully; no run-as into the app's
-        // data), signed with the same fixed key as before (an update installs over 1.5.0 - 1.7.0's debug builds), the
+        // data), signed with the same fixed key as before (new application ID requires save migration), the
         // code not shrunk or obfuscated (R8 off: SDL's Java side is called by name from libSDL2.so through JNI), libmain.so's
         // symbols kept (packagingOptions: crash reports stay readable). A local build without the key signs with the debug key.
         release {

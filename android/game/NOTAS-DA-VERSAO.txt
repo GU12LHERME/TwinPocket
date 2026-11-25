@@ -1,4 +1,9 @@
-TWINSANITY POCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
+VERSÃO 1.8.1 — TwinPocket
+- Novo nome do aplicativo e launcher: TwinPocket.
+- Novo pacote: com.twinpocket.android. Instala como outro aplicativo; exporte e importe os saves antes de remover a versão anterior. Reconfigure as preferências e selecione a imagem do jogo novamente.
+- APK: TwinPocket-1.8.1-arm64.apk. Configuração de assinatura preservada.
+
+TWINPOCKET — PORT NATIVO DO CRASH TWINSANITY PARA ANDROID (ARM64)
 Aparelho de referência: Retroid Pocket 6 (Snapdragon 8 Gen 2, Android 13)
 ================================================================================
 

@@ -772,7 +772,7 @@ public final class LauncherActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setOrientation(LinearLayout.VERTICAL);
         head.setPadding(dp(4), dp(10), dp(4), dp(14));
-        head.addView(text("Twinsanity Pocket", 30, FG, true));
+        head.addView(text("TwinPocket", 30, FG, true));
         head.addView(text(T("Port nativo para Android · versão ") + versionName(), 13, SUBTLE, false));
         TextView label = text("JOGO SELECIONADO", 11, SUBTLE, true);
         label.setPadding(0, dp(18), 0, dp(2));
@@ -832,7 +832,7 @@ public final class LauncherActivity extends Activity {
                 + "github.com/GU12LHERME/TwinsanityEvolved (android-game-arm64)\n\n"
                 + T("Nenhum dado do jogo faz parte do aplicativo: o jogo usa a SUA imagem do disco."),
             null, new String[] {T("OK")}, 0, 0, null));
-        actionRow("Sair do aplicativo", "Fecha o Twinsanity Pocket (configurações, saves e a ISO ficam guardados)", this::confirmExit);
+        actionRow("Sair do aplicativo", "Fecha o TwinPocket (configurações, saves e a ISO ficam guardados)", this::confirmExit);
         note(T("Versão ") + versionName() + " · " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE);
     }
 
@@ -862,7 +862,7 @@ public final class LauncherActivity extends Activity {
         actionRow("Exportar pacote ZIP",
             "Todos os registros técnicos (logs do jogo e do launcher, travamentos, histórico de sessões, verificações, aparelho e ps2r.ini) num .zip onde você escolher. Sem saves nem a ISO.",
             () -> {
-                String name = "twinsanity-pocket-diagnostico-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+                String name = "twinpocket-diagnostico-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
                 launchPicker(new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
                     .putExtra(Intent.EXTRA_TITLE, name), REQUEST_EXPORT_TOOLS);
             });
@@ -1053,7 +1053,7 @@ public final class LauncherActivity extends Activity {
         section("BACKUP");
         actionRow("Exportar backup", "Salva todos os cartões de memória num arquivo .zip onde você escolher", () -> {
             if (gameRunning()) return;
-            String name = "twinsanity-pocket-saves-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
+            String name = "twinpocket-saves-" + new java.text.SimpleDateFormat("yyyyMMdd-HHmm", Locale.ROOT).format(new java.util.Date()) + ".zip";
             Intent i = new Intent(Intent.ACTION_CREATE_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("application/zip")
                 .putExtra(Intent.EXTRA_TITLE, name);
             launchPicker(i, REQUEST_EXPORT_SAVES);
@@ -1268,7 +1268,7 @@ public final class LauncherActivity extends Activity {
             T(gameAlive
                 ? "O jogo ainda está aberto em segundo plano. Saia pelo jogo (Menu principal → quit game) "
                   + "para não perder progresso não salvo. Sair mesmo assim encerra o jogo."
-                : "O Twinsanity Pocket será fechado. Configurações, saves e a ISO continuam guardados."),
+                : "O TwinPocket será fechado. Configurações, saves e a ISO continuam guardados."),
             null, new String[] {T("Sair"), T("Cancelar")}, 1, 1, i -> { if (i == 0) exitApp(); });
     }
 
@@ -1845,7 +1845,7 @@ public final class LauncherActivity extends Activity {
         Tools.recordSessions(c, versionName());
         Diag.write(new File(dir, "logcat.txt"), Diag.captureLogcat(4000));
         StringBuilder b = new StringBuilder();
-        b.append("Twinsanity Pocket — relatório completo — ").append(Diag.now()).append("\n\n");
+        b.append("TwinPocket — relatório completo — ").append(Diag.now()).append("\n\n");
         b.append("===== APLICATIVO E APARELHO =====\n").append(Tools.deviceLines(c, versionName()));
         String pads = Tools.controllers();
         b.append("controles conectados:\n").append(pads.isEmpty() ? "  (nenhum)\n" : pads);
@@ -1921,15 +1921,15 @@ public final class LauncherActivity extends Activity {
                 if (share) {
                     Intent send = new Intent(Intent.ACTION_SEND);
                     send.setType("text/plain");
-                    send.putExtra(Intent.EXTRA_SUBJECT, "Twinsanity Pocket — relatório");
+                    send.putExtra(Intent.EXTRA_SUBJECT, "TwinPocket — relatório");
                     send.putExtra(Intent.EXTRA_STREAM, LogProvider.uriFor(this, "report.txt"));
-                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do Twinsanity Pocket (anexo report.txt).");
+                    send.putExtra(Intent.EXTRA_TEXT, "Relatório de diagnóstico do TwinPocket (anexo report.txt).");
                     send.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
                     startActivity(Intent.createChooser(send, T("Compartilhar relatório")));
                 } else {
                     ClipboardManager cm = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
                     String clip = report.length() > 250000 ? report.substring(report.length() - 250000) : report;
-                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("Twinsanity Pocket report", clip));
+                    if (cm != null) cm.setPrimaryClip(ClipData.newPlainText("TwinPocket report", clip));
                     Toast.makeText(c, T("Relatório copiado (") + clip.length() + T(" caracteres)"), Toast.LENGTH_LONG).show();
                 }
             });

@@ -1,6 +1,6 @@
 [English](README.md) | **Português (Brasil)**
 
-# Twinsanity Pocket
+# TwinPocket
 
 **Port nativo de Crash Twinsanity (PS2) para Android ARM64.** Não é um emulador: o código do jogo é compilado para o
 aparelho e roda direto nele, a partir da **sua** cópia do disco. Feito e testado no **Retroid Pocket 6**.
@@ -16,7 +16,7 @@ As atualizações instalam por cima da anterior (desde a 1.5.0), mantendo saves,
 |---|---|
 | Requisitos | Android 7.0+, processador ARM64 (arm64-v8a), OpenGL ES 3.2 |
 | Jogo | a sua imagem do Crash Twinsanity, ISO ou CHD (versão USA testada) |
-| Pacote | `com.twinsanitypocket.android` |
+| Pacote | `com.twinpocket.android` |
 | Assinatura | SHA-256 do certificado `0b8284df91fca27a6fa616bb1aefe197954d628859339f9e0afe7fcb21820fac` |
 
 [GitHub Actions](https://github.com/GU12LHERME/TwinsanityPocket/actions) · [Notas de atualização](android/game/NOTAS-DA-VERSAO.txt) · [Como contribuir](CONTRIBUTING.md)
@@ -74,7 +74,7 @@ O APK é gerado pelo GitHub Actions. A publicação de novas versões ocorre por
 
 ## Créditos e licenças
 
-Twinsanity Pocket é um fork de [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), o port para PC e
+TwinPocket é um fork de [TwinsanityEvolved](https://github.com/menaman123/TwinsanityEvolved), o port para PC e
 PS Vita, cujo README original está em [docs/TwinsanityEvolved-README.md](docs/TwinsanityEvolved-README.md).
 
 - TwinsanityEvolved e NativeEE — MIT ([LICENSE](LICENSE))
@@ -89,7 +89,7 @@ jogo.
 
 ---
 
-*English: Twinsanity Pocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
+*English: TwinPocket is a native Android ARM64 port of Crash Twinsanity (PS2), not an emulator, built from the
 twinsanity-reversed decompilation on the NativeEE engine and tested on the Retroid Pocket 6. Bring your own disc image
 (ISO or CHD); no game data is included. Download the APK from the [releases](https://github.com/GU12LHERME/TwinsanityPocket/releases/latest).*
 
@@ -101,3 +101,5 @@ Atualize a versão do aplicativo e as notas de atualização antes de criar uma 
 ## Ajuda e segurança
 
 [FAQ](docs/FAQ.md) · [Troubleshooting / Solução de problemas](docs/TROUBLESHOOTING.md) · [Security / Segurança](SECURITY.md)
+
+**Migração da versão 1.8.0 ou anterior:** Exporte os saves antes de instalar a 1.8.1 e importe-os no TwinPocket. O novo pacote Android é um aplicativo separado; selecione novamente a imagem do jogo e as configurações.
