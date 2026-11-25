@@ -48,7 +48,7 @@ public final class TestSaves {
         check(!new File(game, ".import-staging").exists(), "no staging folder left");
 
         // refused archives: nothing written
-        for (String bad : new String[] {"../evil", "memcards/../../evil", "/abs/memcards/x", "ps2r.ini", "other/x"}) {
+        for (String bad : new String[] {"../evil", "memcards/../../evil", "/abs/memcards/x", "ps2r.ini", "other/x", "memcards"}) {
             File z = new File(game, "../bad.zip");
             try (ZipOutputStream o = new ZipOutputStream(new FileOutputStream(z))) { o.putNextEntry(new ZipEntry(bad)); o.write(1); o.closeEntry(); }
             boolean refused = false;
@@ -73,6 +73,13 @@ public final class TestSaves {
             && new File(game, "memcards-mods/mc0/OTHER/data").length() == 10, "conflicting archive preserves both cards");
         check(SaveManager.refuse("memcards-mods.replaced/mc0/data") != null, "reserved recovery name refused");
         check(SaveManager.refuse("memcards//mc0/data") != null, "ambiguous path refused");
+        File dirPayload = new File(game, "../dir-payload.zip");
+        try (ZipOutputStream o = new ZipOutputStream(new FileOutputStream(dirPayload))) {
+            o.putNextEntry(new ZipEntry("memcards/")); o.write(1); o.closeEntry();
+        }
+        refused = false;
+        try { SaveManager.importZip(dirPayload, game); } catch (IOException e) { refused = true; }
+        check(refused && SaveManager.list(game).size() == 2, "directory payload refused");
         check(SaveManager.humanSize(5964).equals("6 KB"), "sizes shown readable");
 
         System.out.println(failures == 0 ? "TestSaves: ok" : "TestSaves: FAILED");
