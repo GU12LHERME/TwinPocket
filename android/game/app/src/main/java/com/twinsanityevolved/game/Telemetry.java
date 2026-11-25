@@ -35,7 +35,7 @@ final class Telemetry {
     private Thread thread;
     private boolean nativeOk = true;
     private long lastCpuMs = -1, lastElapsedMs = -1;
-    private long startedMs;
+    private final long startedMs = SystemClock.elapsedRealtime();
 
     Telemetry(Activity activity) {
         this.activity = activity;
@@ -45,8 +45,8 @@ final class Telemetry {
     synchronized void start() {
         if (running) return;
         running = true;
-        startedMs = SystemClock.elapsedRealtime();
-        lastCpuMs = lastElapsedMs = -1;
+        lastCpuMs = Process.getElapsedCpuTime();
+        lastElapsedMs = SystemClock.elapsedRealtime();
         nativeOk = true;
         thread = new Thread(this::loop, "te-telemetry");
         thread.setDaemon(true);
@@ -68,7 +68,8 @@ final class Telemetry {
             } catch (InterruptedException e) {
                 break;
             }
-            if (!running) break;
+            synchronized (this) {
+            if (!running || thread != Thread.currentThread()) break;
             String line;
             try {
                 line = sample();
@@ -80,6 +81,7 @@ final class Telemetry {
             } catch (Throwable t) {   // libmain.so not loaded (a broken start): the sampler stops
                 nativeOk = false;
                 Diag.log(app, "game", "telemetry stopped: " + t);
+            }
             }
         }
     }
