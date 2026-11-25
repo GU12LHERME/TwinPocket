@@ -18,7 +18,7 @@ Native Android ARM64 port of Crash Twinsanity (PS2), not an emulator. The game c
 | Game | Crash Twinsanity ISO or CHD (USA tested) |
 | Package | com.twinpocket.android |
 
-Updates from version 1.5.0 onward use the same signing certificate and preserve saves and settings.
+Updates from 1.8.1 onward use the same Android package and signing configuration. Back up saves before updating.
 
 ## Usage
 
